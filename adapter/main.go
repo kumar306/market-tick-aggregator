@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"market-adapter/constants"
 	"math"
 	"math/rand"
 	"sync"
@@ -11,45 +12,25 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// creating a mock setup for a json feed
+// start feeds
 func main() {
 
 	// have a map of string ("feed key") to its Config struct
-	// this struct populated via YAML
-	// inject this struct while fetching the config to populate the feed map at startup
+	var c constants.Config
+	c.GetConfig()
+	c.FeedMap = make(map[string]*constants.Feed)
 
-	go startSupervisor()
-}
-
-// string identifier for status of connection. later modify this to take in select list of statuses (enum)
-type Status string
-
-const (
-	StatusNew        Status = "New"
-	StatusBackoff    Status = "Backoff"
-	StatusConnected  Status = "Connected"
-	StatusTerminated Status = "Terminated"
-)
-
-// use interfaces so no need to write multiple persistence logics for persisting - all under same contract
-
-// obtain lock to write to the feed
-var mu sync.Mutex
-
-// url string, times to retry, backoff time,
-type Config struct {
-	url          string
-	maxRetries   int
-	backOffTime  int
-	mu           sync.Mutex
-	statusChan   chan Status
-	lastPongTime time.Time
+	// now we have the array of feed configs
+	// stream through its feeds and start supervisors
+	for _, feed := range c.Feeds {
+		go startSupervisor(feed)
+		c.FeedMap[feed.Name] = feed
+	}
 }
 
 // starts the supervisor per feed. each feed has a supervisor to manage everything for a feed
-func startSupervisor() {
-	// keep trying to acquire the connection - until max retries.
-	var maxRetries int = 3 // this should be changed to fetch from config
+func startSupervisor(feedConfig *constants.Feed) {
+	// keep trying to acquire the connection - until max retries
 	// each feed has its configured retry limit and backoff time
 	// change it so all the configurable values for a client are taken from one struct
 
@@ -57,28 +38,28 @@ func startSupervisor() {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// maintain metric counters to observability and use it to trigger things
+	feedConfig.StatusChan = make(chan constants.Status, 1)
+	feedConfig.LastPongTime = time.Now()
 
-	var statusChan chan Status = make(chan Status, 1)
+	go readChildStatus(feedConfig, ctx, cancel)
 
-	go readChildStatus(statusChan, ctx, cancel, maxRetries)
-
-	statusChan <- StatusNew
+	feedConfig.StatusChan <- constants.StatusNew
 
 }
 
 // go routine for the supervisor to keep reading from this status channel and do its logic
-func readChildStatus(ch chan Status, ctx context.Context, cancel context.CancelFunc, maxRetries int) {
+func readChildStatus(feedConfig *constants.Feed, ctx context.Context, cancel context.CancelFunc) {
 	for {
 		select {
-		case message := <-ch:
+		case message := <-feedConfig.StatusChan:
 			switch message {
-			case StatusNew:
-				connect("feed url", ch, ctx, cancel)
-			case StatusBackoff:
-				retry("feed url", ch, ctx, cancel, maxRetries)
-			case StatusConnected:
+			case constants.StatusNew:
+				connect(feedConfig, ctx, cancel)
+			case constants.StatusBackoff:
+				retry(feedConfig, ctx, cancel)
+			case constants.StatusConnected:
 				fmt.Println("Successfully Connected")
-			case StatusTerminated:
+			case constants.StatusTerminated:
 				fmt.Println("Connection Terminated")
 				return
 			}
@@ -89,64 +70,66 @@ func readChildStatus(ch chan Status, ctx context.Context, cancel context.CancelF
 	}
 }
 
-func connect(url string, statusChan chan Status, ctx context.Context, cancel context.CancelFunc) {
-	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
+func connect(feedConfig *constants.Feed, ctx context.Context, cancel context.CancelFunc) {
+	conn, _, err := websocket.DefaultDialer.Dial(feedConfig.Url, nil)
 	if err != nil {
 		fmt.Printf("Error when connecting to server: %v\n", err)
-		statusChan <- StatusBackoff // retry connect again
+		feedConfig.StatusChan <- constants.StatusBackoff // retry connect again
 		return
 	}
 	defer conn.Close()
-	statusChan <- StatusConnected
-
-	var lastPongTime time.Time
+	feedConfig.StatusChan <- constants.StatusConnected
 
 	conn.SetPongHandler(func(appData string) error {
 		fmt.Println("Received pong:", appData)
-		lastPongTime = time.Now()
+		feedConfig.LastPongTime = time.Now()
 		return nil
 	})
 
-	var wg sync.WaitGroup
-
 	// spawn goroutines to handle message reads, heartbeats, monitor
-	wg.Add(1)
-	go readMessages(conn, ctx, &wg)
+	feedConfig.Wg.Add(1)
+	go readMessages(conn, ctx, &feedConfig.Wg)
 
-	ticker := time.NewTicker(10 * time.Second)
+	ticker := time.NewTicker(time.Duration(feedConfig.HearbeatInterval) * time.Second)
 	defer ticker.Stop()
 
-	wg.Add(1)
-	go sendHeartbeat(conn, ctx, &wg, ticker)
+	feedConfig.Wg.Add(1)
+	go sendHeartbeat(conn, ctx, &feedConfig.Wg, &feedConfig.Mu, ticker)
 
-	wg.Add(1)
-	go monitorConnection(conn, ctx, &wg, cancel, ticker)
+	feedConfig.Wg.Add(1)
+	go monitorConnection(ctx, feedConfig, cancel, ticker)
 
 	// exit this connect only when the goroutines end. if it crosses this point, some connection failure (didnt receive pongs on time)
-	wg.Wait()
+	feedConfig.Wg.Wait()
 
 	// notify the supervisor its backed off and to retry
-	statusChan <- StatusBackoff
+	feedConfig.StatusChan <- constants.StatusBackoff
 }
 
-func retry(url string, ch chan Status, ctx context.Context, cancel context.CancelFunc, maxRetries int) {
-	for retry := 0; retry < maxRetries; retry++ {
+func retry(feedConfig *constants.Feed, ctx context.Context, cancel context.CancelFunc) {
+	for retry := 0; retry < feedConfig.MaxRetries; retry++ {
 		// exponential backoff and jitter
-		delay := time.Duration(float64(time.Second) * math.Pow(2, float64(retry)))
-		jitter := time.Duration(rand.Intn(500)) * time.Millisecond
+		delay := time.Duration(float64(feedConfig.BaseDelay) + float64(time.Second)*math.Pow(2, float64(retry)))
+		jitter := time.Duration(rand.Intn(feedConfig.MaxJitterMillis)) * time.Millisecond
 		fmt.Printf("Retry %d in %v\n", retry+1, delay+jitter)
 		time.Sleep(delay + jitter)
-		connect(url, ch, ctx, cancel)
+		connect(feedConfig, ctx, cancel)
 	}
 }
 
 func readMessages(conn *websocket.Conn, ctx context.Context, wg *sync.WaitGroup) {
 	defer wg.Done()
 	for {
-		_, _, err := conn.ReadMessage()
-		if err != nil {
-			fmt.Printf("Failed to read message: %v\n", err)
+		select {
+		case <-ctx.Done():
+			fmt.Println("Closing read loop. Returning")
 			return
+		default:
+			_, _, err := conn.ReadMessage()
+			if err != nil {
+				fmt.Printf("Failed to read message: %v\n", err)
+				return
+			}
 		}
 	}
 }
@@ -154,6 +137,7 @@ func readMessages(conn *websocket.Conn, ctx context.Context, wg *sync.WaitGroup)
 func sendHeartbeat(conn *websocket.Conn,
 	ctx context.Context,
 	wg *sync.WaitGroup,
+	mu *sync.Mutex,
 	ticker *time.Ticker) {
 	defer wg.Done()
 	for {
@@ -174,18 +158,16 @@ func sendHeartbeat(conn *websocket.Conn,
 	}
 }
 
-func monitorConnection(conn *websocket.Conn,
+func monitorConnection(
 	ctx context.Context,
-	wg *sync.WaitGroup,
+	feedConfig *constants.Feed,
 	cancel context.CancelFunc,
 	ticker *time.Ticker) {
-	defer wg.Done()
-	var lastPongTime time.Time
+	defer feedConfig.Wg.Done()
 	for {
 		select {
 		case <-ticker.C:
-			mu.Lock()
-			if time.Since(lastPongTime) > 10*time.Second {
+			if time.Since(feedConfig.LastPongTime) > time.Duration(feedConfig.PongTimeout)*time.Second {
 				fmt.Println("Pong timeout -- cancelling the connection")
 				cancel()
 				return
