@@ -1,0 +1,30 @@
+feeds:
+  - name: feed1
+    url: https://feed1_url
+    format: json
+    maxRetries: x
+    backoffTime: x
+    heartBeatInterval: x
+    pongTimeout: x
+    kafkaTopic: x
+    kafkaBatchSize: x
+
+  - name: feed2
+    url: https://feed2_url
+    format: csv
+    maxRetries: z
+    backoffTime: z
+    heartBeatInterval: z
+    pongTimeout: z
+    kafkaTopic: z
+    kafkaBatchSize: z
+
+  - name: feed3
+    url: https://feed3_url
+    format: fix
+    maxRetries: k
+    backoffTime: k
+    heartBeatInterval: k
+    pongTimeout: k
+    kafkaTopic: k
+    kafkaBatchSize: k
