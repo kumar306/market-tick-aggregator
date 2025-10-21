@@ -3,8 +3,9 @@ feeds:
     url: https://feed1_url
     format: json
     maxRetries: x
-    backoffTime: x
+    baseDelay: x
     heartBeatInterval: x
+    maxJitterMillis: k
     pongTimeout: x
     kafkaTopic: x
     kafkaBatchSize: x
@@ -13,8 +14,9 @@ feeds:
     url: https://feed2_url
     format: csv
     maxRetries: z
-    backoffTime: z
+    baseDelay: z
     heartBeatInterval: z
+    maxJitterMillis: k
     pongTimeout: z
     kafkaTopic: z
     kafkaBatchSize: z
@@ -23,8 +25,9 @@ feeds:
     url: https://feed3_url
     format: fix
     maxRetries: k
-    backoffTime: k
+    baseDelay: k
     heartBeatInterval: k
+    maxJitterMillis: k
     pongTimeout: k
     kafkaTopic: k
     kafkaBatchSize: k
