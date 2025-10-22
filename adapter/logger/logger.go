@@ -7,7 +7,7 @@ import (
 )
 
 var Log = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-	Level: slog.LevelInfo,
+	Level: slog.LevelDebug,
 }))
 
 func LogAndWrap(msg string, err error, attrs ...any) error {
