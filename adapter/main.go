@@ -8,7 +8,9 @@ import (
 	"math"
 	"math/rand"
 	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -28,18 +30,33 @@ func main() {
 
 	c.FeedMap = make(map[string]*constants.Feed)
 
+	// handle shutdown on SIGTERM
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	// now we have the array of feed configs
 	// stream through its feeds and start supervisors
+
+	// using this to coordinate to shutdown the supervisor goroutines
+	var wg sync.WaitGroup
+
 	for _, feed := range c.Feeds {
-		go startSupervisor(feed)
+		go startSupervisor(feed, ctx, &wg)
 		c.FeedMap[feed.Name] = feed
 	}
 
 	logger.Log.Info("Supervisors startup execution completed")
+
+	// blocks until SIGTERM
+	<-ctx.Done()
+	logger.Log.Info("Received termination signal. Stopping supervisors and its processes gracefully.")
+	wg.Wait()
+	logger.Log.Info("Stopped all supervisors and its processes")
+
 }
 
 // starts the supervisor per feed. each feed has a supervisor to manage everything for a feed
-func startSupervisor(feedConfig *constants.Feed) {
+func startSupervisor(feedConfig *constants.Feed, parentCtx context.Context, wg *sync.WaitGroup) {
 	// keep trying to acquire the connection - until max retries
 	// each feed has its configured retry limit and backoff time
 	// change it so all the configurable values for a client are taken from one struct
@@ -50,20 +67,22 @@ func startSupervisor(feedConfig *constants.Feed) {
 		"url", feedConfig.Url)
 
 	// pass into spawned goroutines to handle shutdown
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(parentCtx)
+	defer cancel()
 
 	// maintain metric counters to observability and use it to trigger things
-	feedConfig.StatusChan = make(chan constants.Status, 1)
+	feedConfig.StatusChan = make(chan constants.Status, 5)
 	feedConfig.LastPongTime = time.Now()
-
-	go readChildStatus(feedConfig, ctx, cancel)
 
 	feedConfig.StatusChan <- constants.StatusNew
 
+	wg.Add(1)
+	go childLoop(feedConfig, ctx, cancel, wg)
 }
 
 // go routine for the supervisor to keep reading from this status channel and do its logic
-func readChildStatus(feedConfig *constants.Feed, ctx context.Context, cancel context.CancelFunc) {
+func childLoop(feedConfig *constants.Feed, ctx context.Context, cancel context.CancelFunc, wg *sync.WaitGroup) {
+	defer wg.Done()
 	for {
 		select {
 		case message := <-feedConfig.StatusChan:
@@ -148,16 +167,22 @@ func connect(feedConfig *constants.Feed, ctx context.Context, cancel context.Can
 
 func retry(feedConfig *constants.Feed, ctx context.Context, cancel context.CancelFunc) {
 	for retry := 0; retry < feedConfig.MaxRetries; retry++ {
-		// exponential backoff and jitter
-		delay := time.Duration(float64(feedConfig.BaseDelay) + float64(time.Second)*math.Pow(2, float64(retry)))
-		jitter := time.Duration(rand.Intn(feedConfig.MaxJitterMillis)) * time.Millisecond
-		logger.Log.Warn("Retrying feed connection",
-			"max_retries", feedConfig.MaxRetries,
-			"retry_attempt", retry+1,
-			"retries_left", feedConfig.MaxRetries-retry-1,
-			"delay", delay+jitter)
-		time.Sleep(delay + jitter)
-		connect(feedConfig, ctx, cancel)
+		select {
+		case <-ctx.Done():
+			logger.Log.Info("Stopping retry for feed", "name", feedConfig.Name)
+			return
+		default:
+			// exponential backoff and jitter
+			delay := time.Duration(float64(feedConfig.BaseDelay) + float64(time.Second)*math.Pow(2, float64(retry)))
+			jitter := time.Duration(rand.Intn(feedConfig.MaxJitterMillis)) * time.Millisecond
+			logger.Log.Warn("Retrying feed connection",
+				"max_retries", feedConfig.MaxRetries,
+				"retry_attempt", retry+1,
+				"retries_left", feedConfig.MaxRetries-retry-1,
+				"delay", delay+jitter)
+			time.Sleep(delay + jitter)
+			connect(feedConfig, ctx, cancel)
+		}
 	}
 }
 
