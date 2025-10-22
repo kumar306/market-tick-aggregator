@@ -1,12 +1,8 @@
 package constants
 
 import (
-	"log"
-	"os"
 	"sync"
 	"time"
-
-	"gopkg.in/yaml.v3"
 )
 
 // string identifier for status of connection. later modify this to take in select list of statuses (enum)
@@ -50,19 +46,4 @@ type Feed struct {
 	LastPongTime     time.Time
 }
 
-const configFile string = "market-adapter/config/config.yaml"
-
-func (c *Config) GetConfig() *Config {
-
-	yamlFile, err := os.ReadFile(configFile)
-	if err != nil {
-		log.Printf("Error when reading feed config: %v", err)
-	}
-
-	err = yaml.Unmarshal(yamlFile, c)
-	if err != nil {
-		log.Printf("Unmarshal error: %v", err)
-	}
-
-	return c
-}
+const ConfigFile string = "market-adapter/config/config.yaml"

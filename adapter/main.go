@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
+	"market-adapter/config"
 	"market-adapter/constants"
 	"math"
 	"math/rand"
@@ -16,15 +18,19 @@ import (
 func main() {
 
 	// have a map of string ("feed key") to its Config struct
-	var c constants.Config
-	c.GetConfig()
+	var c *constants.Config
+	c, err := config.GetConfig()
+	// If any validation errors, return
+	if err != nil {
+		log.Fatalf("Failed to load config: %v", err)
+	}
+
 	c.FeedMap = make(map[string]*constants.Feed)
 
 	// now we have the array of feed configs
 	// stream through its feeds and start supervisors
 	for _, feed := range c.Feeds {
 		go startSupervisor(feed)
-		c.FeedMap[feed.Name] = feed
 	}
 }
 
