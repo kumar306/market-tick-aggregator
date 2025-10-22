@@ -173,7 +173,8 @@ func retry(feedConfig *constants.Feed, ctx context.Context, cancel context.Cance
 			return
 		default:
 			// exponential backoff and jitter
-			delay := time.Duration(float64(feedConfig.BaseDelay) + float64(time.Second)*math.Pow(2, float64(retry)))
+			baseDelay := time.Duration(feedConfig.BaseDelay) * time.Second
+			delay := baseDelay * time.Duration(math.Pow(2, float64(retry)))
 			jitter := time.Duration(rand.Intn(feedConfig.MaxJitterMillis)) * time.Millisecond
 			logger.Log.Warn("Retrying feed connection",
 				"max_retries", feedConfig.MaxRetries,
