@@ -5,8 +5,10 @@ import (
 	"market-adapter/config"
 	"market-adapter/constants"
 	"market-adapter/logger"
+	"market-adapter/metrics"
 	"math"
 	"math/rand"
+	"net/http"
 	"os"
 	"os/signal"
 	"sync"
@@ -14,10 +16,18 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 // start feeds
 func main() {
+
+	// init and expose prometheus metrics
+	metrics.Init()
+	// inc app starts metric
+	metrics.AppStarts.Inc()
+
+	go exposeMetrics()
 
 	// have a map of string ("feed key") to its Config struct
 	var c *constants.Config
@@ -53,6 +63,8 @@ func main() {
 	wg.Wait()
 	logger.Log.Info("Stopped all supervisors and its processes")
 
+	// inc app shutdown metric
+	metrics.AppShutdowns.Inc()
 }
 
 // starts the supervisor per feed. each feed has a supervisor to manage everything for a feed
@@ -88,14 +100,21 @@ func childLoop(feedConfig *constants.Feed, ctx context.Context, cancel context.C
 		case message := <-feedConfig.StatusChan:
 			switch message {
 			case constants.StatusNew:
-				connect(feedConfig, ctx, cancel)
+
+				connect(feedConfig, ctx, cancel, false)
+
 			case constants.StatusBackoff:
+
 				retry(feedConfig, ctx, cancel)
+
 			case constants.StatusConnected:
 
 				logger.Log.Info("Successfully connected to feed",
 					"name", feedConfig.Name,
 					"url", feedConfig.Url)
+
+				// prom metrics
+				metrics.FeedConnections.WithLabelValues(feedConfig.Name).Inc()
 
 			case constants.StatusTerminated:
 
@@ -113,25 +132,31 @@ func childLoop(feedConfig *constants.Feed, ctx context.Context, cancel context.C
 	}
 }
 
-func connect(feedConfig *constants.Feed, ctx context.Context, cancel context.CancelFunc) {
+func connect(feedConfig *constants.Feed, ctx context.Context, cancel context.CancelFunc, isRetry bool) {
 	logger.Log.Info("Attempting to make connection to feed",
 		"name", feedConfig.Name,
 		"url", feedConfig.Url)
 	conn, _, err := websocket.DefaultDialer.Dial(feedConfig.Url, nil)
 	if err != nil {
 		logger.Log.Error("Error when connecting to server. Retry queued", "err", err)
-		feedConfig.StatusChan <- constants.StatusBackoff // retry connect again
+		metrics.FeedErrors.WithLabelValues(feedConfig.Name).Inc()
+		if !isRetry {
+			feedConfig.StatusChan <- constants.StatusBackoff // if fresh retry signal backoff
+		}
 		return
 	}
 	defer conn.Close()
+
 	feedConfig.StatusChan <- constants.StatusConnected
 
+	// create a metric to track last pong time
 	conn.SetPongHandler(func(appData string) error {
 		feedConfig.LastPongTime = time.Now()
 		logger.Log.Debug("Received pong",
 			"name", feedConfig.Name,
 			"url", feedConfig.Url,
 			"last_pong_time", feedConfig.LastPongTime)
+		metrics.LastPongTimes.WithLabelValues(feedConfig.Name).Set(float64(time.Since(feedConfig.LastPongTime) * time.Second))
 		return nil
 	})
 
@@ -154,12 +179,18 @@ func connect(feedConfig *constants.Feed, ctx context.Context, cancel context.Can
 		"heartbeat_interval", feedConfig.HearbeatInterval,
 		"pong_timeout", feedConfig.PongTimeout)
 
+	// inc metric for supervisor count
+	metrics.Supervisors.Inc()
+
 	// exit this connect only when the goroutines end. if it crosses this point, some connection failure (didnt receive pongs on time)
 	feedConfig.Wg.Wait()
 
 	logger.Log.Warn("Supervisor backing off.. Queuing retry",
 		"name", feedConfig.Name,
 		"url", feedConfig.Url)
+
+	// dec metric for supervisor count
+	metrics.Supervisors.Dec()
 
 	// notify the supervisor its backed off and to retry
 	feedConfig.StatusChan <- constants.StatusBackoff
@@ -182,13 +213,15 @@ func retry(feedConfig *constants.Feed, ctx context.Context, cancel context.Cance
 				"retries_left", feedConfig.MaxRetries-retry-1,
 				"delay", delay+jitter)
 			time.Sleep(delay + jitter)
-			connect(feedConfig, ctx, cancel)
+			connect(feedConfig, ctx, cancel, true)
 		}
 	}
 }
 
 func readMessages(conn *websocket.Conn, ctx context.Context, wg *sync.WaitGroup, name string) {
+	metrics.SupervisorGoroutines.WithLabelValues(name).Inc()
 	defer wg.Done()
+	defer metrics.SupervisorGoroutines.WithLabelValues(name).Dec()
 	for {
 		select {
 		case <-ctx.Done():
@@ -211,7 +244,9 @@ func sendHeartbeat(conn *websocket.Conn,
 	mu *sync.Mutex,
 	ticker *time.Ticker,
 	name string) {
+	metrics.SupervisorGoroutines.WithLabelValues(name).Inc()
 	defer wg.Done()
+	defer metrics.SupervisorGoroutines.WithLabelValues(name).Dec()
 	for {
 		select {
 		case <-ticker.C:
@@ -236,7 +271,9 @@ func monitorConnection(
 	cancel context.CancelFunc,
 	ticker *time.Ticker,
 	name string) {
+	metrics.SupervisorGoroutines.WithLabelValues(name).Inc()
 	defer feedConfig.Wg.Done()
+	defer metrics.SupervisorGoroutines.WithLabelValues(name).Dec()
 	for {
 		select {
 		case <-ticker.C:
@@ -250,5 +287,14 @@ func monitorConnection(
 			logger.Log.Info("Shutting down monitor loop", "name", name)
 			return
 		}
+	}
+}
+
+func exposeMetrics() {
+	http.Handle("/metrics", promhttp.Handler())
+	logger.Log.Info("Exposed metrics endpoint at 2112", "url", ":2112/metrics")
+	err := http.ListenAndServe(":2112", nil)
+	if err != nil {
+		logger.Log.Error("Metrics have stopped", "err", err)
 	}
 }
