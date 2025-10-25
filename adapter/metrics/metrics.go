@@ -65,6 +65,31 @@ var (
 		},
 		[]string{"feed_name"},
 	)
+
+	// adapter ring buffer metrics
+	BufferCapacity = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "buffer_capacity",
+			Help: "Buffer capacity per feeed",
+		},
+		[]string{"feed_name"},
+	)
+
+	BufferLen = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "buffer_len",
+			Help: "Buffer length per feed",
+		},
+		[]string{"feed_name"},
+	)
+
+	BufferDrops = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "buffer_drops",
+			Help: "Buffer drops per feed",
+		},
+		[]string{"feed_name"},
+	)
 )
 
 func Init() {

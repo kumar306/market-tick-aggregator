@@ -9,6 +9,7 @@ feeds:
     pongTimeout: x
     kafkaTopic: x
     kafkaBatchSize: x
+    ringBufferSize: z
 
   - name: feed2
     url: https://feed2_url
@@ -20,6 +21,7 @@ feeds:
     pongTimeout: z
     kafkaTopic: z
     kafkaBatchSize: z
+    ringBufferSize: z
 
   - name: feed3
     url: https://feed3_url
@@ -31,3 +33,4 @@ feeds:
     pongTimeout: k
     kafkaTopic: k
     kafkaBatchSize: k
+    ringBufferSize: z

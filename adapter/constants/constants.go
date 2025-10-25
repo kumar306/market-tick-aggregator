@@ -1,6 +1,7 @@
 package constants
 
 import (
+	"market-adapter/ring"
 	"sync"
 	"time"
 )
@@ -40,10 +41,12 @@ type Feed struct {
 	PongTimeout      int        `yaml:"pongTimeout"`
 	KafkaTopic       string     `yaml:"kafkaTopic"`
 	KafkaBatchSize   int        `yaml:"kafkaBatchSize"`
+	RingBufferSize   uint64     `yaml:"ringBufferSize"`
 	Mu               sync.Mutex
 	Wg               sync.WaitGroup
 	StatusChan       chan Status
 	LastPongTime     time.Time
+	Ring             *ring.SpscDropOldestRing[[]byte]
 }
 
 const ConfigFile string = "market-adapter/config/config.yaml"

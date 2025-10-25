@@ -6,6 +6,7 @@ import (
 	"market-adapter/constants"
 	"market-adapter/logger"
 	"market-adapter/metrics"
+	"market-adapter/ring"
 	"math"
 	"math/rand"
 	"net/http"
@@ -82,9 +83,12 @@ func startSupervisor(feedConfig *constants.Feed, parentCtx context.Context, wg *
 	ctx, cancel := context.WithCancel(parentCtx)
 	defer cancel()
 
-	// maintain metric counters to observability and use it to trigger things
+	// maintain metric counters to observability
 	feedConfig.StatusChan = make(chan constants.Status, 5)
 	feedConfig.LastPongTime = time.Now()
+
+	// init each feed's ring buffer
+	feedConfig.Ring = ring.NewSpscDropOldestRing[[]byte](feedConfig.RingBufferSize, feedConfig.Name)
 
 	feedConfig.StatusChan <- constants.StatusNew
 
@@ -162,7 +166,7 @@ func connect(feedConfig *constants.Feed, ctx context.Context, cancel context.Can
 
 	// spawn goroutines to handle message reads, heartbeats, monitor
 	feedConfig.Wg.Add(1)
-	go readMessages(conn, ctx, &feedConfig.Wg, feedConfig.Name)
+	go readMessages(conn, ctx, &feedConfig.Wg, feedConfig.Ring)
 
 	ticker := time.NewTicker(time.Duration(feedConfig.HearbeatInterval) * time.Second)
 	defer ticker.Stop()
@@ -181,6 +185,8 @@ func connect(feedConfig *constants.Feed, ctx context.Context, cancel context.Can
 
 	// inc metric for supervisor count
 	metrics.Supervisors.Inc()
+	// metric for ring cap upon supervisor init
+	metrics.BufferCapacity.WithLabelValues(feedConfig.Name).Set(float64(feedConfig.Ring.Capacity))
 
 	// exit this connect only when the goroutines end. if it crosses this point, some connection failure (didnt receive pongs on time)
 	feedConfig.Wg.Wait()
@@ -218,7 +224,8 @@ func retry(feedConfig *constants.Feed, ctx context.Context, cancel context.Cance
 	}
 }
 
-func readMessages(conn *websocket.Conn, ctx context.Context, wg *sync.WaitGroup, name string) {
+func readMessages(conn *websocket.Conn, ctx context.Context, wg *sync.WaitGroup, ring *ring.SpscDropOldestRing[[]byte]) {
+	name := ring.Name
 	metrics.SupervisorGoroutines.WithLabelValues(name).Inc()
 	defer wg.Done()
 	defer metrics.SupervisorGoroutines.WithLabelValues(name).Dec()
@@ -232,6 +239,7 @@ func readMessages(conn *websocket.Conn, ctx context.Context, wg *sync.WaitGroup,
 			if err != nil {
 				logger.Log.Error("Failed to read message for feed", "name", name, "err", err)
 			} else {
+				ring.Push(msg)
 				logger.Log.Info("Received message for feed", "name", name, "msg", string(msg))
 			}
 		}
