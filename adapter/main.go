@@ -4,6 +4,7 @@ import (
 	"context"
 	"market-adapter/config"
 	"market-adapter/constants"
+	"market-adapter/kafka"
 	"market-adapter/logger"
 	"market-adapter/metrics"
 	"market-adapter/ring"
@@ -45,12 +46,14 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// now we have the array of feed configs
-	// stream through its feeds and start supervisors
+	// kafka setup
+	kafka.Init(c.BootstrapServers)
+	defer kafka.Close()
 
 	// using this to coordinate to shutdown the supervisor goroutines
 	var wg sync.WaitGroup
 
+	// stream through config feeds and start supervisors
 	for _, feed := range c.Feeds {
 		go startSupervisor(feed, ctx, &wg)
 		c.FeedMap[feed.Name] = feed
@@ -320,7 +323,7 @@ func publishToKafkaLoop(feed *constants.Feed, ctx context.Context) {
 			}
 
 			// publish to kafka
-
+			kafka.ProduceAsync(feed.KafkaTopic, feed.Name, ctx, msg)
 		}
 	}
 }

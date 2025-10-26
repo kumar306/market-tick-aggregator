@@ -1,3 +1,5 @@
+bootstrap_servers:
+  - http://localhost:9092
 feeds:
   - name: feed1
     url: https://feed1_url

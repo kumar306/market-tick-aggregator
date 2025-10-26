@@ -26,8 +26,9 @@ const (
 // use interfaces so no need to write multiple persistence logics for persisting - all under same contract
 
 type Config struct {
-	Feeds   []*Feed `yaml:"feeds"`
-	FeedMap map[string]*Feed
+	Feeds            []*Feed `yaml:"feeds"`
+	FeedMap          map[string]*Feed
+	BootstrapServers []string `yaml:"bootstrap_servers"`
 }
 
 type Feed struct {
