@@ -168,6 +168,9 @@ func connect(feedConfig *constants.Feed, ctx context.Context, cancel context.Can
 	feedConfig.Wg.Add(1)
 	go readMessages(conn, ctx, &feedConfig.Wg, feedConfig.Ring)
 
+	feedConfig.Wg.Add(1)
+	go publishToKafkaLoop(feedConfig, ctx)
+
 	ticker := time.NewTicker(time.Duration(feedConfig.HearbeatInterval) * time.Second)
 	defer ticker.Stop()
 
@@ -294,6 +297,30 @@ func monitorConnection(
 		case <-ctx.Done():
 			logger.Log.Info("Shutting down monitor loop", "name", name)
 			return
+		}
+	}
+}
+
+func publishToKafkaLoop(feed *constants.Feed, ctx context.Context) {
+	defer feed.Wg.Done()
+	metrics.SupervisorGoroutines.WithLabelValues(feed.Name).Inc()
+	defer metrics.SupervisorGoroutines.WithLabelValues(feed.Name).Dec()
+	for {
+		select {
+		case <-ctx.Done():
+			logger.Log.Info("Shutting down kafka publish loop for feed " + feed.Name)
+			return
+		default:
+			// read from ring buffer
+			msg, ok := feed.Ring.Pop()
+			if !ok {
+				// empty buffer case
+				time.Sleep(1 * time.Millisecond)
+				continue
+			}
+
+			// publish to kafka
+
 		}
 	}
 }
