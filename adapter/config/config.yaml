@@ -1,38 +1,47 @@
 bootstrap_servers:
   - http://localhost:9092
 feeds:
-  - name: feed1
-    url: https://feed1_url
-    format: json
-    maxRetries: x
-    baseDelay: x
-    heartBeatInterval: x
-    maxJitterMillis: k
-    pongTimeout: x
-    kafkaTopic: x
-    kafkaBatchSize: x
-    ringBufferSize: z
+  - name: binance
+    url: wss://stream.binance.com:9443
+    maxRetries: 5
+    baseDelay: 2
+    heartBeatInterval: 15
+    pongTimeout: 25
+    kafkaTopic: ticks_binance
+    ringBufferSize: 10000
 
-  - name: feed2
-    url: https://feed2_url
-    format: csv
-    maxRetries: z
-    baseDelay: z
-    heartBeatInterval: z
-    maxJitterMillis: k
-    pongTimeout: z
-    kafkaTopic: z
-    kafkaBatchSize: z
-    ringBufferSize: z
+  - name: coinbase
+    url: wss://ws-feed.exchange.coinbase.com
+    maxRetries: 5
+    baseDelay: 2
+    heartBeatInterval: 15
+    pongTimeout: 25
+    kafkaTopic: ticks_coinbase
+    ringBufferSize: 10000
 
-  - name: feed3
-    url: https://feed3_url
-    format: fix
-    maxRetries: k
-    baseDelay: k
-    heartBeatInterval: k
-    maxJitterMillis: k
-    pongTimeout: k
-    kafkaTopic: k
-    kafkaBatchSize: k
-    ringBufferSize: z
+  - name: kraken
+    url: wss://ws.kraken.com/v2
+    maxRetries: 5
+    baseDelay: 2
+    heartBeatInterval: 15
+    pongTimeout: 25
+    kafkaTopic: ticks_kraken
+    ringBufferSize: 10000
+
+  - name: bitfinex
+    url: wss://api-pub.bitfinex.com
+    maxRetries: 5
+    baseDelay: 2
+    heartBeatInterval: 15
+    pongTimeout: 25
+    kafkaTopic: ticks_bitfinex
+    ringBufferSize: 10000
+
+  - name: bybit
+    url: wss://stream.bybit.com/v5/public/spot
+    maxRetries: 5
+    baseDelay: 2
+    heartBeatInterval: 15
+    pongTimeout: 25
+    kafkaTopic: ticks_bybit
+    ringBufferSize: 10000

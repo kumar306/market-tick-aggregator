@@ -4,6 +4,8 @@ import (
 	"market-adapter/ring"
 	"sync"
 	"time"
+
+	"github.com/gorilla/websocket"
 )
 
 // string identifier for status of connection. later modify this to take in select list of statuses (enum)
@@ -32,22 +34,40 @@ type Config struct {
 }
 
 type Feed struct {
-	Name             string     `yaml:"name"`
-	Url              string     `yaml:"url"`
-	Format           FormatType `yaml:"format"`
-	MaxRetries       int        `yaml:"maxRetries"`
-	BaseDelay        int        `yaml:"baseDelay"`
-	MaxJitterMillis  int        `yaml:"maxJitterMillis"`
-	HearbeatInterval int        `yaml:"heartbeatInterval"`
-	PongTimeout      int        `yaml:"pongTimeout"`
-	KafkaTopic       string     `yaml:"kafkaTopic"`
-	KafkaBatchSize   int        `yaml:"kafkaBatchSize"`
-	RingBufferSize   uint64     `yaml:"ringBufferSize"`
+	Name             string `yaml:"name"`
+	Url              string `yaml:"url"`
+	MaxRetries       int    `yaml:"maxRetries"`
+	BaseDelay        int    `yaml:"baseDelay"`
+	HearbeatInterval int    `yaml:"heartbeatInterval"`
+	PongTimeout      int    `yaml:"pongTimeout"`
+	KafkaTopic       string `yaml:"kafkaTopic"`
+	RingBufferSize   uint64 `yaml:"ringBufferSize"`
+	MaxJitterMillis  int
 	Mu               sync.Mutex
 	Wg               sync.WaitGroup
 	StatusChan       chan Status
 	LastPongTime     time.Time
 	Ring             *ring.SpscDropOldestRing[[]byte]
+	Normalizer       Normalizer
+	Subscriber       Subscriber
+	Pinger           Pinger
 }
 
 const ConfigFile string = "market-adapter/config/config.yaml"
+
+// normalize different kind of messages for different exchanges
+type Normalizer interface {
+	Normalize(raw []byte) (symbol string, normalized []byte, err error)
+}
+
+type Subscriber interface {
+	Subscribe(conn *websocket.Conn) error
+}
+
+type Pinger interface {
+	Ping(conn *websocket.Conn) error
+}
+
+type AuthHandler interface {
+	HandleAuth() error
+}

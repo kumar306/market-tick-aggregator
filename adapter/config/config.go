@@ -98,17 +98,6 @@ func Validate(f *constants.Feed) error {
 			"url", f.Url)
 	}
 
-	// Format must be of type FormatType - JSON or CSV or FIX or array of json, etc
-	if f.Format != constants.FormatJson &&
-		f.Format != constants.FormatCsv &&
-		f.Format != constants.FormatFix {
-		return logger.LogAndWrap("cannot have invalid format. expected json/csv/fix",
-			nil,
-			"name", f.Name,
-			"url", f.Url,
-			"format", f.Format)
-	}
-
 	// default for max retries
 	if f.MaxRetries == 0 {
 		logger.Log.Warn("Missing max retries or its set to 0. Reverting to default", "name", f.Name)
@@ -169,11 +158,6 @@ func Validate(f *constants.Feed) error {
 			"pong_timeout", f.PongTimeout,
 			"expected_min_pong_timeout", 1.5*float64(f.HearbeatInterval),
 			"expected_max_pong_timeout", 2.5*float64(f.HearbeatInterval))
-	}
-
-	// default for kafka batch size
-	if f.KafkaBatchSize <= 1000 {
-		f.KafkaBatchSize = 10000
 	}
 
 	logger.Log.Info("Successfully validated for feed", "name", f.Name)

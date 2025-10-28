@@ -4,6 +4,8 @@ import (
 	"context"
 	"market-adapter/config"
 	"market-adapter/constants"
+	feedFactory "market-adapter/feeds"
+	"market-adapter/feeds/binance"
 	"market-adapter/kafka"
 	"market-adapter/logger"
 	"market-adapter/metrics"
@@ -23,6 +25,9 @@ import (
 
 // start feeds
 func main() {
+
+	// register the feeds
+	feedFactory.RegisterFeedFactory("binance", &binance.BinanceFactory{})
 
 	// init and expose prometheus metrics
 	metrics.Init()
@@ -79,7 +84,6 @@ func startSupervisor(feedConfig *constants.Feed, parentCtx context.Context, wg *
 
 	logger.Log.Info("Starting supervisor for feed",
 		"name", feedConfig.Name,
-		"format", feedConfig.Format,
 		"url", feedConfig.Url)
 
 	// pass into spawned goroutines to handle shutdown
@@ -94,6 +98,20 @@ func startSupervisor(feedConfig *constants.Feed, parentCtx context.Context, wg *
 	feedConfig.Ring = ring.NewSpscDropOldestRing[[]byte](feedConfig.RingBufferSize, feedConfig.Name)
 
 	feedConfig.StatusChan <- constants.StatusNew
+
+	// get the feed factory for a feed
+	ff, err := feedFactory.GetFeedFactory(feedConfig.Name)
+	if err != nil {
+		// feedFactory is not present for feed
+		// don't start the goroutines for it, exit
+		logger.Log.Error("Closing supervisor as feed factory is not found", "name", feedConfig.Name)
+		return
+	}
+
+	// feed factory is retrieved - init its normalizer, subscriber, pinger
+	feedConfig.Normalizer = ff.CreateNormalizer()
+	feedConfig.Subscriber = ff.CreateSubscriber()
+	feedConfig.Pinger = ff.CreatePinger()
 
 	wg.Add(1)
 	go childLoop(feedConfig, ctx, cancel, wg)
@@ -311,7 +329,7 @@ func publishToKafkaLoop(feed *constants.Feed, ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			logger.Log.Info("Shutting down kafka publish loop for feed " + feed.Name)
+			logger.Log.Info("Shutting down kafka publish loop", "name", feed.Name)
 			return
 		default:
 			// read from ring buffer
