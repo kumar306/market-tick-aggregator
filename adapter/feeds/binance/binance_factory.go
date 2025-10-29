@@ -8,8 +8,8 @@ func (b *BinanceFactory) CreateNormalizer() constants.Normalizer {
 	return &BinanceNormalizer{}
 }
 
-func (b *BinanceFactory) CreateSubscriber() constants.Subscriber {
-	return &BinanceSubscriber{}
+func (b *BinanceFactory) CreateSubscriber(channel string) constants.Subscriber {
+	return &BinanceSubscriber{Channel: channel}
 }
 
 func (b *BinanceFactory) CreatePinger() constants.Pinger {

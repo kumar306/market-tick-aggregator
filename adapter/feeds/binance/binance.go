@@ -9,7 +9,9 @@ import (
 )
 
 type BinanceNormalizer struct{}
-type BinanceSubscriber struct{}
+type BinanceSubscriber struct {
+	Channel string
+}
 type BinancePinger struct{}
 
 type BinanceSubscribeMessage struct {
@@ -23,11 +25,10 @@ func (b *BinanceNormalizer) Normalize([]byte) (string, []byte, error) {
 }
 
 // subscribe message logic
-// TODO: make the streams taken from config
 func (b *BinanceSubscriber) Subscribe(conn *websocket.Conn) error {
 	subscribeMsg := BinanceSubscribeMessage{
 		Method: "SUBSCRIBE",
-		Params: []string{"btcusdt@aggTrade", "btcusdt@depth"},
+		Params: []string{b.Channel},
 		Id:     1}
 
 	subscribeJson, err := json.Marshal(subscribeMsg)

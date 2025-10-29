@@ -101,7 +101,10 @@ func Init() {
 		FeedErrors,
 		Supervisors,
 		SupervisorGoroutines,
-		LastPongTimes)
+		LastPongTimes,
+		BufferCapacity,
+		BufferLen,
+		BufferDrops)
 
 	// metric to track current version, commit SHA
 	BuildInfo.WithLabelValues("v1.0.0", "abc123").Set(1)
