@@ -3,45 +3,50 @@ bootstrap_servers:
 feeds:
   - name: binance
     url: wss://stream.binance.com:9443
-    maxRetries: 5
-    baseDelay: 2
-    heartBeatInterval: 15
-    pongTimeout: 25
-    kafkaTopic: ticks_binance
-    ringBufferSize: 10000
+    streams:
+      - name: binance
+        channel: btcusdt@aggtrade
+        maxRetries: 5
+        heartBeatInterval: 15
+        pongTimeout: 25
+        kafkaTopic: binance_raw_ticks
+        ringBufferSize: 10000
+      - name: binance
+        channel: btcusdt@depth
+        maxRetries: 5
+        heartBeatInterval: 15
+        pongTimeout: 25
+        kafkaTopic: binance_depth
+        ringBufferSize: 10000
 
-  - name: coinbase
-    url: wss://ws-feed.exchange.coinbase.com
-    maxRetries: 5
-    baseDelay: 2
-    heartBeatInterval: 15
-    pongTimeout: 25
-    kafkaTopic: ticks_coinbase
-    ringBufferSize: 10000
+  # - name: coinbase
+  #   url: wss://ws-feed.exchange.coinbase.com
+  #   maxRetries: 5
+  #   heartBeatInterval: 15
+  #   pongTimeout: 25
+  #   kafkaTopic: ticks_coinbase
+  #   ringBufferSize: 10000
 
-  - name: kraken
-    url: wss://ws.kraken.com/v2
-    maxRetries: 5
-    baseDelay: 2
-    heartBeatInterval: 15
-    pongTimeout: 25
-    kafkaTopic: ticks_kraken
-    ringBufferSize: 10000
+  # - name: kraken
+  #   url: wss://ws.kraken.com/v2
+  #   maxRetries: 5
+  #   heartBeatInterval: 15
+  #   pongTimeout: 25
+  #   kafkaTopic: ticks_kraken
+  #   ringBufferSize: 10000
 
-  - name: bitfinex
-    url: wss://api-pub.bitfinex.com
-    maxRetries: 5
-    baseDelay: 2
-    heartBeatInterval: 15
-    pongTimeout: 25
-    kafkaTopic: ticks_bitfinex
-    ringBufferSize: 10000
+  # - name: bitfinex
+  #   url: wss://api-pub.bitfinex.com
+  #   maxRetries: 5
+  #   heartBeatInterval: 15
+  #   pongTimeout: 25
+  #   kafkaTopic: ticks_bitfinex
+  #   ringBufferSize: 10000
 
-  - name: bybit
-    url: wss://stream.bybit.com/v5/public/spot
-    maxRetries: 5
-    baseDelay: 2
-    heartBeatInterval: 15
-    pongTimeout: 25
-    kafkaTopic: ticks_bybit
-    ringBufferSize: 10000
+  # - name: bybit
+  #   url: wss://stream.bybit.com/v5/public/spot
+  #   maxRetries: 5
+  #   heartBeatInterval: 15
+  #   pongTimeout: 25
+  #   kafkaTopic: ticks_bybit
+  #   ringBufferSize: 10000

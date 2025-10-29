@@ -1,6 +1,7 @@
 package constants
 
 import (
+	"context"
 	"market-adapter/ring"
 	"sync"
 	"time"
@@ -34,23 +35,37 @@ type Config struct {
 }
 
 type Feed struct {
-	Name             string `yaml:"name"`
-	Url              string `yaml:"url"`
-	MaxRetries       int    `yaml:"maxRetries"`
-	BaseDelay        int    `yaml:"baseDelay"`
-	HearbeatInterval int    `yaml:"heartbeatInterval"`
-	PongTimeout      int    `yaml:"pongTimeout"`
-	KafkaTopic       string `yaml:"kafkaTopic"`
-	RingBufferSize   uint64 `yaml:"ringBufferSize"`
-	MaxJitterMillis  int
-	Mu               sync.Mutex
-	Wg               sync.WaitGroup
-	StatusChan       chan Status
-	LastPongTime     time.Time
-	Ring             *ring.SpscDropOldestRing[[]byte]
-	Normalizer       Normalizer
-	Subscriber       Subscriber
-	Pinger           Pinger
+	Name             string    `yaml:"name"`
+	Url              string    `yaml:"url"`
+	Streams          []*Stream `yaml:"streams"`
+	MaxRetries       int       `yaml:"maxRetries"`
+	BaseDelay        int       `yaml:"baseDelay"`
+	HearbeatInterval int       `yaml:"heartbeatInterval"`
+	PongTimeout      int       `yaml:"pongTimeout"`
+	MaxJitterMillis  int       `yaml:"maxJitterMillis"`
+}
+
+type Stream struct {
+	Channel        string `yaml:"channel"`
+	KafkaTopic     string `yaml:"kafkaTopic"`
+	RingBufferSize uint64 `yaml:"ringBufferSize"`
+}
+
+type Supervisor struct {
+	Wg           *sync.WaitGroup
+	Ctx          context.Context
+	Cancel       context.CancelFunc
+	StatusChan   chan Status
+	LastPongTime time.Time
+	Handler      *StreamHandler
+}
+
+type StreamHandler struct {
+	Mu         *sync.Mutex
+	Normalizer Normalizer
+	Subscriber Subscriber
+	Pinger     Pinger
+	Ring       *ring.SpscDropOldestRing[[]byte]
 }
 
 const ConfigFile string = "market-adapter/config/config.yaml"

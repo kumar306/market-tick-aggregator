@@ -45,6 +45,7 @@ func ValidateAll(c *constants.Config) error {
 	seenNames := make(map[string]bool)
 	seenKafkaTopics := make(map[string]bool)
 	seenUrls := make(map[string]bool)
+	seenChannels := make(map[string]bool)
 
 	for _, feed := range c.Feeds {
 		if seenNames[feed.Name] {
@@ -58,15 +59,27 @@ func ValidateAll(c *constants.Config) error {
 				"name", feed.Name,
 				"url", feed.Url)
 		}
-		if seenKafkaTopics[feed.KafkaTopic] {
-			return logger.LogAndWrap("cannot have duplicate Kafka Topic for feed",
-				nil,
-				"name", feed.Name,
-				"kafka_topic", feed.KafkaTopic)
+
+		for _, stream := range feed.Streams {
+			if seenKafkaTopics[stream.KafkaTopic] {
+				return logger.LogAndWrap("cannot have duplicate Kafka Topic for feed",
+					nil,
+					"name", feed.Name,
+					"kafka_topic", stream.KafkaTopic)
+			}
+			seenKafkaTopics[stream.KafkaTopic] = true
+
+			if seenChannels[stream.Channel] {
+				return logger.LogAndWrap("cannot have duplicate channel for feed",
+					nil,
+					"name", feed.Name,
+					"channel", stream.Channel)
+			}
+			seenChannels[stream.Channel] = true
 		}
+
 		seenNames[feed.Name] = true
 		seenUrls[feed.Url] = true
-		seenKafkaTopics[feed.KafkaTopic] = true
 
 		validateErr := Validate(feed)
 		if validateErr != nil {

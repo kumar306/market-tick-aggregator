@@ -58,9 +58,28 @@ func main() {
 	// using this to coordinate to shutdown the supervisor goroutines
 	var wg sync.WaitGroup
 
-	// stream through config feeds and start supervisors
+	// stream through config streams and start supervisors
 	for _, feed := range c.Feeds {
-		go startSupervisor(feed, ctx, &wg)
+		for _, stream := range feed.Streams {
+
+			// create supervisor and get the stream handler
+			handler, handlerErr := feedFactory.GetStreamHandler(feed.Name, stream)
+			if handlerErr != nil {
+				logger.Log.Error("Error occurred when retrieving stream handler for stream", handlerErr, "name", feed.Name)
+				metrics.FeedErrors.WithLabelValues("feed_name", feed.Name).Inc()
+				continue
+			}
+
+			// each supervisor has an internal waitgroup to manage its child goroutines - read, heartbeat, monitor
+			supervisor := &constants.Supervisor{
+				Wg:           &sync.WaitGroup{},
+				Handler:      handler,
+				StatusChan:   make(chan constants.Status, 3),
+				LastPongTime: time.Now(),
+			}
+
+			go startSupervisor(supervisor, feed, stream, ctx, &wg)
+		}
 		c.FeedMap[feed.Name] = feed
 	}
 
@@ -76,174 +95,167 @@ func main() {
 	metrics.AppShutdowns.Inc()
 }
 
-// starts the supervisor per feed. each feed has a supervisor to manage everything for a feed
-func startSupervisor(feedConfig *constants.Feed, parentCtx context.Context, wg *sync.WaitGroup) {
+// starts the supervisor per stream. each stream has a supervisor to manage everything
+func startSupervisor(supervisor *constants.Supervisor,
+	feed *constants.Feed,
+	stream *constants.Stream,
+	parentCtx context.Context,
+	wg *sync.WaitGroup) {
+
 	// keep trying to acquire the connection - until max retries
 	// each feed has its configured retry limit and backoff time
-	// change it so all the configurable values for a client are taken from one struct
 
-	logger.Log.Info("Starting supervisor for feed",
-		"name", feedConfig.Name,
-		"url", feedConfig.Url)
+	logger.Log.Info("Starting supervisor for stream",
+		"name", feed.Name,
+		"url", feed.Url)
 
 	// pass into spawned goroutines to handle shutdown
 	ctx, cancel := context.WithCancel(parentCtx)
 	defer cancel()
 
-	// maintain metric counters to observability
-	feedConfig.StatusChan = make(chan constants.Status, 5)
-	feedConfig.LastPongTime = time.Now()
-
-	// init each feed's ring buffer
-	feedConfig.Ring = ring.NewSpscDropOldestRing[[]byte](feedConfig.RingBufferSize, feedConfig.Name)
-
-	feedConfig.StatusChan <- constants.StatusNew
-
-	// get the feed factory for a feed
-	ff, err := feedFactory.GetFeedFactory(feedConfig.Name)
-	if err != nil {
-		// feedFactory is not present for feed
-		// don't start the goroutines for it, exit
-		logger.Log.Error("Closing supervisor as feed factory is not found", "name", feedConfig.Name)
-		return
-	}
-
-	// feed factory is retrieved - init its normalizer, subscriber, pinger
-	feedConfig.Normalizer = ff.CreateNormalizer()
-	feedConfig.Subscriber = ff.CreateSubscriber()
-	feedConfig.Pinger = ff.CreatePinger()
+	supervisor.Ctx = ctx
+	supervisor.Cancel = cancel
+	supervisor.StatusChan <- constants.StatusNew
 
 	wg.Add(1)
-	go childLoop(feedConfig, ctx, cancel, wg)
+	go childLoop(feed, stream, supervisor, wg)
 }
 
 // go routine for the supervisor to keep reading from this status channel and do its logic
-func childLoop(feedConfig *constants.Feed, ctx context.Context, cancel context.CancelFunc, wg *sync.WaitGroup) {
+func childLoop(
+	feed *constants.Feed,
+	stream *constants.Stream,
+	supervisor *constants.Supervisor,
+	wg *sync.WaitGroup) {
 	defer wg.Done()
 	for {
 		select {
-		case message := <-feedConfig.StatusChan:
+		case message := <-supervisor.StatusChan:
 			switch message {
 			case constants.StatusNew:
 
-				connect(feedConfig, ctx, cancel, false)
+				connect(feed, stream, supervisor, false)
 
 			case constants.StatusBackoff:
 
-				retry(feedConfig, ctx, cancel)
+				retry(feed, stream, supervisor)
 
 			case constants.StatusConnected:
 
 				logger.Log.Info("Successfully connected to feed",
-					"name", feedConfig.Name,
-					"url", feedConfig.Url)
+					"name", feed.Name,
+					"url", feed.Url)
 
 				// prom metrics
-				metrics.FeedConnections.WithLabelValues(feedConfig.Name).Inc()
+				metrics.FeedConnections.WithLabelValues(feed.Name).Inc()
 
 			case constants.StatusTerminated:
 
 				logger.Log.Info("Terminated connection",
-					"name", feedConfig.Name,
-					"url", feedConfig.Url)
+					"name", feed.Name,
+					"url", feed.Url)
 				return
 			}
-		case <-ctx.Done():
+		case <-supervisor.Ctx.Done():
 			logger.Log.Info("Supervisor shutting down",
-				"name", feedConfig.Name,
-				"url", feedConfig.Url)
+				"name", feed.Name,
+				"url", feed.Url)
 			return
 		}
 	}
 }
 
-func connect(feedConfig *constants.Feed, ctx context.Context, cancel context.CancelFunc, isRetry bool) {
+func connect(feed *constants.Feed, stream *constants.Stream, supervisor *constants.Supervisor, isRetry bool) {
 	logger.Log.Info("Attempting to make connection to feed",
-		"name", feedConfig.Name,
-		"url", feedConfig.Url)
-	conn, _, err := websocket.DefaultDialer.Dial(feedConfig.Url, nil)
+		"name", feed.Name,
+		"url", feed.Url)
+	conn, _, err := websocket.DefaultDialer.Dial(feed.Url, nil)
 	if err != nil {
 		logger.Log.Error("Error when connecting to server. Retry queued", "err", err)
-		metrics.FeedErrors.WithLabelValues(feedConfig.Name).Inc()
+		metrics.FeedErrors.WithLabelValues(feed.Name).Inc()
 		if !isRetry {
-			feedConfig.StatusChan <- constants.StatusBackoff // if fresh retry signal backoff
+			supervisor.StatusChan <- constants.StatusBackoff // if fresh retry signal backoff
 		}
 		return
 	}
 	defer conn.Close()
 
-	feedConfig.StatusChan <- constants.StatusConnected
+	supervisor.StatusChan <- constants.StatusConnected
+
+	var streamHandler *constants.StreamHandler = supervisor.Handler
 
 	// create a metric to track last pong time
 	conn.SetPongHandler(func(appData string) error {
-		feedConfig.LastPongTime = time.Now()
+		supervisor.LastPongTime = time.Now()
 		logger.Log.Debug("Received pong",
-			"name", feedConfig.Name,
-			"url", feedConfig.Url,
-			"last_pong_time", feedConfig.LastPongTime)
-		metrics.LastPongTimes.WithLabelValues(feedConfig.Name).Set(float64(time.Since(feedConfig.LastPongTime) * time.Second))
+			"name", feed.Name,
+			"url", feed.Url,
+			"last_pong_time", supervisor.LastPongTime)
+		metrics.LastPongTimes.WithLabelValues(feed.Name).Set(float64(time.Since(supervisor.LastPongTime) * time.Second))
 		return nil
 	})
 
+	// TODO: subscribe goroutine to be added here
+
 	// spawn goroutines to handle message reads, heartbeats, monitor
-	feedConfig.Wg.Add(1)
-	go readMessages(conn, ctx, &feedConfig.Wg, feedConfig.Ring)
+	supervisor.Wg.Add(1)
+	go readMessages(conn, supervisor.Ctx, supervisor.Wg, streamHandler.Ring)
 
-	feedConfig.Wg.Add(1)
-	go publishToKafkaLoop(feedConfig, ctx)
+	supervisor.Wg.Add(1)
+	go publishToKafkaLoop(supervisor.Wg, feed.Name, stream.KafkaTopic, supervisor.Ctx, streamHandler.Ring)
 
-	ticker := time.NewTicker(time.Duration(feedConfig.HearbeatInterval) * time.Second)
+	ticker := time.NewTicker(time.Duration(feed.HearbeatInterval) * time.Second)
 	defer ticker.Stop()
 
-	feedConfig.Wg.Add(1)
-	go sendHeartbeat(conn, ctx, &feedConfig.Wg, &feedConfig.Mu, ticker, feedConfig.Name)
+	supervisor.Wg.Add(1)
+	go sendHeartbeat(conn, supervisor.Ctx, supervisor.Wg, streamHandler.Mu, ticker, feed.Name)
 
-	feedConfig.Wg.Add(1)
-	go monitorConnection(ctx, feedConfig, cancel, ticker, feedConfig.Name)
+	supervisor.Wg.Add(1)
+	go monitorConnection(supervisor, feed, ticker)
 
 	logger.Log.Info("Started the supervisor loops for feed after establishing connection",
-		"name", feedConfig.Name,
-		"url", feedConfig.Url,
-		"heartbeat_interval", feedConfig.HearbeatInterval,
-		"pong_timeout", feedConfig.PongTimeout)
+		"name", feed.Name,
+		"url", feed.Url,
+		"heartbeat_interval", feed.HearbeatInterval,
+		"pong_timeout", feed.PongTimeout)
 
 	// inc metric for supervisor count
 	metrics.Supervisors.Inc()
 	// metric for ring cap upon supervisor init
-	metrics.BufferCapacity.WithLabelValues(feedConfig.Name).Set(float64(feedConfig.Ring.Capacity))
+	metrics.BufferCapacity.WithLabelValues(feed.Name).Set(float64(streamHandler.Ring.Capacity))
 
 	// exit this connect only when the goroutines end. if it crosses this point, some connection failure (didnt receive pongs on time)
-	feedConfig.Wg.Wait()
+	supervisor.Wg.Wait()
 
 	logger.Log.Warn("Supervisor backing off.. Queuing retry",
-		"name", feedConfig.Name,
-		"url", feedConfig.Url)
+		"name", feed.Name,
+		"url", feed.Url)
 
 	// dec metric for supervisor count
 	metrics.Supervisors.Dec()
 
 	// notify the supervisor its backed off and to retry
-	feedConfig.StatusChan <- constants.StatusBackoff
+	supervisor.StatusChan <- constants.StatusBackoff
 }
 
-func retry(feedConfig *constants.Feed, ctx context.Context, cancel context.CancelFunc) {
-	for retry := 0; retry < feedConfig.MaxRetries; retry++ {
+func retry(feed *constants.Feed, stream *constants.Stream, supervisor *constants.Supervisor) {
+	for retry := 0; retry < feed.MaxRetries; retry++ {
 		select {
-		case <-ctx.Done():
-			logger.Log.Info("Stopping retry for feed", "name", feedConfig.Name)
+		case <-supervisor.Ctx.Done():
+			logger.Log.Info("Stopping retry for feed", "name", feed.Name)
 			return
 		default:
 			// exponential backoff and jitter
-			baseDelay := time.Duration(feedConfig.BaseDelay) * time.Second
+			baseDelay := time.Duration(feed.BaseDelay) * time.Second
 			delay := baseDelay * time.Duration(math.Pow(2, float64(retry)))
-			jitter := time.Duration(rand.Intn(feedConfig.MaxJitterMillis)) * time.Millisecond
+			jitter := time.Duration(rand.Intn(feed.MaxJitterMillis)) * time.Millisecond
 			logger.Log.Warn("Retrying feed connection",
-				"max_retries", feedConfig.MaxRetries,
+				"max_retries", feed.MaxRetries,
 				"retry_attempt", retry+1,
-				"retries_left", feedConfig.MaxRetries-retry-1,
+				"retries_left", feed.MaxRetries-retry-1,
 				"delay", delay+jitter)
 			time.Sleep(delay + jitter)
-			connect(feedConfig, ctx, cancel, true)
+			connect(feed, stream, supervisor, true)
 		}
 	}
 }
@@ -298,42 +310,44 @@ func sendHeartbeat(conn *websocket.Conn,
 }
 
 func monitorConnection(
-	ctx context.Context,
-	feedConfig *constants.Feed,
-	cancel context.CancelFunc,
-	ticker *time.Ticker,
-	name string) {
-	metrics.SupervisorGoroutines.WithLabelValues(name).Inc()
-	defer feedConfig.Wg.Done()
-	defer metrics.SupervisorGoroutines.WithLabelValues(name).Dec()
+	supervisor *constants.Supervisor,
+	feed *constants.Feed,
+	ticker *time.Ticker) {
+	metrics.SupervisorGoroutines.WithLabelValues(feed.Name).Inc()
+	defer supervisor.Wg.Done()
+	defer metrics.SupervisorGoroutines.WithLabelValues(feed.Name).Dec()
 	for {
 		select {
 		case <-ticker.C:
-			if time.Since(feedConfig.LastPongTime) > time.Duration(feedConfig.PongTimeout)*time.Second {
-				logger.Log.Warn("Pong timeout -- cancelling the connection", "name", name)
-				cancel()
+			if time.Since(supervisor.LastPongTime) > time.Duration(feed.PongTimeout)*time.Second {
+				logger.Log.Warn("Pong timeout -- cancelling the connection", "name", feed.Name)
+				supervisor.Cancel()
 				return
 			}
 
-		case <-ctx.Done():
-			logger.Log.Info("Shutting down monitor loop", "name", name)
+		case <-supervisor.Ctx.Done():
+			logger.Log.Info("Shutting down monitor loop", "name", feed.Name)
 			return
 		}
 	}
 }
 
-func publishToKafkaLoop(feed *constants.Feed, ctx context.Context) {
-	defer feed.Wg.Done()
-	metrics.SupervisorGoroutines.WithLabelValues(feed.Name).Inc()
-	defer metrics.SupervisorGoroutines.WithLabelValues(feed.Name).Dec()
+func publishToKafkaLoop(wg *sync.WaitGroup,
+	name string,
+	kafkaTopic string,
+	ctx context.Context,
+	ring *ring.SpscDropOldestRing[[]byte]) {
+	defer wg.Done()
+	metrics.SupervisorGoroutines.WithLabelValues(name).Inc()
+	defer metrics.SupervisorGoroutines.WithLabelValues(name).Dec()
 	for {
 		select {
 		case <-ctx.Done():
-			logger.Log.Info("Shutting down kafka publish loop", "name", feed.Name)
+			logger.Log.Info("Shutting down kafka publish loop", "name", name)
 			return
 		default:
 			// read from ring buffer
-			msg, ok := feed.Ring.Pop()
+			msg, ok := ring.Pop()
 			if !ok {
 				// empty buffer case
 				time.Sleep(1 * time.Millisecond)
@@ -341,7 +355,7 @@ func publishToKafkaLoop(feed *constants.Feed, ctx context.Context) {
 			}
 
 			// publish to kafka
-			kafka.ProduceAsync(feed.KafkaTopic, feed.Name, ctx, msg)
+			kafka.ProduceAsync(kafkaTopic, name, ctx, msg)
 		}
 	}
 }
