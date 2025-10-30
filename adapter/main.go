@@ -210,7 +210,7 @@ func connect(feed *constants.Feed, streamCfg *constants.Stream, supervisor *cons
 	go readMessages(conn, supervisor.Ctx, supervisor.Wg, streamHandler.Ring)
 
 	supervisor.Wg.Add(1)
-	go publishToKafkaLoop(supervisor.Wg, feed.Name, streamCfg.KafkaTopic, supervisor.Ctx, streamHandler.Normalizer, streamHandler.Ring)
+	go publishToKafkaLoop(supervisor.Wg, feed.Name, streamCfg.Channel, streamCfg.KafkaTopic, supervisor.Ctx, streamHandler.Normalizer, streamHandler.Ring)
 
 	ticker := time.NewTicker(time.Duration(streamCfg.HearbeatInterval) * time.Second)
 	defer ticker.Stop()
@@ -344,6 +344,7 @@ func monitorConnection(
 
 func publishToKafkaLoop(wg *sync.WaitGroup,
 	name string,
+	channel string,
 	kafkaTopic string,
 	ctx context.Context,
 	normalizer constants.Normalizer,
@@ -369,11 +370,12 @@ func publishToKafkaLoop(wg *sync.WaitGroup,
 			symbol, normalized, normalizeErr := normalizer.Normalize(msg)
 			if normalizeErr != nil {
 				logger.Log.Error("Failed to normalize message for feed", "name", name, "err", normalizeErr)
+				metrics.NormalizerErrors.WithLabelValues().Inc()
 				continue
 			}
 
 			// publish to kafka
-			kafka.ProduceAsync(kafkaTopic, name, ctx, symbol, normalized)
+			kafka.ProduceAsync(kafkaTopic, name, channel, ctx, symbol, normalized)
 		}
 	}
 }

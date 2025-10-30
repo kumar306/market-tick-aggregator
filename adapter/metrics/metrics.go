@@ -90,6 +90,22 @@ var (
 		},
 		[]string{"feed_name"},
 	)
+
+	KafkaPublishes = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "kafka_publishes",
+			Help: "Kafka Publishes per stream",
+		},
+		[]string{"stream"},
+	)
+
+	NormalizerErrors = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "normalizer_errors",
+			Help: "Normalizer errors per stream",
+		},
+		[]string{"stream"},
+	)
 )
 
 func Init() {
@@ -104,7 +120,9 @@ func Init() {
 		LastPongTimes,
 		BufferCapacity,
 		BufferLen,
-		BufferDrops)
+		BufferDrops,
+		KafkaPublishes,
+		NormalizerErrors)
 
 	// metric to track current version, commit SHA
 	BuildInfo.WithLabelValues("v1.0.0", "abc123").Set(1)

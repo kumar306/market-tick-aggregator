@@ -27,9 +27,9 @@ func Init(brokers []string) (*kgo.Client, error) {
 	return client, err
 }
 
-func ProduceAsync(topic string, name string, ctx context.Context, value []byte) {
+func ProduceAsync(topic string, name string, channel string, ctx context.Context, key, value []byte) {
 	record := &kgo.Record{
-		// Key:   key,
+		Key:   key,
 		Value: value,
 		Topic: topic,
 	}
@@ -37,8 +37,10 @@ func ProduceAsync(topic string, name string, ctx context.Context, value []byte) 
 	client.Produce(ctx, record, func(r *kgo.Record, err error) {
 		if err != nil {
 			logger.Log.Error("Produce failed for topic", "topic", topic, "feed_name", name)
-			metrics.FeedErrors.WithLabelValues(name).Inc()
+			metrics.FeedErrors.WithLabelValues(name + "|" + channel).Inc()
 		}
+
+		metrics.KafkaPublishes.WithLabelValues(name + "|" + channel).Inc()
 	})
 }
 
