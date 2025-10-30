@@ -165,7 +165,7 @@ func childLoop(
 	}
 }
 
-func connect(feed *constants.Feed, stream *constants.Stream, supervisor *constants.Supervisor, isRetry bool) {
+func connect(feed *constants.Feed, streamCfg *constants.Stream, supervisor *constants.Supervisor, isRetry bool) {
 	logger.Log.Info("Attempting to make connection to feed",
 		"name", feed.Name,
 		"url", feed.Url)
@@ -202,22 +202,22 @@ func connect(feed *constants.Feed, stream *constants.Stream, supervisor *constan
 	go readMessages(conn, supervisor.Ctx, supervisor.Wg, streamHandler.Ring)
 
 	supervisor.Wg.Add(1)
-	go publishToKafkaLoop(supervisor.Wg, feed.Name, stream.KafkaTopic, supervisor.Ctx, streamHandler.Ring)
+	go publishToKafkaLoop(supervisor.Wg, feed.Name, streamCfg.KafkaTopic, supervisor.Ctx, streamHandler.Ring)
 
-	ticker := time.NewTicker(time.Duration(feed.HearbeatInterval) * time.Second)
+	ticker := time.NewTicker(time.Duration(streamCfg.HearbeatInterval) * time.Second)
 	defer ticker.Stop()
 
 	supervisor.Wg.Add(1)
 	go sendHeartbeat(conn, supervisor.Ctx, supervisor.Wg, streamHandler.Mu, ticker, feed.Name)
 
 	supervisor.Wg.Add(1)
-	go monitorConnection(supervisor, feed, ticker)
+	go monitorConnection(supervisor, streamCfg, ticker)
 
 	logger.Log.Info("Started the supervisor loops for feed after establishing connection",
 		"name", feed.Name,
 		"url", feed.Url,
-		"heartbeat_interval", feed.HearbeatInterval,
-		"pong_timeout", feed.PongTimeout)
+		"heartbeat_interval", streamCfg.HearbeatInterval,
+		"pong_timeout", streamCfg.PongTimeout)
 
 	// inc metric for supervisor count
 	metrics.Supervisors.Inc()
@@ -238,24 +238,24 @@ func connect(feed *constants.Feed, stream *constants.Stream, supervisor *constan
 	supervisor.StatusChan <- constants.StatusBackoff
 }
 
-func retry(feed *constants.Feed, stream *constants.Stream, supervisor *constants.Supervisor) {
-	for retry := 0; retry < feed.MaxRetries; retry++ {
+func retry(feed *constants.Feed, streamCfg *constants.Stream, supervisor *constants.Supervisor) {
+	for retry := 0; retry < streamCfg.MaxRetries; retry++ {
 		select {
 		case <-supervisor.Ctx.Done():
-			logger.Log.Info("Stopping retry for feed", "name", feed.Name)
+			logger.Log.Info("Stopping retry for feed", "name", streamCfg.Name)
 			return
 		default:
 			// exponential backoff and jitter
-			baseDelay := time.Duration(feed.BaseDelay) * time.Second
+			baseDelay := time.Duration(streamCfg.BaseDelay) * time.Second
 			delay := baseDelay * time.Duration(math.Pow(2, float64(retry)))
-			jitter := time.Duration(rand.Intn(feed.MaxJitterMillis)) * time.Millisecond
+			jitter := time.Duration(rand.Intn(streamCfg.MaxJitterMillis)) * time.Millisecond
 			logger.Log.Warn("Retrying feed connection",
-				"max_retries", feed.MaxRetries,
+				"max_retries", streamCfg.MaxRetries,
 				"retry_attempt", retry+1,
-				"retries_left", feed.MaxRetries-retry-1,
+				"retries_left", streamCfg.MaxRetries-retry-1,
 				"delay", delay+jitter)
 			time.Sleep(delay + jitter)
-			connect(feed, stream, supervisor, true)
+			connect(feed, streamCfg, supervisor, true)
 		}
 	}
 }
@@ -311,22 +311,22 @@ func sendHeartbeat(conn *websocket.Conn,
 
 func monitorConnection(
 	supervisor *constants.Supervisor,
-	feed *constants.Feed,
+	streamCfg *constants.Stream,
 	ticker *time.Ticker) {
-	metrics.SupervisorGoroutines.WithLabelValues(feed.Name).Inc()
+	metrics.SupervisorGoroutines.WithLabelValues(streamCfg.Name).Inc()
 	defer supervisor.Wg.Done()
-	defer metrics.SupervisorGoroutines.WithLabelValues(feed.Name).Dec()
+	defer metrics.SupervisorGoroutines.WithLabelValues(streamCfg.Name).Dec()
 	for {
 		select {
 		case <-ticker.C:
-			if time.Since(supervisor.LastPongTime) > time.Duration(feed.PongTimeout)*time.Second {
-				logger.Log.Warn("Pong timeout -- cancelling the connection", "name", feed.Name)
+			if time.Since(supervisor.LastPongTime) > time.Duration(streamCfg.PongTimeout)*time.Second {
+				logger.Log.Warn("Pong timeout -- cancelling the connection", "name", streamCfg.Name)
 				supervisor.Cancel()
 				return
 			}
 
 		case <-supervisor.Ctx.Done():
-			logger.Log.Info("Shutting down monitor loop", "name", feed.Name)
+			logger.Log.Info("Shutting down monitor loop", "name", streamCfg.Name)
 			return
 		}
 	}
