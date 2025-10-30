@@ -184,6 +184,16 @@ func connect(feed *constants.Feed, streamCfg *constants.Stream, supervisor *cons
 
 	var streamHandler *constants.StreamHandler = supervisor.Handler
 
+	// subscribe to the stream after making the connection
+	err = streamHandler.Subscriber.Subscribe(conn)
+	if err != nil {
+		logger.Log.Error("Subscription failed for stream with error",
+			"feed_name", feed.Name, "stream_channel", streamCfg.Channel, "error", err)
+		metrics.FeedErrors.WithLabelValues(feed.Name).Inc()
+		supervisor.StatusChan <- constants.StatusBackoff
+		return
+	}
+
 	// create a metric to track last pong time
 	conn.SetPongHandler(func(appData string) error {
 		supervisor.LastPongTime = time.Now()
@@ -194,8 +204,6 @@ func connect(feed *constants.Feed, streamCfg *constants.Stream, supervisor *cons
 		metrics.LastPongTimes.WithLabelValues(feed.Name).Set(float64(time.Since(supervisor.LastPongTime) * time.Second))
 		return nil
 	})
-
-	// TODO: subscribe goroutine to be added here
 
 	// spawn goroutines to handle message reads, heartbeats, monitor
 	supervisor.Wg.Add(1)
