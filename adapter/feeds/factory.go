@@ -8,7 +8,7 @@ import (
 )
 
 type FeedFactory interface {
-	CreateNormalizer() constants.Normalizer
+	CreateNormalizer(stream string) (constants.Normalizer, error)
 	CreateSubscriber(channel string) constants.Subscriber
 	CreatePinger() constants.Pinger
 }
@@ -36,8 +36,13 @@ func GetStreamHandler(name string, streamCfg *constants.Stream) (*constants.Stre
 		return nil, logger.LogAndWrap("No feed factory for the given stream name", nil, "name", name)
 	}
 
+	normalizer, err := factory.CreateNormalizer(streamCfg.Channel)
+	if err != nil {
+		return nil, logger.LogAndWrap("Could not create stream handler as could not create normalizer", err, "feed_name", name, "stream_channel", streamCfg.Channel)
+	}
+
 	return &constants.StreamHandler{
-		Normalizer: factory.CreateNormalizer(),
+		Normalizer: normalizer,
 		Subscriber: factory.CreateSubscriber(streamCfg.Channel),
 		Pinger:     factory.CreatePinger(),
 		Ring:       ring.NewSpscDropOldestRing[[]byte](streamCfg.RingBufferSize, name),

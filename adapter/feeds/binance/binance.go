@@ -8,11 +8,15 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-type BinanceNormalizer struct{}
+type BinanceAggTradeNormalizer struct{}
+type BinanceDepthNormalizer struct{}
+
 type BinanceSubscriber struct {
 	Channel string
 }
 type BinancePinger struct{}
+
+const Binance string = "Binance"
 
 type BinanceSubscribeMessage struct {
 	Method string   `json:"method"`
@@ -20,8 +24,58 @@ type BinanceSubscribeMessage struct {
 	Id     int      `json:"id"`
 }
 
-func (b *BinanceNormalizer) Normalize([]byte) (string, []byte, error) {
-	return "", nil, nil
+/*
+sample response for agg trades:
+
+	{
+	  "e": "aggTrade",  // Event type
+	  "E": 123456789,   // Event time
+	  "s": "BTCUSDT",    // Symbol
+	  "a": 5933014,		// Aggregate trade ID
+	  "p": "0.001",     // Price
+	  "q": "100",       // Quantity
+	  "f": 100,         // First trade ID
+	  "l": 105,         // Last trade ID
+	  "T": 123456785,   // Trade time
+	  "m": true,        // Is the buyer the market maker?
+	}
+*/
+type BinanceAggTradeMessage struct {
+	Exchange         string
+	EventType        string `json:"e"`
+	EventTime        uint64 `json:"E"`
+	Symbol           string `json:"s"`
+	AggregateTradeId uint64 `json:"a"`
+	Price            string `json:"p"`
+	Quantity         string `json:"q"`
+	FirstTradeId     uint64 `json:"f"`
+	LastTradeId      uint64 `json:"l"`
+	TradeTime        uint64 `json:"T"`
+	IsMarketMaker    bool   `json:"m"`
+}
+
+func (b *BinanceAggTradeNormalizer) Normalize(raw []byte) ([]byte, []byte, error) {
+	var aggTradeMsg BinanceAggTradeMessage
+	err := json.Unmarshal(raw, &aggTradeMsg)
+	if err != nil {
+		logger.Log.Error("Error in parsing agg trades binance response", "feed", "binance", "channel", "aggTrades", "error", err)
+		return nil, nil, err
+	}
+
+	aggTradeMsg.Exchange = Binance
+	symbol := aggTradeMsg.Symbol
+
+	normalized, marshalErr := json.Marshal(aggTradeMsg)
+	if marshalErr != nil {
+		logger.Log.Error("Error in marshalling normalized agg trade message", "feed", "binance", "channel", "aggTrades", "error", marshalErr)
+		return nil, nil, err
+	}
+
+	return []byte(symbol), normalized, nil
+}
+
+func (b *BinanceDepthNormalizer) Normalize(raw []byte) ([]byte, []byte, error) {
+	return nil, nil, nil
 }
 
 // subscribe message logic

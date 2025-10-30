@@ -73,7 +73,7 @@ const ConfigFile string = "market-adapter/config/config.yaml"
 
 // normalize different kind of messages for different exchanges
 type Normalizer interface {
-	Normalize(raw []byte) (symbol string, normalized []byte, err error)
+	Normalize(raw []byte) (symbol []byte, normalized []byte, err error)
 }
 
 type Subscriber interface {

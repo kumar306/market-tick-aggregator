@@ -210,7 +210,7 @@ func connect(feed *constants.Feed, streamCfg *constants.Stream, supervisor *cons
 	go readMessages(conn, supervisor.Ctx, supervisor.Wg, streamHandler.Ring)
 
 	supervisor.Wg.Add(1)
-	go publishToKafkaLoop(supervisor.Wg, feed.Name, streamCfg.KafkaTopic, supervisor.Ctx, streamHandler.Ring)
+	go publishToKafkaLoop(supervisor.Wg, feed.Name, streamCfg.KafkaTopic, supervisor.Ctx, streamHandler.Normalizer, streamHandler.Ring)
 
 	ticker := time.NewTicker(time.Duration(streamCfg.HearbeatInterval) * time.Second)
 	defer ticker.Stop()
@@ -282,10 +282,12 @@ func readMessages(conn *websocket.Conn, ctx context.Context, wg *sync.WaitGroup,
 			_, msg, err := conn.ReadMessage()
 			if err != nil {
 				logger.Log.Error("Failed to read message for feed", "name", name, "err", err)
-			} else {
-				ring.Push(msg)
-				logger.Log.Info("Received message for feed", "name", name, "msg", string(msg))
+				continue
 			}
+
+			ring.Push(msg)
+			logger.Log.Info("Received message for feed", "name", name, "msg", string(msg))
+
 		}
 	}
 }
@@ -344,6 +346,7 @@ func publishToKafkaLoop(wg *sync.WaitGroup,
 	name string,
 	kafkaTopic string,
 	ctx context.Context,
+	normalizer constants.Normalizer,
 	ring *ring.SpscDropOldestRing[[]byte]) {
 	defer wg.Done()
 	metrics.SupervisorGoroutines.WithLabelValues(name).Inc()
@@ -362,8 +365,15 @@ func publishToKafkaLoop(wg *sync.WaitGroup,
 				continue
 			}
 
+			// normalize after reading from ring buffer
+			symbol, normalized, normalizeErr := normalizer.Normalize(msg)
+			if normalizeErr != nil {
+				logger.Log.Error("Failed to normalize message for feed", "name", name, "err", normalizeErr)
+				continue
+			}
+
 			// publish to kafka
-			kafka.ProduceAsync(kafkaTopic, name, ctx, msg)
+			kafka.ProduceAsync(kafkaTopic, name, ctx, symbol, normalized)
 		}
 	}
 }
