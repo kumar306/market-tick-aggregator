@@ -54,6 +54,44 @@ type BinanceAggTradeMessage struct {
 	IsMarketMaker    bool   `json:"m"`
 }
 
+/*
+sample response for depth:
+	{
+	"e": "depthUpdate", // Event type
+	"E": 123456789,     // Event time
+	"T": 123456788,     // Transaction time
+	"s": "BTCUSDT",     // Symbol
+	"U": 157,           // First update ID in event
+	"u": 160,           // Final update ID in event
+	"pu": 149,          // Final update Id in last stream(ie `u` in last stream)
+	"b": [              // Bids to be updated
+		[
+		"0.0024",       // Price level to be updated
+		"10"            // Quantity
+		]
+	],
+	"a": [              // Asks to be updated
+		[
+		"0.0026",       // Price level to be updated
+		"100"          // Quantity
+		]
+	]
+	}
+*/
+
+type BinanceDepthMessage struct {
+	Exchange          string
+	EventType         string     `json:"e"`
+	EventTime         uint64     `json:"E"`
+	TransactionTime   uint64     `json:"T"`
+	Symbol            string     `json:"s"`
+	FirstUpdateId     uint64     `json:"U"`
+	FinalUpdateId     uint64     `json:"u"`
+	PrevFinalUpdateId uint64     `json:"pu"`
+	Bids              [][]string `json:"b"`
+	Asks              [][]string `json:"a"`
+}
+
 func (b *BinanceAggTradeNormalizer) Normalize(raw []byte) ([]byte, []byte, error) {
 	var aggTradeMsg BinanceAggTradeMessage
 	err := json.Unmarshal(raw, &aggTradeMsg)
@@ -75,7 +113,23 @@ func (b *BinanceAggTradeNormalizer) Normalize(raw []byte) ([]byte, []byte, error
 }
 
 func (b *BinanceDepthNormalizer) Normalize(raw []byte) ([]byte, []byte, error) {
-	return nil, nil, nil
+	var depthMessage BinanceDepthMessage
+	err := json.Unmarshal(raw, &depthMessage)
+	if err != nil {
+		logger.Log.Error("Error in parsing depth binance response", "feed", "binance", "channel", "depth", "error", err)
+		return nil, nil, err
+	}
+
+	depthMessage.Exchange = Binance
+	symbol := depthMessage.Symbol
+
+	normalized, marshalErr := json.Marshal(depthMessage)
+	if marshalErr != nil {
+		logger.Log.Error("Error in marshalling normalized depth message", "feed", "binance", "channel", "depth", "error", marshalErr)
+		return nil, nil, err
+	}
+
+	return []byte(symbol), normalized, nil
 }
 
 // subscribe message logic
