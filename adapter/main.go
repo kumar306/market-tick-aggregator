@@ -83,7 +83,7 @@ func main() {
 		c.FeedMap[feed.Name] = feed
 	}
 
-	logger.Log.Info("Supervisors startup execution completed")
+	logger.Log.Info("Supervisors startup execution initiated")
 
 	// blocks until SIGTERM
 	<-ctx.Done()
@@ -107,6 +107,7 @@ func startSupervisor(supervisor *constants.Supervisor,
 
 	logger.Log.Info("Starting supervisor for stream",
 		"name", feed.Name,
+		"channel", stream.Channel,
 		"url", feed.Url)
 
 	// pass into spawned goroutines to handle shutdown
@@ -119,6 +120,7 @@ func startSupervisor(supervisor *constants.Supervisor,
 
 	wg.Add(1)
 	go childLoop(feed, stream, supervisor, wg)
+	wg.Wait()
 }
 
 // go routine for the supervisor to keep reading from this status channel and do its logic
@@ -142,8 +144,9 @@ func childLoop(
 
 			case constants.StatusConnected:
 
-				logger.Log.Info("Successfully connected to feed",
+				logger.Log.Info("Successfully connected to channel",
 					"name", feed.Name,
+					"channel", stream.Channel,
 					"url", feed.Url)
 
 				// prom metrics
@@ -153,12 +156,14 @@ func childLoop(
 
 				logger.Log.Info("Terminated connection",
 					"name", feed.Name,
+					"channel", stream.Channel,
 					"url", feed.Url)
 				return
 			}
 		case <-supervisor.Ctx.Done():
 			logger.Log.Info("Supervisor shutting down",
 				"name", feed.Name,
+				"channel", stream.Channel,
 				"url", feed.Url)
 			return
 		}
@@ -168,12 +173,14 @@ func childLoop(
 func connect(feed *constants.Feed, streamCfg *constants.Stream, supervisor *constants.Supervisor, isRetry bool) {
 	logger.Log.Info("Attempting to make connection to feed",
 		"name", feed.Name,
+		"channel", streamCfg.Channel,
 		"url", feed.Url)
 	conn, _, err := websocket.DefaultDialer.Dial(feed.Url, nil)
 	if err != nil {
 		logger.Log.Error("Error when connecting to server. Retry queued", "err", err)
 		metrics.FeedErrors.WithLabelValues(feed.Name).Inc()
 		if !isRetry {
+			logger.Log.Info("Supervisor backing off after queueing retry", "feed", feed.Name, "channel", streamCfg.Channel)
 			supervisor.StatusChan <- constants.StatusBackoff // if fresh retry signal backoff
 		}
 		return
@@ -224,6 +231,7 @@ func connect(feed *constants.Feed, streamCfg *constants.Stream, supervisor *cons
 	logger.Log.Info("Started the supervisor loops for feed after establishing connection",
 		"name", feed.Name,
 		"url", feed.Url,
+		"channel", streamCfg.Channel,
 		"heartbeat_interval", streamCfg.HearbeatInterval,
 		"pong_timeout", streamCfg.PongTimeout)
 
@@ -237,6 +245,7 @@ func connect(feed *constants.Feed, streamCfg *constants.Stream, supervisor *cons
 
 	logger.Log.Warn("Supervisor backing off.. Queuing retry",
 		"name", feed.Name,
+		"channel", streamCfg.Channel,
 		"url", feed.Url)
 
 	// dec metric for supervisor count
@@ -375,7 +384,7 @@ func publishToKafkaLoop(wg *sync.WaitGroup,
 			}
 
 			// publish to kafka
-			kafka.ProduceAsync(kafkaTopic, name, channel, ctx, symbol, normalized)
+			kafka.ProduceAsync(kafkaTopic, name, channel, symbol, normalized)
 		}
 	}
 }
@@ -383,7 +392,7 @@ func publishToKafkaLoop(wg *sync.WaitGroup,
 func exposeMetrics() {
 	http.Handle("/metrics", promhttp.Handler())
 	logger.Log.Info("Exposed metrics endpoint at 2112", "url", ":2112/metrics")
-	err := http.ListenAndServe(":2112", nil)
+	err := http.ListenAndServe("0.0.0.0:2112", nil)
 	if err != nil {
 		logger.Log.Error("Metrics have stopped", "err", err)
 	}

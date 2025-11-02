@@ -12,7 +12,7 @@ type BinanceFactory struct{}
 func getBinanceNormalizer(stream string) (constants.Normalizer, error) {
 	channel := strings.Split(stream, "@")[1]
 	switch channel {
-	case "aggTrades":
+	case "aggTrade":
 		return &BinanceAggTradeNormalizer{}, nil
 	case "depth":
 		return &BinanceDepthNormalizer{}, nil

@@ -109,6 +109,8 @@ func (b *BinanceAggTradeNormalizer) Normalize(raw []byte) ([]byte, []byte, error
 		return nil, nil, err
 	}
 
+	logger.Log.Info("Normalized aggTrades response for message", "name", Binance, "symbol", symbol, "message", normalized)
+
 	return []byte(symbol), normalized, nil
 }
 
@@ -128,6 +130,8 @@ func (b *BinanceDepthNormalizer) Normalize(raw []byte) ([]byte, []byte, error) {
 		logger.Log.Error("Error in marshalling normalized depth message", "feed", "binance", "channel", "depth", "error", marshalErr)
 		return nil, nil, err
 	}
+
+	logger.Log.Info("Normalized depth response for message", "name", Binance, "symbol", symbol, "message", normalized)
 
 	return []byte(symbol), normalized, nil
 }
@@ -173,7 +177,7 @@ func (b *BinanceSubscriber) Subscribe(conn *websocket.Conn) error {
 		return logger.LogAndWrap("Got error response from Binance upon subscription", nil, "code", okResp.Code, "msg", okResp.Msg)
 	}
 
-	logger.Log.Info("Successfully subscribed to Binance stream", "stream_channel", b.Channel)
+	logger.Log.Info("Successfully subscribed to Binance stream", "channel", b.Channel)
 
 	return nil
 }

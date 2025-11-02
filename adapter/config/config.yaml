@@ -1,23 +1,23 @@
 bootstrap_servers:
-  - http://localhost:9092
+  - localhost:9092
 feeds:
   - name: binance
-    url: wss://stream.binance.com:9443
+    url: wss://stream.binance.com:9443/ws
     streams:
       - name: binance
-        channel: btcusdt@aggtrade
+        channel: btcusdt@aggTrade
         maxRetries: 5
         heartBeatInterval: 15
         pongTimeout: 25
-        kafkaTopic: binance_raw_ticks
-        ringBufferSize: 10000
+        kafkaTopic: binance_raw_aggtrades
+        ringBufferSize: 1024
       - name: binance
         channel: btcusdt@depth
         maxRetries: 5
         heartBeatInterval: 15
         pongTimeout: 25
-        kafkaTopic: binance_depth
-        ringBufferSize: 10000
+        kafkaTopic: binance_raw_depth
+        ringBufferSize: 1024
 
   # - name: coinbase
   #   url: wss://ws-feed.exchange.coinbase.com

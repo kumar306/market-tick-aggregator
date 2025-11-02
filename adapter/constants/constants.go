@@ -69,7 +69,7 @@ type StreamHandler struct {
 	Ring       *ring.SpscDropOldestRing[[]byte]
 }
 
-const ConfigFile string = "market-adapter/config/config.yaml"
+const ConfigFile string = "./config/config.yaml"
 
 // normalize different kind of messages for different exchanges
 type Normalizer interface {

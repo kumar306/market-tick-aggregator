@@ -173,7 +173,7 @@ func Validate(f *constants.Feed, s *constants.Stream) error {
 			"expected_max_pong_timeout", 2.5*float64(s.HearbeatInterval))
 	}
 
-	logger.Log.Info("Successfully validated for feed", "name", f.Name)
+	logger.Log.Info("Successfully validated for stream", "name", f.Name, "stream", s.Channel)
 
 	return nil
 }
