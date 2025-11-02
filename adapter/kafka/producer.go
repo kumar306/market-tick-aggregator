@@ -23,8 +23,8 @@ func Init(brokers []string) (*kgo.Client, error) {
 			kgo.SeedBrokers(brokers...),
 			kgo.ProduceRequestTimeout(5*time.Second),
 			kgo.ProducerLinger(0),
-			kgo.ProducerBatchMaxBytes(512),
-			kgo.ProducerBatchCompression(kgo.NoCompression()),
+			kgo.ProducerBatchMaxBytes(5*1024*1024),
+			kgo.ProducerBatchCompression(kgo.GzipCompression()),
 			kgo.WithLogger(kgo.BasicLogger(os.Stdout, kgo.LogLevelDebug, nil)),
 		)
 
