@@ -6,6 +6,7 @@ import (
 	"market-adapter/constants"
 	feedFactory "market-adapter/feeds"
 	"market-adapter/feeds/binance"
+	"market-adapter/feeds/coinbase"
 	"market-adapter/kafka"
 	"market-adapter/logger"
 	"market-adapter/metrics"
@@ -28,6 +29,7 @@ func main() {
 
 	// register the feeds
 	feedFactory.RegisterFeedFactory("binance", &binance.BinanceFactory{})
+	feedFactory.RegisterFeedFactory("coinbase", &coinbase.CBFactory{})
 
 	// init and expose prometheus metrics
 	metrics.Init()
@@ -65,7 +67,7 @@ func main() {
 			// create supervisor and get the stream handler
 			handler, handlerErr := feedFactory.GetStreamHandler(feed.Name, stream)
 			if handlerErr != nil {
-				logger.Log.Error("Error occurred when retrieving stream handler for stream", handlerErr, "name", feed.Name)
+				logger.Log.Error("Error occurred when retrieving stream handler for stream", "error", handlerErr, "name", feed.Name)
 				metrics.FeedErrors.WithLabelValues("feed_name", feed.Name).Inc()
 				continue
 			}

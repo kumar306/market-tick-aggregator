@@ -9,7 +9,7 @@ import (
 
 type FeedFactory interface {
 	CreateNormalizer(stream string) (constants.Normalizer, error)
-	CreateSubscriber(channel string) constants.Subscriber
+	CreateSubscriber(channel string, productIds []string) constants.Subscriber
 	CreatePinger() constants.Pinger
 }
 
@@ -43,7 +43,7 @@ func GetStreamHandler(name string, streamCfg *constants.Stream) (*constants.Stre
 
 	return &constants.StreamHandler{
 		Normalizer: normalizer,
-		Subscriber: factory.CreateSubscriber(streamCfg.Channel),
+		Subscriber: factory.CreateSubscriber(streamCfg.Channel, streamCfg.ProductIds),
 		Pinger:     factory.CreatePinger(),
 		Ring:       ring.NewSpscDropOldestRing[[]byte](streamCfg.RingBufferSize, name+"|"+streamCfg.Channel),
 		Mu:         &sync.Mutex{},

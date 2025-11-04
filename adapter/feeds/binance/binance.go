@@ -12,7 +12,8 @@ type BinanceAggTradeNormalizer struct{}
 type BinanceDepthNormalizer struct{}
 
 type BinanceSubscriber struct {
-	Channel string
+	Channel    string
+	ProductIds []string
 }
 type BinancePinger struct{}
 
@@ -138,9 +139,16 @@ func (b *BinanceDepthNormalizer) Normalize(raw []byte) ([]byte, []byte, error) {
 
 // subscribe message logic
 func (b *BinanceSubscriber) Subscribe(conn *websocket.Conn) error {
+
+	// multiple symbols for a stream per connection
+	var channels []string
+	for _, id := range b.ProductIds {
+		channels = append(channels, b.Channel+id)
+	}
+
 	subscribeMsg := BinanceSubscribeMessage{
 		Method: "SUBSCRIBE",
-		Params: []string{b.Channel},
+		Params: channels,
 		Id:     1}
 
 	subscribeJson, err := json.Marshal(subscribeMsg)

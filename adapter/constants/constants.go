@@ -41,15 +41,16 @@ type Feed struct {
 }
 
 type Stream struct {
-	Name             string `yaml:"name"`
-	Channel          string `yaml:"channel"`
-	KafkaTopic       string `yaml:"kafkaTopic"`
-	RingBufferSize   uint64 `yaml:"ringBufferSize"`
-	MaxRetries       int    `yaml:"maxRetries"`
-	BaseDelay        int    `yaml:"baseDelay"`
-	HearbeatInterval int    `yaml:"heartbeatInterval"`
-	PongTimeout      int    `yaml:"pongTimeout"`
-	MaxJitterMillis  int    `yaml:"maxJitterMillis"`
+	Name             string   `yaml:"name"`
+	Channel          string   `yaml:"channel"`
+	ProductIds       []string `yaml:"productIds"`
+	KafkaTopic       string   `yaml:"kafkaTopic"`
+	RingBufferSize   uint64   `yaml:"ringBufferSize"`
+	MaxRetries       int      `yaml:"maxRetries"`
+	BaseDelay        int      `yaml:"baseDelay"`
+	HearbeatInterval int      `yaml:"heartbeatInterval"`
+	PongTimeout      int      `yaml:"pongTimeout"`
+	MaxJitterMillis  int      `yaml:"maxJitterMillis"`
 }
 
 type Supervisor struct {

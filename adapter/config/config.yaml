@@ -5,27 +5,44 @@ feeds:
     url: wss://stream.binance.com:9443/ws
     streams:
       - name: binance
-        channel: btcusdt@aggTrade
+        channel: aggTrade
+        productIds:
+          - btcusdt
         maxRetries: 5
         heartBeatInterval: 15
         pongTimeout: 25
         kafkaTopic: binance_raw_aggtrades
         ringBufferSize: 1024
       - name: binance
-        channel: btcusdt@depth
+        channel: depth
+        productIds:
+          - btcusdt
         maxRetries: 5
         heartBeatInterval: 15
         pongTimeout: 25
         kafkaTopic: binance_raw_depth
         ringBufferSize: 1024
 
-  # - name: coinbase
-  #   url: wss://ws-feed.exchange.coinbase.com
-  #   maxRetries: 5
-  #   heartBeatInterval: 15
-  #   pongTimeout: 25
-  #   kafkaTopic: ticks_coinbase
-  #   ringBufferSize: 10000
+  - name: coinbase
+    url: wss://ws-feed.exchange.coinbase.com
+    streams:
+      - channel: ticker
+        productIds:
+          - BTC-USD
+        maxRetries: 5
+        heartBeatInterval: 15
+        pongTimeout: 25
+        kafkaTopic: coinbase_raw_ticker
+        ringBufferSize: 1024
+      - channel: level2
+        productIds:
+          - BTC-USD
+        maxRetries: 5
+        heartBeatInterval: 15
+        pongTimeout: 25
+        kafkaTopic: coinbase_raw_depth
+        ringBufferSize: 1024
+
 
   # - name: kraken
   #   url: wss://ws.kraken.com/v2

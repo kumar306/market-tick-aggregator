@@ -3,15 +3,13 @@ package binance
 import (
 	"market-adapter/constants"
 	"market-adapter/logger"
-	"strings"
 )
 
 type BinanceFactory struct{}
 
 // registry of string channel to Normalizer variables
 func getBinanceNormalizer(stream string) (constants.Normalizer, error) {
-	channel := strings.Split(stream, "@")[1]
-	switch channel {
+	switch stream {
 	case "aggTrade":
 		return &BinanceAggTradeNormalizer{}, nil
 	case "depth":
@@ -27,8 +25,8 @@ func (b *BinanceFactory) CreateNormalizer(channel string) (constants.Normalizer,
 	return getBinanceNormalizer(channel)
 }
 
-func (b *BinanceFactory) CreateSubscriber(channel string) constants.Subscriber {
-	return &BinanceSubscriber{Channel: channel}
+func (b *BinanceFactory) CreateSubscriber(channel string, productIds []string) constants.Subscriber {
+	return &BinanceSubscriber{Channel: channel, ProductIds: productIds}
 }
 
 func (b *BinanceFactory) CreatePinger() constants.Pinger {
