@@ -2,9 +2,9 @@ package binance
 
 import (
 	"encoding/json"
+	"market-adapter/feeds/utils"
 	"market-adapter/logger"
 	"sync"
-	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -18,7 +18,10 @@ type BinanceSubscriber struct {
 }
 type BinancePinger struct{}
 
-const Binance string = "Binance"
+const (
+	Binance         string = "Binance"
+	AggTradeChannel string = "aggTrade"
+)
 
 type BinanceSubscribeMessage struct {
 	Method string   `json:"method"`
@@ -95,25 +98,7 @@ type BinanceDepthMessage struct {
 }
 
 func (b *BinanceAggTradeNormalizer) Normalize(raw []byte) ([]byte, []byte, error) {
-	var aggTradeMsg BinanceAggTradeMessage
-	err := json.Unmarshal(raw, &aggTradeMsg)
-	if err != nil {
-		logger.Log.Error("Error in parsing agg trades binance response", "feed", "binance", "channel", "aggTrades", "error", err)
-		return nil, nil, err
-	}
-
-	aggTradeMsg.Exchange = Binance
-	symbol := aggTradeMsg.Symbol
-
-	normalized, marshalErr := json.Marshal(aggTradeMsg)
-	if marshalErr != nil {
-		logger.Log.Error("Error in marshalling normalized agg trade message", "feed", "binance", "channel", "aggTrades", "error", marshalErr)
-		return nil, nil, err
-	}
-
-	logger.Log.Info("Normalized aggTrades response for message", "name", Binance, "symbol", symbol, "message", normalized)
-
-	return []byte(symbol), normalized, nil
+	return utils.NormalizeTrade(raw, "s", Binance, AggTradeChannel)
 }
 
 func (b *BinanceDepthNormalizer) Normalize(raw []byte) ([]byte, []byte, error) {
@@ -144,28 +129,13 @@ func (b *BinanceSubscriber) Subscribe(conn *websocket.Conn) error {
 	// multiple symbols for a stream per connection
 	var channels []string
 	for _, id := range b.ProductIds {
-		channels = append(channels, b.Channel+id)
+		channels = append(channels, id+"@"+b.Channel)
 	}
 
 	subscribeMsg := BinanceSubscribeMessage{
 		Method: "SUBSCRIBE",
 		Params: channels,
 		Id:     1}
-
-	subscribeJson, err := json.Marshal(subscribeMsg)
-	if err != nil {
-		return logger.LogAndWrap("Error creating subscribe message for binance", err, "feed", "binance")
-	}
-
-	err = conn.WriteMessage(websocket.TextMessage, subscribeJson)
-	if err != nil {
-		return logger.LogAndWrap("Error writing subscribe message to binance connection", err, "feed", "binance", "stream", b.Channel)
-	}
-
-	_, msg, readErr := conn.ReadMessage()
-	if readErr != nil {
-		return logger.LogAndWrap("Error reading subscribe acknowledgement in binance connection", err, "feed", "binance", "stream", b.Channel)
-	}
 
 	// resp can be {"result": null, "id": 1}
 	// or
@@ -177,8 +147,9 @@ func (b *BinanceSubscriber) Subscribe(conn *websocket.Conn) error {
 		Msg    string      `json:"msg"`
 	}
 
-	if err = json.Unmarshal(msg, &okResp); err != nil {
-		return logger.LogAndWrap("Error in parsing subscribe response for Binance", err, "feed_name", "binance", "stream", b.Channel)
+	err := utils.SendAndAckSubscribe(conn, subscribeMsg, &okResp, Binance, b.Channel)
+	if err != nil {
+		return logger.LogAndWrap(err.Error(), err, "feed", Binance, "channel", b.Channel)
 	}
 
 	// ERROR CASE
@@ -193,11 +164,5 @@ func (b *BinanceSubscriber) Subscribe(conn *websocket.Conn) error {
 
 // ping logic
 func (b *BinancePinger) Ping(conn *websocket.Conn, mu *sync.Mutex) error {
-	mu.Lock()
-	err := conn.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(time.Second*5))
-	mu.Unlock()
-	if err != nil {
-		return logger.LogAndWrap("Error when writing ping message to binance", err, "feed", "binance")
-	}
-	return nil
+	return utils.SendPing(conn, mu, Binance)
 }

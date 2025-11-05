@@ -3,9 +3,9 @@ package coinbase
 import (
 	"encoding/json"
 	"market-adapter/constants"
+	"market-adapter/feeds/utils"
 	"market-adapter/logger"
 	"sync"
-	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -168,25 +168,8 @@ type CBPinger struct{}
 
 // for ticker channel
 func (c *CBTickerNormalizer) Normalize(raw []byte) ([]byte, []byte, error) {
-	var tickerMsg CBTickerMessage
-	err := json.Unmarshal(raw, &tickerMsg)
-	if err != nil {
-		logger.Log.Error("Error in parsing ticker message coinbase response", "feed", CoinbaseType, "channel", "ticker", "error", err)
-		return nil, nil, err
-	}
+	return utils.NormalizeTrade(raw, "product_id", CoinbaseType, TickerType)
 
-	tickerMsg.Exchange = CoinbaseType
-	productId := tickerMsg.ProductID
-
-	normalized, marshalErr := json.Marshal(tickerMsg)
-	if marshalErr != nil {
-		logger.Log.Error("Error in marshalling normalized ticker message", "feed", CoinbaseType, "channel", "ticker", "error", marshalErr)
-		return nil, nil, err
-	}
-
-	logger.Log.Info("Normalized ticker response for message", "name", CoinbaseType, "product_id", productId, "message", normalized)
-
-	return []byte(productId), normalized, nil
 }
 
 func (c *CBL2Normalizer) Normalize(raw []byte) ([]byte, []byte, error) {
@@ -236,36 +219,17 @@ func (c *CBL2Normalizer) Normalize(raw []byte) ([]byte, []byte, error) {
 
 // create the req, write it. read ack. if any errors dont proceed.
 func (c *CBSubscriber) Subscribe(conn *websocket.Conn) error {
-	var CoinbaseSubscribeRequest CBSubscribeRequest = CBSubscribeRequest{
+	var CBSubscribeRequest CBSubscribeRequest = CBSubscribeRequest{
 		Type:       SubscribeType,
 		ProductIds: c.ProductIds,
 		Channels:   []string{c.Channel},
 	}
 
-	subscribeBytes, err := json.Marshal(CoinbaseSubscribeRequest)
-	if err != nil {
-		logger.Log.Error("Error in serializing subscribe message for coinbase", "channel", c.Channel, "error", err)
-		return err
-	}
-
-	writeErr := conn.WriteMessage(websocket.TextMessage, subscribeBytes)
-	if writeErr != nil {
-		logger.Log.Error("Error in writing subscribe message for coinbase", "channel", c.Channel, "error", writeErr)
-		return writeErr
-	}
-
-	_, msg, readErr := conn.ReadMessage()
-	if readErr != nil {
-		logger.Log.Error("Error in reading subscribe ack for coinbase", "channel", c.Channel, "error", writeErr)
-		return readErr
-	}
-
 	var CBSubscribeResponse CBSubscribeResponse
 
-	parseErr := json.Unmarshal(msg, &CBSubscribeResponse)
-	if parseErr != nil {
-		logger.Log.Error("Error response for coinbase subscribe", "channel", c.Channel, "error", parseErr)
-		return parseErr
+	err := utils.SendAndAckSubscribe(conn, CBSubscribeRequest, &CBSubscribeResponse, CoinbaseType, c.Channel)
+	if err != nil {
+		return logger.LogAndWrap("Error when writing ping message to coinbase", err, "feed", CoinbaseType)
 	}
 
 	logger.Log.Info("Successfully subscribed to Coinbase", "channel", c.Channel, "productIds", c.ProductIds)
@@ -274,13 +238,7 @@ func (c *CBSubscriber) Subscribe(conn *websocket.Conn) error {
 }
 
 func (c *CBPinger) Ping(conn *websocket.Conn, mu *sync.Mutex) error {
-	mu.Lock()
-	err := conn.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(time.Second*5))
-	mu.Unlock()
-	if err != nil {
-		return logger.LogAndWrap("Error when writing ping message to coinbase", err, "feed", "coinbase")
-	}
-	return nil
+	return utils.SendPing(conn, mu, CoinbaseType)
 }
 
 func (c *CBFactory) CreateNormalizer(channel string) (constants.Normalizer, error) {
