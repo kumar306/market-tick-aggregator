@@ -225,7 +225,7 @@ func connect(feed *constants.Feed, streamCfg *constants.Stream, supervisor *cons
 	defer ticker.Stop()
 
 	supervisor.Wg.Add(1)
-	go sendHeartbeat(conn, supervisor.Ctx, supervisor.Wg, streamHandler.Mu, ticker, feed.Name)
+	go sendHeartbeat(conn, supervisor.Ctx, supervisor.Wg, streamHandler, ticker, feed.Name)
 
 	supervisor.Wg.Add(1)
 	go monitorConnection(supervisor, streamCfg, ticker)
@@ -306,7 +306,7 @@ func readMessages(conn *websocket.Conn, ctx context.Context, wg *sync.WaitGroup,
 func sendHeartbeat(conn *websocket.Conn,
 	ctx context.Context,
 	wg *sync.WaitGroup,
-	mu *sync.Mutex,
+	handler *constants.StreamHandler,
 	ticker *time.Ticker,
 	name string) {
 	metrics.SupervisorGoroutines.WithLabelValues(name).Inc()
@@ -315,14 +315,7 @@ func sendHeartbeat(conn *websocket.Conn,
 	for {
 		select {
 		case <-ticker.C:
-			mu.Lock()
-			err := conn.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(5*time.Second))
-			mu.Unlock()
-			if err != nil {
-				logger.Log.Warn("Failed to send a ping message for feed", "name", name)
-				return
-			}
-
+			handler.Pinger.Ping(conn, handler.Mu)
 		case <-ctx.Done():
 			logger.Log.Info("Shutting down heartbeat loop. Returning", "name", name)
 			return

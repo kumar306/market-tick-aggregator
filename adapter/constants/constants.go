@@ -82,7 +82,7 @@ type Subscriber interface {
 }
 
 type Pinger interface {
-	Ping(conn *websocket.Conn) error
+	Ping(conn *websocket.Conn, mu *sync.Mutex) error
 }
 
 type AuthHandler interface {

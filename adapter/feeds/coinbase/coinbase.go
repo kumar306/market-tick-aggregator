@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"market-adapter/constants"
 	"market-adapter/logger"
+	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -271,7 +273,13 @@ func (c *CBSubscriber) Subscribe(conn *websocket.Conn) error {
 	return nil
 }
 
-func (c *CBPinger) Ping(conn *websocket.Conn) error {
+func (c *CBPinger) Ping(conn *websocket.Conn, mu *sync.Mutex) error {
+	mu.Lock()
+	err := conn.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(time.Second*5))
+	mu.Unlock()
+	if err != nil {
+		return logger.LogAndWrap("Error when writing ping message to coinbase", err, "feed", "coinbase")
+	}
 	return nil
 }
 

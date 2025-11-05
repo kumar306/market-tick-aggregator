@@ -3,6 +3,7 @@ package binance
 import (
 	"encoding/json"
 	"market-adapter/logger"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -191,10 +192,12 @@ func (b *BinanceSubscriber) Subscribe(conn *websocket.Conn) error {
 }
 
 // ping logic
-func (b *BinancePinger) Ping(conn *websocket.Conn) error {
-	err := conn.WriteControl(websocket.PongMessage, []byte{}, time.Now().Add(time.Second*5))
+func (b *BinancePinger) Ping(conn *websocket.Conn, mu *sync.Mutex) error {
+	mu.Lock()
+	err := conn.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(time.Second*5))
+	mu.Unlock()
 	if err != nil {
-		return logger.LogAndWrap("Error when writing pong message to binance", err, "feed", "binance")
+		return logger.LogAndWrap("Error when writing ping message to binance", err, "feed", "binance")
 	}
 	return nil
 }
