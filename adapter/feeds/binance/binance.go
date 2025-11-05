@@ -1,7 +1,7 @@
 package binance
 
 import (
-	"encoding/json"
+	"market-adapter/constants"
 	"market-adapter/feeds/utils"
 	"market-adapter/logger"
 	"sync"
@@ -9,8 +9,9 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-type BinanceAggTradeNormalizer struct{}
-type BinanceDepthNormalizer struct{}
+type BinanceNormalizer struct {
+	Channel string
+}
 
 type BinanceSubscriber struct {
 	Channel    string
@@ -21,6 +22,7 @@ type BinancePinger struct{}
 const (
 	Binance         string = "Binance"
 	AggTradeChannel string = "aggTrade"
+	SymbolField     string = "s"
 )
 
 type BinanceSubscribeMessage struct {
@@ -44,22 +46,7 @@ sample response for agg trades:
 	  "T": 123456785,   // Trade time
 	  "m": true,        // Is the buyer the market maker?
 	}
-*/
-type BinanceAggTradeMessage struct {
-	Exchange         string
-	EventType        string `json:"e"`
-	EventTime        uint64 `json:"E"`
-	Symbol           string `json:"s"`
-	AggregateTradeId uint64 `json:"a"`
-	Price            string `json:"p"`
-	Quantity         string `json:"q"`
-	FirstTradeId     uint64 `json:"f"`
-	LastTradeId      uint64 `json:"l"`
-	TradeTime        uint64 `json:"T"`
-	IsMarketMaker    bool   `json:"m"`
-}
 
-/*
 sample response for depth:
 	{
 	"e": "depthUpdate", // Event type
@@ -84,43 +71,22 @@ sample response for depth:
 	}
 */
 
-type BinanceDepthMessage struct {
-	Exchange          string
-	EventType         string     `json:"e"`
-	EventTime         uint64     `json:"E"`
-	TransactionTime   uint64     `json:"T"`
-	Symbol            string     `json:"s"`
-	FirstUpdateId     uint64     `json:"U"`
-	FinalUpdateId     uint64     `json:"u"`
-	PrevFinalUpdateId uint64     `json:"pu"`
-	Bids              [][]string `json:"b"`
-	Asks              [][]string `json:"a"`
+type BinanceFactory struct{}
+
+func (b *BinanceFactory) CreateNormalizer(channel string) (constants.Normalizer, error) {
+	return &BinanceNormalizer{Channel: channel}, nil
 }
 
-func (b *BinanceAggTradeNormalizer) Normalize(raw []byte) ([]byte, []byte, error) {
-	return utils.NormalizeTrade(raw, "s", Binance, AggTradeChannel)
+func (b *BinanceFactory) CreateSubscriber(channel string, productIds []string) constants.Subscriber {
+	return &BinanceSubscriber{Channel: channel, ProductIds: productIds}
 }
 
-func (b *BinanceDepthNormalizer) Normalize(raw []byte) ([]byte, []byte, error) {
-	var depthMessage BinanceDepthMessage
-	err := json.Unmarshal(raw, &depthMessage)
-	if err != nil {
-		logger.Log.Error("Error in parsing depth binance response", "feed", "binance", "channel", "depth", "error", err)
-		return nil, nil, err
-	}
+func (b *BinanceFactory) CreatePinger() constants.Pinger {
+	return &BinancePinger{}
+}
 
-	depthMessage.Exchange = Binance
-	symbol := depthMessage.Symbol
-
-	normalized, marshalErr := json.Marshal(depthMessage)
-	if marshalErr != nil {
-		logger.Log.Error("Error in marshalling normalized depth message", "feed", "binance", "channel", "depth", "error", marshalErr)
-		return nil, nil, err
-	}
-
-	logger.Log.Info("Normalized depth response for message", "name", Binance, "symbol", symbol, "message", normalized)
-
-	return []byte(symbol), normalized, nil
+func (b *BinanceNormalizer) Normalize(raw []byte) ([]byte, []byte, error) {
+	return utils.Normalize(raw, SymbolField, Binance, b.Channel)
 }
 
 // subscribe message logic

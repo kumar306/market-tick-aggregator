@@ -7,6 +7,7 @@ import (
 	feedFactory "market-adapter/feeds"
 	"market-adapter/feeds/binance"
 	"market-adapter/feeds/coinbase"
+	"market-adapter/feeds/kraken"
 	"market-adapter/kafka"
 	"market-adapter/logger"
 	"market-adapter/metrics"
@@ -27,9 +28,8 @@ import (
 // start feeds
 func main() {
 
-	// register the feeds
-	feedFactory.RegisterFeedFactory("binance", &binance.BinanceFactory{})
-	feedFactory.RegisterFeedFactory("coinbase", &coinbase.CBFactory{})
+	// register the feed factories
+	go registerFeedFactories()
 
 	// init and expose prometheus metrics
 	metrics.Init()
@@ -391,4 +391,10 @@ func exposeMetrics() {
 	if err != nil {
 		logger.Log.Error("Metrics have stopped", "err", err)
 	}
+}
+
+func registerFeedFactories() {
+	feedFactory.RegisterFeedFactory("binance", &binance.BinanceFactory{})
+	feedFactory.RegisterFeedFactory("coinbase", &coinbase.CBFactory{})
+	feedFactory.RegisterFeedFactory("kraken", &kraken.KrakenFactory{})
 }

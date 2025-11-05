@@ -1,7 +1,6 @@
 package coinbase
 
 import (
-	"encoding/json"
 	"market-adapter/constants"
 	"market-adapter/feeds/utils"
 	"market-adapter/logger"
@@ -100,6 +99,7 @@ const (
 	SubscriptionsType string = "subscriptions"
 	TickerType        string = "ticker"
 	Level2Type        string = "level2"
+	SymbolField       string = "product_id"
 )
 
 type CBSubscribeRequest struct {
@@ -123,98 +123,14 @@ type CBSubscriber struct {
 	ProductIds []string
 }
 
-type CBTickerMessage struct {
-	Exchange    string
-	Type        string `json:"type"`
-	Sequence    int64  `json:"sequence"`
-	ProductID   string `json:"product_id"`
-	Price       string `json:"price"`
-	Open24h     string `json:"open_24h"`
-	Volume24h   string `json:"volume_24h"`
-	Low24h      string `json:"low_24h"`
-	High24h     string `json:"high_24h"`
-	Volume30d   string `json:"volume_30d"`
-	BestBid     string `json:"best_bid"`
-	BestBidSize string `json:"best_bid_size"`
-	BestAsk     string `json:"best_ask"`
-	BestAskSize string `json:"best_ask_size"`
-	Side        string `json:"side"`
-	Time        string `json:"time"`
-	TradeID     int64  `json:"trade_id"`
-	LastSize    string `json:"last_size"`
+type CBNormalizer struct {
+	Channel string
 }
-
-type CBL2Snapshot struct {
-	Exchange  string
-	Type      string      `json:"type"`
-	ProductId string      `json:"product_id"`
-	Bids      [][2]string `json:"bids"`
-	Asks      [][2]string `json:"asks"`
-}
-
-type CBL2Update struct {
-	Exchange  string
-	Type      string      `json:"type"`
-	ProductId string      `json:"product_id"`
-	Changes   [][3]string `json:"changes"`
-	Time      string      `json:"time"`
-}
-
-type CBTickerNormalizer struct{}
-
-type CBL2Normalizer struct{}
 
 type CBPinger struct{}
 
-// for ticker channel
-func (c *CBTickerNormalizer) Normalize(raw []byte) ([]byte, []byte, error) {
-	return utils.NormalizeTrade(raw, "product_id", CoinbaseType, TickerType)
-
-}
-
-func (c *CBL2Normalizer) Normalize(raw []byte) ([]byte, []byte, error) {
-	// first, we get a snapshot message. then we get a snapshot update message.
-	var msgType struct {
-		Type string `json:"type"`
-	}
-
-	parseErr := json.Unmarshal(raw, &msgType)
-	if parseErr != nil {
-		logger.Log.Error("Error in parse L2 message", "name", CoinbaseType, "channel", "l2", "error", parseErr)
-		return nil, nil, parseErr
-	}
-
-	switch msgType.Type {
-	case SnapshotType:
-		var snapshot CBL2Snapshot
-		json.Unmarshal(raw, &snapshot)
-		snapshot.Exchange = CoinbaseType
-		normalized, err := json.Marshal(snapshot)
-		if err != nil {
-			logger.Log.Error("Error in normalize L2 shapshot message", "name", CoinbaseType, "channel", "l2", "error", err)
-			return nil, nil, err
-		}
-
-		logger.Log.Info("Normalized L2 snapshot message", "name", CoinbaseType, "channel", "l2")
-		return []byte(snapshot.ProductId), normalized, nil
-
-	case UpdateType:
-		var L2Update CBL2Update
-		json.Unmarshal(raw, &L2Update)
-		L2Update.Exchange = CoinbaseType
-		normalized, err := json.Marshal(L2Update)
-		if err != nil {
-			logger.Log.Error("Error in normalize L2 update message", "name", CoinbaseType, "channel", "l2", "error", err)
-			return nil, nil, err
-		}
-
-		logger.Log.Info("Normalized L2 update message", "name", CoinbaseType, "channel", "l2")
-		return []byte(L2Update.ProductId), normalized, nil
-
-	default:
-		return nil, nil, logger.LogAndWrap("No matching type for coinbase L2 message", nil, "name", CoinbaseType, "channel", "l2")
-	}
-
+func (c *CBNormalizer) Normalize(raw []byte) ([]byte, []byte, error) {
+	return utils.Normalize(raw, SymbolField, CoinbaseType, c.Channel)
 }
 
 // create the req, write it. read ack. if any errors dont proceed.
@@ -242,14 +158,7 @@ func (c *CBPinger) Ping(conn *websocket.Conn, mu *sync.Mutex) error {
 }
 
 func (c *CBFactory) CreateNormalizer(channel string) (constants.Normalizer, error) {
-	switch channel {
-	case TickerType:
-		return &CBTickerNormalizer{}, nil
-	case Level2Type:
-		return &CBL2Normalizer{}, nil
-	default:
-		return nil, logger.LogAndWrap("Unsupported channel type for normalizer", nil, "name", CoinbaseType, "channel", channel)
-	}
+	return &CBNormalizer{Channel: channel}, nil
 }
 
 func (c *CBFactory) CreateSubscriber(channel string, productIds []string) constants.Subscriber {

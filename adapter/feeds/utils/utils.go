@@ -9,7 +9,10 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-const ExchangeField string = "Exchange"
+const (
+	ExchangeField string = "exchange"
+	ChannelField  string = "channel"
+)
 
 func SendAndAckSubscribe[T any](conn *websocket.Conn, subscribeReq interface{}, subscribeRes *T, feed string, channel string) error {
 	subscribeJson, err := json.Marshal(subscribeReq)
@@ -44,21 +47,37 @@ func SendPing(conn *websocket.Conn, mu *sync.Mutex, feed string) error {
 	return nil
 }
 
-func NormalizeTrade(raw []byte, symbolKey, feed, channel string) ([]byte, []byte, error) {
-	var data map[string]interface{}
-
-	if err := json.Unmarshal(raw, &data); err != nil {
+func Normalize(raw []byte, symbolKey, feed, channel string) ([]byte, []byte, error) {
+	var msg map[string]interface{}
+	var symbol string
+	if err := json.Unmarshal(raw, &msg); err != nil {
 		return nil, nil, err
 	}
 
-	symbol, ok := data[symbolKey].(string)
-	if !ok || symbol == "" {
-		return nil, nil, logger.LogAndWrap("Symbol not present in trade msg", nil, "feed", feed, "channel", channel, "symbol", symbol)
+	// binance, coinbase case
+	if val, ok := msg[symbolKey]; ok {
+		symbol, _ = val.(string)
+	} else {
+		// kraken case - symbol inside data []
+		if dataArr, ok := msg["data"].([]interface{}); ok && len(dataArr) > 0 {
+			if firstObj, ok := dataArr[0].(map[string]interface{}); ok {
+				if val, ok := firstObj[symbolKey]; ok {
+					symbol, _ = val.(string)
+				}
+			}
+		}
 	}
 
-	data[ExchangeField] = feed
+	if symbol == "" {
+		return nil, nil, logger.LogAndWrap("Unable to locate symbol in ticker message", nil, "feed", feed, "channel", channel)
+	}
 
-	normalized, marshalErr := json.Marshal(data)
+	// add in the root level for kafka consumer processing
+	msg[ExchangeField] = feed
+	msg[ChannelField] = channel
+	msg[symbolKey] = symbol
+
+	normalized, marshalErr := json.Marshal(msg)
 	if marshalErr != nil {
 		logger.Log.Error("Error in marshalling normalized trade message", "feed", feed, "channel", channel, "error", marshalErr)
 		return nil, nil, marshalErr

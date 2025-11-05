@@ -8,7 +8,7 @@ import (
 )
 
 type FeedFactory interface {
-	CreateNormalizer(stream string) (constants.Normalizer, error)
+	CreateNormalizer(channel string) (constants.Normalizer, error)
 	CreateSubscriber(channel string, productIds []string) constants.Subscriber
 	CreatePinger() constants.Pinger
 }

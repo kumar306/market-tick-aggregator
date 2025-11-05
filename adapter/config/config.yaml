@@ -43,14 +43,27 @@ feeds:
         kafkaTopic: coinbase_raw_depth
         ringBufferSize: 1024
 
-
-  # - name: kraken
-  #   url: wss://ws.kraken.com/v2
-  #   maxRetries: 5
-  #   heartBeatInterval: 15
-  #   pongTimeout: 25
-  #   kafkaTopic: ticks_kraken
-  #   ringBufferSize: 10000
+  - name: kraken
+    url: wss://ws.kraken.com/v2
+    streams: 
+      - name: kraken
+        channel: ticker
+        productIds:
+          - BTC/USD
+        maxRetries: 5
+        heartBeatInterval: 15
+        pongTimeout: 25
+        kafkaTopic: kraken_raw_ticker
+        ringBufferSize: 1024
+      - name: kraken
+        channel: book
+        productIds:
+          - BTC/USD
+        maxRetries: 5
+        heartBeatInterval: 15
+        pongTimeout: 25
+        kafkaTopic: kraken_raw_depth
+        ringBufferSize: 1024
 
   # - name: bitfinex
   #   url: wss://api-pub.bitfinex.com
