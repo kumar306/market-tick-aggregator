@@ -40,7 +40,7 @@ func main() {
 
 	// have a map of string ("feed key") to its Config struct
 	var c *constants.Config
-	c, err := config.GetConfig()
+	c, err := config.GetConfig(constants.ConfigFile)
 	// If any validation errors, return
 	if err != nil {
 		logger.Log.Error("Failed to load feed config. Stopping main()", "err", err)

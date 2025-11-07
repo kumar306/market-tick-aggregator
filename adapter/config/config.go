@@ -7,17 +7,18 @@ import (
 	"math"
 	"net/url"
 	"os"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
 
-func GetConfig() (*constants.Config, error) {
+func GetConfig(cfgFilePath string) (*constants.Config, error) {
 
 	var c constants.Config
-	yamlFile, err := os.ReadFile(constants.ConfigFile)
+	yamlFile, err := os.ReadFile(cfgFilePath)
 	if err != nil {
 		logger.Log.Error("Error when reading file from path",
-			"configFilePath", constants.ConfigFile,
+			"configFilePath", cfgFilePath,
 			"err", err)
 		return nil, fmt.Errorf("error when reading feed config: %w", err)
 	}
@@ -42,12 +43,38 @@ func ValidateAll(c *constants.Config) error {
 	// No duplicates across feeds
 	// Feed validation done
 	// default values if not given in yaml config
+
+	if len(c.BootstrapServers) == 0 {
+		return logger.LogAndWrap("Missing bootstrap servers in config file. Exiting.", nil)
+	}
+
 	seenNames := make(map[string]bool)
 	seenKafkaTopics := make(map[string]bool)
 	seenUrls := make(map[string]bool)
-	seenChannels := make(map[string]bool)
 
 	for _, feed := range c.Feeds {
+
+		// Each name should not be blank
+		if strings.TrimSpace(feed.Name) == "" {
+			return logger.LogAndWrap("cannot have blank name",
+				nil)
+		}
+
+		// Each URL should not be blank, should have a proper URL
+		if feed.Url == "" {
+			return logger.LogAndWrap("cannot have blank url",
+				nil,
+				"name", feed.Name)
+		}
+
+		_, err := url.ParseRequestURI(feed.Url)
+		if err != nil {
+			return logger.LogAndWrap("cannot have invalid url",
+				nil,
+				"name", feed.Name,
+				"url", feed.Url)
+		}
+
 		if seenNames[feed.Name] {
 			return logger.LogAndWrap("cannot have duplicate name for feed",
 				nil,
@@ -69,14 +96,6 @@ func ValidateAll(c *constants.Config) error {
 			}
 			seenKafkaTopics[stream.KafkaTopic] = true
 
-			if seenChannels[stream.Channel] {
-				return logger.LogAndWrap("cannot have duplicate channel for feed",
-					nil,
-					"name", feed.Name,
-					"channel", stream.Channel)
-			}
-			seenChannels[stream.Channel] = true
-
 			validateErr := Validate(feed, stream)
 			if validateErr != nil {
 				return logger.LogAndWrap("internal validation error",
@@ -96,24 +115,13 @@ func ValidateAll(c *constants.Config) error {
 
 func Validate(f *constants.Feed, s *constants.Stream) error {
 
-	// Each URL should not be blank, should have a proper URL
-	if f.Url == "" {
-		return logger.LogAndWrap("cannot have blank url",
-			nil,
-			"name", f.Name)
-	}
-
-	_, err := url.ParseRequestURI(f.Url)
-	if err != nil {
-		return logger.LogAndWrap("cannot have invalid url",
-			nil,
-			"name", f.Name,
-			"url", f.Url)
+	if len(s.ProductIds) == 0 {
+		return logger.LogAndWrap("Missing product IDs for stream", nil, "name", f.Name, "stream", s.Channel)
 	}
 
 	// default for max retries
-	if s.MaxRetries == 0 {
-		logger.Log.Warn("Missing max retries or its set to 0. Reverting to default", "name", f.Name)
+	if s.MaxRetries <= 0 {
+		logger.Log.Warn("Missing max retries or its <= 0. Reverting to default", "name", f.Name)
 		s.MaxRetries = 5
 	}
 	if s.MaxRetries > 15 {
@@ -125,8 +133,8 @@ func Validate(f *constants.Feed, s *constants.Stream) error {
 	}
 
 	// default for max jitter ms
-	if s.MaxJitterMillis == 0 {
-		logger.Log.Warn("Missing max jitter millis or its set to 0. Reverting to default", "name", f.Name)
+	if s.MaxJitterMillis <= 0 {
+		logger.Log.Warn("Missing max jitter millis or its set to <= 0. Reverting to default", "name", f.Name)
 		s.MaxJitterMillis = 1000
 	}
 	if s.MaxJitterMillis > 10000 {
@@ -137,8 +145,8 @@ func Validate(f *constants.Feed, s *constants.Stream) error {
 			"max_jitter_millis", s.MaxJitterMillis)
 	}
 
-	if s.BaseDelay == 0 {
-		logger.Log.Warn("Missing base delay seconds or its set to 0. Reverting to default", "name", f.Name)
+	if s.BaseDelay <= 0 {
+		logger.Log.Warn("Missing base delay seconds or its set to <= 0. Reverting to default", "name", f.Name)
 		s.BaseDelay = 5
 	}
 	if s.BaseDelay > 20 {
@@ -150,13 +158,13 @@ func Validate(f *constants.Feed, s *constants.Stream) error {
 	}
 
 	// default value for heartbeat interval if its 0 or not given
-	if s.HearbeatInterval == 0 {
-		logger.Log.Warn("Missing heartbeat interval or its set to 0. Reverting to default", "name", f.Name)
+	if s.HearbeatInterval <= 0 {
+		logger.Log.Warn("Missing heartbeat interval or its set to <= 0. Reverting to default", "name", f.Name)
 		s.HearbeatInterval = 10
 	}
 
 	// default value for pong timeout = 1.5 * heartbeat interval
-	if s.PongTimeout == 0 {
+	if s.PongTimeout <= 0 {
 		s.PongTimeout = int(math.Round(1.5 * float64(s.HearbeatInterval)))
 	}
 

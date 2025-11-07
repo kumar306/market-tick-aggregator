@@ -80,14 +80,15 @@ func Test_SendAndAckSubscribe(t *testing.T) {
 
 	// req, res, mock server response, feedname, channel - extend this for other exchanges
 	tests := []struct {
+		name          string
 		req           interface{}
 		res           interface{}
 		mockServerRes string
 		feed          string
 		channel       string
 	}{
-		{binanceSubscribeMsg, binanceResponse, `{"result":null, "id": 1}`, "Binance", "aggTrade"},
-		{coinbaseSubscribeMsg, coinbaseResponse, `{
+		{"binance subscribe", binanceSubscribeMsg, binanceResponse, `{"result":null, "id": 1}`, "Binance", "aggTrade"},
+		{"coinbase subscribe", coinbaseSubscribeMsg, coinbaseResponse, `{
 			"type":"subscriptions", 
 			"channels":[
 				{
@@ -96,7 +97,7 @@ func Test_SendAndAckSubscribe(t *testing.T) {
 				}
 			]
 		}`, "Coinbase", "ticker"},
-		{krakenSubscribeMsg, krakenResponse, `{
+		{"kraken subscribe", krakenSubscribeMsg, krakenResponse, `{
 			"method": "subscribe",
 			"result": {
 				"channel": "ticker",
@@ -110,34 +111,35 @@ func Test_SendAndAckSubscribe(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		server := newMockServer(t, func(conn *websocket.Conn) {
-			defer conn.Close()
-			for {
-				_, msg, err := conn.ReadMessage()
-				if err != nil {
-					return
-				}
-				t.Logf("Server received subscribe message: %v", string(msg))
-				// subscribe dummy response
-				resp := tc.mockServerRes
-				conn.WriteMessage(websocket.TextMessage, []byte(resp))
+		t.Run(tc.name, func(t *testing.T) {
+			server := newMockServer(t, func(conn *websocket.Conn) {
+				defer conn.Close()
+				for {
+					_, msg, err := conn.ReadMessage()
+					if err != nil {
+						return
+					}
+					t.Logf("Server received subscribe message: %v", string(msg))
+					// subscribe dummy response
+					resp := tc.mockServerRes
+					conn.WriteMessage(websocket.TextMessage, []byte(resp))
 
+				}
+			})
+			defer server.Close()
+
+			conn, _, err := websocket.DefaultDialer.Dial(convertToWsUrl(server.URL), nil)
+			if err != nil {
+				t.Fatalf("Unable to connect to mock server. Error: %v", err)
+			}
+			defer conn.Close()
+
+			err = utils.SendAndAckSubscribe(conn, tc.req, &tc.res, tc.feed, tc.channel)
+			if err != nil {
+				t.Fatalf("Error in subscription test: %v", err)
 			}
 		})
-		defer server.Close()
-
-		conn, _, err := websocket.DefaultDialer.Dial(convertToWsUrl(server.URL), nil)
-		if err != nil {
-			t.Fatalf("Unable to connect to mock server. Error: %v", err)
-		}
-		defer conn.Close()
-
-		err = utils.SendAndAckSubscribe(conn, tc.req, &tc.res, tc.feed, tc.channel)
-		if err != nil {
-			t.Fatalf("Error in subscription test: %v", err)
-		}
 	}
-
 }
 
 func Test_SendPing(t *testing.T) {
@@ -189,18 +191,19 @@ viii. kraken book update
 */
 func Test_NormalizeFeeds(t *testing.T) {
 	tests := []struct {
+		name      string
 		raw       string
 		symbolKey string
 		feed      string
 		channel   string
 		symbol    string
 	}{
-		{`{"s":"BTCUSDT","p":"0.001","q":"100"}`, "s", "Binance", "aggTrade", "BTCUSDT"},
-		{`{"s":"BTCUSDT","pu":149,"b": [["0.0024","10"]],"a": [["0.0026","100"]]}`, "s", "Binance", "depth", "BTCUSDT"},
-		{`{"type": "ticker","sequence": 37475248783,"product_id": "ETH-USD","price": "1285.22","open_24h": "1310.79","volume_24h": "245532.79269678"}`, "product_id", "Coinbase", "ticker", "ETH-USD"},
-		{`{"type": "snapshot","product_id": "BTC-USD","bids": [["10101.10", "0.45054140"]],"asks": [["10102.55", "0.57753524"]]}`, "product_id", "Coinbase", "level2", "BTC-USD"},
-		{`{"type": "l2update","product_id": "BTC-USD","changes": [["buy","22356.270000","0.00000000"],["buy","22356.300000","1.00000000"]],"time": "2022-08-04T15:25:05.010758Z"}`, "product_id", "Coinbase", "level2", "BTC-USD"},
-		{`{"channel": "ticker","type": "snapshot","data": [
+		{"binance ticker normalize", `{"s":"BTCUSDT","p":"0.001","q":"100"}`, "s", "Binance", "aggTrade", "BTCUSDT"},
+		{"binance depth normalize", `{"s":"BTCUSDT","pu":149,"b": [["0.0024","10"]],"a": [["0.0026","100"]]}`, "s", "Binance", "depth", "BTCUSDT"},
+		{"coinbase ticker normalize", `{"type": "ticker","sequence": 37475248783,"product_id": "ETH-USD","price": "1285.22","open_24h": "1310.79","volume_24h": "245532.79269678"}`, "product_id", "Coinbase", "ticker", "ETH-USD"},
+		{"coinbase l2 snapshot normalize", `{"type": "snapshot","product_id": "BTC-USD","bids": [["10101.10", "0.45054140"]],"asks": [["10102.55", "0.57753524"]]}`, "product_id", "Coinbase", "level2", "BTC-USD"},
+		{"coinbase l2 update normalize", `{"type": "l2update","product_id": "BTC-USD","changes": [["buy","22356.270000","0.00000000"],["buy","22356.300000","1.00000000"]],"time": "2022-08-04T15:25:05.010758Z"}`, "product_id", "Coinbase", "level2", "BTC-USD"},
+		{"kraken ticker normalize", `{"channel": "ticker","type": "snapshot","data": [
         {
             "symbol": "ALGO/USD",
             "bid": 0.10025,
@@ -217,7 +220,7 @@ func Test_NormalizeFeeds(t *testing.T) {
         }
     ]
 }`, "symbol", "Kraken", "ticker", "ALGO/USD"},
-		{`{
+		{"kraken book normalize", `{
     "channel": "book",
     "type": "snapshot",
     "data": [
@@ -311,7 +314,7 @@ func Test_NormalizeFeeds(t *testing.T) {
         }
     ]
 }`, "symbol", "Kraken", "book", "MATIC/USD"},
-		{`{
+		{"kraken book update normalize", `{
     "channel": "book",
     "type": "update",
     "data": [
@@ -332,27 +335,28 @@ func Test_NormalizeFeeds(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		symbol, normalized, err := utils.Normalize([]byte(tc.raw), tc.symbolKey, tc.feed, tc.channel)
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			symbol, normalized, err := utils.Normalize([]byte(tc.raw), tc.symbolKey, tc.feed, tc.channel)
 
-		if err != nil {
-			t.Fatalf("Unexpected error: %v", err)
-		}
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
 
-		var m map[string]interface{}
-		json.Unmarshal(normalized, &m)
+			var m map[string]interface{}
+			json.Unmarshal(normalized, &m)
 
-		if string(symbol) != tc.symbol {
-			t.Fatalf("expected symbol %v, got %v", tc.symbolKey, string(symbol))
-		}
+			if string(symbol) != tc.symbol {
+				t.Fatalf("expected symbol %v, got %v", tc.symbolKey, string(symbol))
+			}
 
-		if m["exchange"] != tc.feed {
-			t.Fatalf("expected exchange %v, got %v", tc.feed, m["exchange"])
-		}
+			if m["exchange"] != tc.feed {
+				t.Fatalf("expected exchange %v, got %v", tc.feed, m["exchange"])
+			}
 
-		if m["channel"] != tc.channel {
-			t.Fatalf("expected channel %v, got %v", tc.channel, m["channel"])
-		}
-
+			if m["channel"] != tc.channel {
+				t.Fatalf("expected channel %v, got %v", tc.channel, m["channel"])
+			}
+		})
 	}
-
 }

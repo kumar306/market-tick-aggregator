@@ -29,28 +29,28 @@ const (
 // use interfaces so no need to write multiple persistence logics for persisting - all under same contract
 
 type Config struct {
-	Feeds            []*Feed `yaml:"feeds"`
+	Feeds            []*Feed `yaml:"feeds" json:"feeds"`
 	FeedMap          map[string]*Feed
-	BootstrapServers []string `yaml:"bootstrap_servers"`
+	BootstrapServers []string `yaml:"bootstrap_servers" json:"bootstrap_servers"`
 }
 
 type Feed struct {
-	Name    string    `yaml:"name"`
-	Url     string    `yaml:"url"`
-	Streams []*Stream `yaml:"streams"`
+	Name    string    `yaml:"name" json:"name"`
+	Url     string    `yaml:"url" json:"url"`
+	Streams []*Stream `yaml:"streams" json:"streams"`
 }
 
 type Stream struct {
-	Name             string   `yaml:"name"`
-	Channel          string   `yaml:"channel"`
-	ProductIds       []string `yaml:"productIds"`
-	KafkaTopic       string   `yaml:"kafkaTopic"`
-	RingBufferSize   uint64   `yaml:"ringBufferSize"`
-	MaxRetries       int      `yaml:"maxRetries"`
-	BaseDelay        int      `yaml:"baseDelay"`
-	HearbeatInterval int      `yaml:"heartbeatInterval"`
-	PongTimeout      int      `yaml:"pongTimeout"`
-	MaxJitterMillis  int      `yaml:"maxJitterMillis"`
+	Name             string   `yaml:"name" json:"name"`
+	Channel          string   `yaml:"channel" json:"channel"`
+	ProductIds       []string `yaml:"productIds" json:"productIds"`
+	KafkaTopic       string   `yaml:"kafkaTopic" json:"kafkaTopic"`
+	RingBufferSize   uint64   `yaml:"ringBufferSize" json:"ringBufferSize"`
+	MaxRetries       int      `yaml:"maxRetries" json:"maxRetries"`
+	BaseDelay        int      `yaml:"baseDelay" json:"baseDelay"`
+	HearbeatInterval int      `yaml:"heartbeatInterval" json:"heartbeatInterval"`
+	PongTimeout      int      `yaml:"pongTimeout" json:"pongTimeout"`
+	MaxJitterMillis  int      `yaml:"maxJitterMillis" json:"maxJitterMillis"`
 }
 
 type Supervisor struct {
