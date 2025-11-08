@@ -113,7 +113,7 @@ func Test_ProduceAsync(t *testing.T) {
 
 	fetched := false
 	// read the message. if message present, then test passes. add some assertions
-	for start := time.Now(); time.Since(start) <= 10*time.Second; {
+	require.Eventually(t, func() bool {
 		fetches := client.PollFetches(ctx)
 		iter := fetches.RecordIter()
 		for !iter.Done() {
@@ -126,13 +126,7 @@ func Test_ProduceAsync(t *testing.T) {
 			fetched = true
 			break
 		}
+		return fetched
+	}, 10*time.Second, 200*time.Millisecond, "No message consumed within timeout")
 
-		if fetched {
-			break
-		}
-
-		time.Sleep(200 * time.Millisecond)
-	}
-
-	require.True(t, fetched, "No message consumed within the timeout.")
 }
