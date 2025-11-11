@@ -1,10 +1,10 @@
 package internal
 
 import (
-	"market-adapter/constants"
-	"market-adapter/logger"
 	"math"
 	"math/rand"
+	"shared/constants"
+	"shared/logger"
 	"time"
 )
 

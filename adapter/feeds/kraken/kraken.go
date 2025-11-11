@@ -1,9 +1,10 @@
 package kraken
 
 import (
-	"market-adapter/constants"
 	"market-adapter/feeds/utils"
-	"market-adapter/logger"
+	"shared/constants"
+	"shared/logger"
+
 	"sync"
 
 	"github.com/gorilla/websocket"

@@ -2,7 +2,7 @@ package utils
 
 import (
 	"encoding/json"
-	"market-adapter/logger"
+	"shared/logger"
 	"sync"
 	"time"
 

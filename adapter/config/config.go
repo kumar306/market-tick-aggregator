@@ -2,8 +2,9 @@ package config
 
 import (
 	"fmt"
-	"market-adapter/constants"
-	"market-adapter/logger"
+	"shared/constants"
+	"shared/logger"
+
 	"math"
 	"net/url"
 	"os"

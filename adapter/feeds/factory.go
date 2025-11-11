@@ -1,9 +1,9 @@
 package feedFactory
 
 import (
-	"market-adapter/constants"
-	"market-adapter/logger"
 	"market-adapter/ring"
+	"shared/constants"
+	"shared/logger"
 	"sync"
 )
 

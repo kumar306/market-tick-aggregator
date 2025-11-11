@@ -2,9 +2,9 @@ package kafka
 
 import (
 	"context"
-	"market-adapter/logger"
 	"market-adapter/metrics"
 	"os"
+	"shared/logger"
 	"sync"
 	"time"
 

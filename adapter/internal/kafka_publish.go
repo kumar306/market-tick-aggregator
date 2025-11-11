@@ -2,11 +2,11 @@ package internal
 
 import (
 	"context"
-	"market-adapter/constants"
 	"market-adapter/kafka"
-	"market-adapter/logger"
 	"market-adapter/metrics"
 	"market-adapter/ring"
+	"shared/constants"
+	"shared/logger"
 	"sync"
 	"time"
 )

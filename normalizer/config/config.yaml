@@ -1,0 +1,13 @@
+normalizer:
+  brokers:
+    - localhost:9092
+  topics:
+    - "binance_raw_aggtrades"
+    - "binance_raw_depth"
+    - "coinbase_raw_ticker"
+    - "coinbase_raw_depth"
+    - "kraken_raw_ticker"
+    - "kraken_raw_depth"
+  consumer_group: normalizer-group-1
+  max_poll_records: 500
+  commit_offset_interval_millis: 5000
