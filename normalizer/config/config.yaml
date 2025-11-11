@@ -1,4 +1,4 @@
-normalizer:
+kafka:
   brokers:
     - localhost:9092
   topics:
@@ -9,5 +9,5 @@ normalizer:
     - "kraken_raw_ticker"
     - "kraken_raw_depth"
   consumer_group: normalizer-group-1
-  max_poll_records: 500
+  max_buffer_records: 5000
   commit_offset_interval_millis: 5000

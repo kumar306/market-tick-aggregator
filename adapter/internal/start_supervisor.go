@@ -2,7 +2,7 @@ package internal
 
 import (
 	"context"
-	"shared/constants"
+	"market-adapter/constants"
 	"shared/logger"
 	"sync"
 )

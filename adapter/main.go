@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"market-adapter/config"
+	"market-adapter/constants"
 	feedFactory "market-adapter/feeds"
 	"market-adapter/feeds/binance"
 	"market-adapter/feeds/coinbase"
@@ -13,7 +14,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"shared/constants"
 	"shared/logger"
 	"sync"
 	"syscall"

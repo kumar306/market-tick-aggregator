@@ -88,15 +88,3 @@ type Pinger interface {
 type AuthHandler interface {
 	HandleAuth() error
 }
-
-type NormalizerConfig struct {
-	NormalizerConfig NormalizerKafkaConfig `yaml:"normalizer"`
-}
-
-type NormalizerKafkaConfig struct {
-	Brokers                    []string `yaml:"brokers"`
-	Topics                     []string `yaml:"topics"`
-	ConsumerGroup              string   `yaml:"consumer_group"`
-	MaxPollRecords             int      `yaml:"max_poll_records"`
-	CommitOffsetIntervalMillis int      `yaml:"max_poll_records"`
-}

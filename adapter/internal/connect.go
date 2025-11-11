@@ -1,8 +1,8 @@
 package internal
 
 import (
+	"market-adapter/constants"
 	"market-adapter/metrics"
-	"shared/constants"
 	"shared/logger"
 	"time"
 

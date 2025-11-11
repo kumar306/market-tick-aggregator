@@ -1,8 +1,8 @@
 package kraken
 
 import (
+	"market-adapter/constants"
 	"market-adapter/feeds/utils"
-	"shared/constants"
 	"shared/logger"
 
 	"sync"

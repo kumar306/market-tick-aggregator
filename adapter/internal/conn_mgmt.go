@@ -2,9 +2,9 @@ package internal
 
 import (
 	"context"
+	"market-adapter/constants"
 	"market-adapter/metrics"
 	"market-adapter/ring"
-	"shared/constants"
 	"shared/logger"
 	"sync"
 	"time"

@@ -2,9 +2,9 @@ package internal_test
 
 import (
 	"context"
+	"market-adapter/constants"
 	"market-adapter/internal"
 	"math"
-	"shared/constants"
 	"sync"
 	"testing"
 	"time"

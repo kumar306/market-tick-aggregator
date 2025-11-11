@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"market-adapter/config"
+	"market-adapter/constants"
 	"os"
 	"path/filepath"
-	"shared/constants"
 	"testing"
 
 	"gopkg.in/yaml.v3"

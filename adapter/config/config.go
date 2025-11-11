@@ -2,7 +2,7 @@ package config
 
 import (
 	"fmt"
-	"shared/constants"
+	"market-adapter/constants"
 	"shared/logger"
 
 	"math"
