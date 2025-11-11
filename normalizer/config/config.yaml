@@ -11,3 +11,5 @@ kafka:
   consumer_group: normalizer-group-1
   max_buffer_records: 5000
   commit_offset_interval_millis: 5000
+
+worker_count: 16

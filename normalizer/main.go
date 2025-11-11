@@ -4,6 +4,7 @@ import (
 	"context"
 	"market-normalizer/config"
 	"market-normalizer/constants"
+	"market-normalizer/dispatcher"
 	"market-normalizer/kafka"
 	"os"
 	"os/signal"
@@ -14,10 +15,6 @@ import (
 )
 
 // TODO:
-// iv. create the array of bounded channels - for now 16 channels and create pool of 16 goroutines to receive on each of them. this would be high CPU usage i guess.
-// v. pass the client into a goroutine which does poll fetch from the list of topics
-// vi. iterate through fetched records. for each fetched record, pass it into a channel
-// vii. dispatcher goroutine reading from this channel - does quick top fields retrieval. pushes to the sharded worker
 // viii. create a bg goroutine to commit the marked offsets - use a ticker.C
 
 func main() {
@@ -40,6 +37,15 @@ func main() {
 
 	// create the dispatch channel
 	var dispatchChannel chan *kgo.Record = make(chan *kgo.Record, 1000)
+
+	// create the worker channels
+	channelPool := dispatcher.CreateWorkerChannels(cfg.WorkerCount)
+
+	// start worker pool
+	dispatcher.StartWorkerPool(ctx, channelPool)
+
+	// setup dispatcher
+	go dispatcher.StartDispatcher(ctx, dispatchChannel, channelPool, cfg.WorkerCount)
 
 	// start the consumer loop
 	go kafka.ConsumerLoop(ctx, client, dispatchChannel)

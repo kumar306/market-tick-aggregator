@@ -41,7 +41,7 @@ func Validate(c *constants.Config) error {
 	// TODO: config validation
 	// verify topics is a valid array of strings. if no topics, return err
 	// verify bootstrap servers is valid array of strings.
-	// verify max poll records is present. and a number. if a negative number or not present, default is 500
+	// verify max buffer records is present. and a number. if a negative number or not present, default is 5000
 	// verify similarly for commit millis, default to 5000
 
 	var kafkaConfig *constants.KafkaConfig = c.KafkaConfig
@@ -59,10 +59,10 @@ func Validate(c *constants.Config) error {
 		kafkaConfig.ConsumerGroup = constants.DefaultConsumerGroupName
 	}
 
-	// under 100 is too less to fetch at once
-	if kafkaConfig.MaxBufferRecords <= 100 {
-		logger.Log.Warn("Normalizer kafka max poll records missing or <= 10. Setting to default [100]")
-		kafkaConfig.MaxBufferRecords = 100
+	// under 5000 is too less for backpressure
+	if kafkaConfig.MaxBufferRecords <= 5000 {
+		logger.Log.Warn("Normalizer kafka max buffer records missing or <= 5000. Setting to default [5000]")
+		kafkaConfig.MaxBufferRecords = 5000
 	}
 
 	if kafkaConfig.CommitOffsetIntervalMillis < 2000 {
