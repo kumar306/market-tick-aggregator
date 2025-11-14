@@ -17,7 +17,7 @@ goroutine which reads from dispatch channel
 parses the top level information
 forwards to respective worker
 */
-func StartDispatcher(ctx context.Context, dispatchChannel <-chan *kgo.Record, channelPool []chan *kgo.Record, numWorkers int) {
+func StartDispatcher(ctx context.Context, dispatchChannel <-chan *kgo.Record, channelPool []chan *constants.DispatchRecord, numWorkers int) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -39,12 +39,21 @@ func StartDispatcher(ctx context.Context, dispatchChannel <-chan *kgo.Record, ch
 
 			// compute hash - hash of feed + stream + symbol
 			// route to respective worker
+			dedupeKey := strings.ToLower(header.Exchange) + "-" + strings.ToLower(header.Channel) + "-" + strings.ToLower(symbol)
+
 			hash := fnv.New32a()
-			hash.Write([]byte(strings.ToLower(header.Exchange) + "-" + strings.ToLower(header.Channel) + "-" + strings.ToLower(symbol)))
+			hash.Write([]byte(dedupeKey))
 			sum := hash.Sum32()
 
 			shardKey := sum % uint32(numWorkers)
-			channelPool[shardKey] <- rec
+
+			channelPool[shardKey] <- &constants.DispatchRecord{
+				Record:    rec,
+				BufferKey: dedupeKey,
+				Exchange:  header.Exchange,
+				Channel:   header.Channel,
+				Symbol:    symbol,
+			}
 		}
 	}
 }
@@ -52,11 +61,11 @@ func StartDispatcher(ctx context.Context, dispatchChannel <-chan *kgo.Record, ch
 /*
 method to create the worker channels
 */
-func CreateWorkerChannels(numWorkers int) []chan *kgo.Record {
-	var channelPool []chan *kgo.Record
+func CreateWorkerChannels(numWorkers int) []chan *constants.DispatchRecord {
+	var channelPool []chan *constants.DispatchRecord
 	for i := 0; i < numWorkers; i++ {
 		// bounded so it doesnt block
-		workerChannel := make(chan *kgo.Record, 1000)
+		workerChannel := make(chan *constants.DispatchRecord, 1000)
 		channelPool = append(channelPool, workerChannel)
 	}
 	return channelPool
@@ -65,22 +74,24 @@ func CreateWorkerChannels(numWorkers int) []chan *kgo.Record {
 /*
 start the workers listening on those channels. shutdown worker pool on ctx shutdown
 */
-func StartWorkerPool(ctx context.Context, channelPool []chan *kgo.Record) {
+func StartWorkerPool(ctx context.Context, channelPool []chan *constants.DispatchRecord) {
 	for i, workerChannel := range channelPool {
-		go func(i int, workerChannel <-chan *kgo.Record) {
+		go func(i int, workerChannel <-chan *constants.DispatchRecord) {
 			logger.Log.Info("Starting worker.", "worker", i)
+			// in memory map per worker
+			workerMap := make(map[string]*constants.SymbolState)
 			for {
 				select {
 				case <-ctx.Done():
 					logger.Log.Info("Worker stopping.", "worker", i)
 					return
-				case rec := <-workerChannel:
-					if rec == nil {
+				case dispatchRec := <-workerChannel:
+					if dispatchRec == nil {
 						continue
 					}
 
 					// executes after dispatcher route
-					worker.ProcessRecord(ctx, rec)
+					worker.ProcessRecord(ctx, dispatchRec, workerMap)
 				}
 			}
 		}(i, workerChannel)
