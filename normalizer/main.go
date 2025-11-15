@@ -5,6 +5,7 @@ import (
 	"market-normalizer/config"
 	"market-normalizer/constants"
 	"market-normalizer/dispatcher"
+	"market-normalizer/factory"
 	"market-normalizer/kafka"
 	"os"
 	"os/signal"
@@ -20,6 +21,9 @@ import (
 func main() {
 
 	logger.Log.Info("Normalizer starting...")
+
+	// init all pipeline registries
+	factory.InitConverterRegistry()
 
 	// load the consumer config
 	cfg, err := config.GetConfig(constants.ConfigFilePath)

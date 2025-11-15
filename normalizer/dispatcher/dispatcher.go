@@ -48,8 +48,10 @@ func StartDispatcher(ctx context.Context, dispatchChannel <-chan *kgo.Record, ch
 			shardKey := sum % uint32(numWorkers)
 
 			channelPool[shardKey] <- &constants.DispatchRecord{
+				Event:     constants.NewMessage,
 				Record:    rec,
 				BufferKey: dedupeKey,
+				ShardKey:  shardKey,
 				Exchange:  header.Exchange,
 				Channel:   header.Channel,
 				Symbol:    symbol,
@@ -76,7 +78,7 @@ start the workers listening on those channels. shutdown worker pool on ctx shutd
 */
 func StartWorkerPool(ctx context.Context, channelPool []chan *constants.DispatchRecord) {
 	for i, workerChannel := range channelPool {
-		go func(i int, workerChannel <-chan *constants.DispatchRecord) {
+		go func(i int, workerChannel chan *constants.DispatchRecord) {
 			logger.Log.Info("Starting worker.", "worker", i)
 			// in memory map per worker
 			workerMap := make(map[string]*constants.SymbolState)
@@ -90,8 +92,13 @@ func StartWorkerPool(ctx context.Context, channelPool []chan *constants.Dispatch
 						continue
 					}
 
-					// executes after dispatcher route
-					worker.ProcessRecord(ctx, dispatchRec, workerMap)
+					// dispatched record can be a new message or buffer flush event
+					switch dispatchRec.Event {
+					case constants.FlushBuffer:
+						worker.FlushBuffer(ctx, dispatchRec, workerMap)
+					case constants.NewMessage:
+						worker.ProcessRecord(ctx, dispatchRec, workerMap, workerChannel)
+					}
 				}
 			}
 		}(i, workerChannel)
