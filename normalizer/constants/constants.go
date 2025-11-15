@@ -91,7 +91,7 @@ type ConverterStrategy interface {
 
 // orders the stream of messages
 type OrdererStrategy interface {
-	Order(*NormalizedMessage, chan *DispatchRecord) ([]*NormalizedMessage, error)
+	Order(*NormalizedMessage, string, chan *DispatchRecord) ([]*NormalizedMessage, error)
 	InitOrdererState(*NormalizedMessage)
 	// comparator sort the buffer in order before flushing
 	Less(i, j *NormalizedMessage) bool
