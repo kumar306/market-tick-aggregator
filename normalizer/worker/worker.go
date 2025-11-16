@@ -5,7 +5,6 @@ import (
 	"market-normalizer/constants"
 	"market-normalizer/factory"
 	"shared/logger"
-	"sort"
 )
 
 func ProcessRecord(ctx context.Context, dispatchRec *constants.DispatchRecord, workerMap map[string]*constants.SymbolState, workerChannel chan *constants.DispatchRecord) error {
@@ -71,12 +70,15 @@ func ProcessRecord(ctx context.Context, dispatchRec *constants.DispatchRecord, w
 	}
 
 	// convert to a normalized schema and publish to downstream
-	ProcessBuffer(normalizedBuf, dispatchRec.BufferKey, symbolState.Normalizer, symbolState.Publisher)
+	ProcessBuffer(normalizedBuf, dispatchRec.BufferKey, symbolState.Normalizer, symbolState.Publisher, symbolState.Orderer)
 
 	return err
 }
 
-func ProcessBuffer(normalizedBuffer []*constants.PipelineMessage, partitionKey string, normalizer constants.NormalizerStrategy, publisher constants.PublisherStrategy) {
+func ProcessBuffer(normalizedBuffer []*constants.PipelineMessage, partitionKey string,
+	normalizer constants.NormalizerStrategy,
+	publisher constants.PublisherStrategy,
+	orderer constants.OrdererStrategy) {
 
 	for _, msg := range normalizedBuffer {
 
@@ -87,9 +89,13 @@ func ProcessBuffer(normalizedBuffer []*constants.PipelineMessage, partitionKey s
 
 		publisher.Publish(protoStream, []byte(partitionKey), msg.Exchange, msg.Channel)
 
-		// mark the record for commit.
-		// remove pointer from buffer
+		// ack and update symbol state - by update strategy of orderer
+		// if worker crashes mid flush, it will resume from crash point
+		orderer.Ack(msg)
 	}
+
+	// final buffer internals cleanup
+	orderer.Cleanup()
 }
 
 func FlushBuffer(ctx context.Context, dispatchRec *constants.DispatchRecord, workerMap map[string]*constants.SymbolState) {
@@ -97,9 +103,7 @@ func FlushBuffer(ctx context.Context, dispatchRec *constants.DispatchRecord, wor
 
 	// process buffermap in order of increasing seq/timestamp
 	// sort should happen based on orderer strategy
-	sort.Slice(symbolState.Buffer, func(i, j int) bool {
-		return symbolState.Orderer.Less(symbolState.Buffer[i], symbolState.Buffer[j])
-	})
+	sortedBuffer := symbolState.Orderer.PrepareBufferFlush()
 
-	ProcessBuffer(symbolState.Buffer, dispatchRec.BufferKey, symbolState.Normalizer, symbolState.Publisher)
+	ProcessBuffer(sortedBuffer, dispatchRec.BufferKey, symbolState.Normalizer, symbolState.Publisher, symbolState.Orderer)
 }

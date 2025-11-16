@@ -61,14 +61,14 @@ func GetConverter(key string) (constants.ConverterStrategy, error) {
 		return &BinanceAggTradeConverter{}, nil
 	case "binance:depth":
 		return &BinanceDepthConverter{}, nil
-	case "coinbase:ticker":
-		return &CoinbaseTickerConverter{}, nil
-	case "coinbase:l2":
-		return &CoinbaseDepthConverter{}, nil
-	case "kraken:ticker":
-		return &KrakenTickerConverter{}, nil
-	case "kraken:book":
-		return &KrakenBookConverter{}, nil
+	// case "coinbase:ticker":
+	// 	return &CoinbaseTickerConverter{}, nil
+	// case "coinbase:l2":
+	// 	return &CoinbaseDepthConverter{}, nil
+	// case "kraken:ticker":
+	// 	return &KrakenTickerConverter{}, nil
+	// case "kraken:book":
+	// 	return &KrakenBookConverter{}, nil
 	default:
 		return nil, logger.LogAndWrap("Could not find a converter for key", nil, "key", key)
 	}

@@ -27,4 +27,7 @@ func ProduceAsync(topic string, name string, channel string, key, value []byte) 
 			metrics.KafkaPublishes.WithLabelValues(name + "|" + channel).Inc()
 		}
 	})
+
+	// mark the record for commit.
+	client.MarkCommitRecords(record)
 }

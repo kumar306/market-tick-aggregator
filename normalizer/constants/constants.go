@@ -65,10 +65,17 @@ type SymbolState struct {
 	// seq ordering
 	LastSeqId int64
 	// buffer map of sequence id to record
-	Buffer    []*PipelineMessage
-	Gap       time.Timer
+	BufferSeqMap map[int64]*PipelineMessage
+	BufferSeqId  []int64
+
+	// time ordering
+	BufferTimeMap map[int64][]*PipelineMessage
+	BufferTime    []int64
+
+	Gap       *time.Timer
 	GapActive bool
 
+	// pipeline
 	Converter  ConverterStrategy
 	Normalizer NormalizerStrategy
 	Publisher  PublisherStrategy
@@ -93,10 +100,18 @@ type ConverterStrategy interface {
 
 // orders the stream of messages
 type OrdererStrategy interface {
-	Order(*PipelineMessage, string, chan *DispatchRecord) ([]*PipelineMessage, error)
+	// delegate it from the worker to the orderer. the worker should not concern himself with the ordering semantics
+	SetSymbolState(*SymbolState)
+	// init orderer buffer internals
 	InitOrdererState(*PipelineMessage)
-	// comparator sort the buffer in order before flushing
-	Less(i, j *PipelineMessage) bool
+	// places message into the buffer if needed
+	Order(*PipelineMessage, string, chan *DispatchRecord) ([]*PipelineMessage, error)
+	// sort strategy the buffer in order before flushing
+	PrepareBufferFlush() []*PipelineMessage
+	// ack fires after processing each message in buffer
+	Ack(*PipelineMessage)
+	// cleanup after buffer processed
+	Cleanup()
 }
 
 // publishes to downstream topic based on channel type
