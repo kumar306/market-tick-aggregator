@@ -9,7 +9,12 @@ import (
 	"time"
 )
 
-var ordererRegistry = make(map[string]constants.OrdererStrategy)
+// create a registry of ordererStrategy constructors
+// to prevent single orderer registry pointer to be shared across multiple symbols of a stream
+// this prevents corruption of the orderer/buffer state
+type OrdererCtor func() constants.OrdererStrategy
+
+var ordererCtorRegistry = make(map[string]OrdererCtor)
 var onceOrderer sync.Once
 
 func InitOrdererRegistry() {
@@ -17,16 +22,19 @@ func InitOrdererRegistry() {
 		pairs := []struct {
 			exchange string
 			channel  string
+			ctor     func() constants.OrdererStrategy
 		}{
-			{constants.Binance, constants.AggTrade},
-			{constants.Binance, constants.Depth},
-			{constants.Coinbase, constants.Ticker},
-			{constants.Coinbase, constants.Level2},
-			{constants.Kraken, constants.Ticker},
-			{constants.Kraken, constants.Book},
+			{constants.Binance, constants.AggTrade, func() constants.OrdererStrategy {
+				return &BinanceAggTradeOrderer{}
+			}},
+			// {constants.Binance, constants.Depth},
+			// {constants.Coinbase, constants.Ticker},
+			// {constants.Coinbase, constants.Level2},
+			// {constants.Kraken, constants.Ticker},
+			// {constants.Kraken, constants.Book},
 		}
 		for _, p := range pairs {
-			if err := RegisterOrderer(p.exchange, p.channel); err != nil {
+			if err := RegisterOrdererCtor(p.exchange, p.channel, p.ctor); err != nil {
 				logger.Log.Error("Failed to register orderer, shutting down", "exchange", p.exchange, "channel", p.channel, "error", err)
 				panic(err)
 			}
@@ -36,41 +44,18 @@ func InitOrdererRegistry() {
 
 func GetRegisteredOrderer(exchange string, channel string) (constants.OrdererStrategy, error) {
 	key := strings.ToLower(exchange) + ":" + strings.ToLower(channel)
-	if v, ok := ordererRegistry[key]; ok {
-		return v, nil
+	if v, ok := ordererCtorRegistry[key]; ok {
+		return v(), nil
 	}
 
 	return nil, logger.LogAndWrap("Could not get registered orderer from map for key", nil, "key", key)
 }
 
-func RegisterOrderer(exchange string, channel string) error {
+func RegisterOrdererCtor(exchange, channel string, ordererCtor OrdererCtor) error {
 	key := strings.ToLower(exchange) + ":" + strings.ToLower(channel)
-	orderer, err := GetOrderer(key)
-	if err != nil {
-		return logger.LogAndWrap("Could not register orderer", nil, "error", err)
-	}
-	ordererRegistry[key] = orderer
-	logger.Log.Info("Registered orderer for key", "key", key)
+	ordererCtorRegistry[key] = ordererCtor
+	logger.Log.Info("Registered orderer constructor for key", "key", key)
 	return nil
-}
-
-func GetOrderer(key string) (constants.OrdererStrategy, error) {
-	switch key {
-	case "binance:aggtrade":
-		return &BinanceAggTradeOrderer{}, nil
-	// case "binance:depth":
-	// 	return &BinanceDepthConverter{}, nil
-	// case "coinbase:ticker":
-	// 	return &CoinbaseTickerConverter{}, nil
-	// case "coinbase:l2":
-	// 	return &CoinbaseDepthConverter{}, nil
-	// case "kraken:ticker":
-	// 	return &KrakenTickerConverter{}, nil
-	// case "kraken:book":
-	// 	return &KrakenBookConverter{}, nil
-	default:
-		return nil, logger.LogAndWrap("Could not find an orderer for key", nil, "key", key)
-	}
 }
 
 // create the orderers
@@ -95,6 +80,10 @@ type BinanceAggTradeOrderer struct {
 
 func (b *BinanceAggTradeOrderer) SetSymbolState(symbolState *constants.SymbolState) {
 	b.SymbolState = symbolState
+	b.SymbolState.BufferSeqMap = make(map[int64]*constants.PipelineMessage)
+	b.SymbolState.BufferSeqId = make([]int64, 0, 100)
+	b.SymbolState.Gap = nil
+	b.SymbolState.GapActive = false
 }
 
 func (b *BinanceAggTradeOrderer) Order(

@@ -50,6 +50,8 @@ func ProcessRecord(ctx context.Context, dispatchRec *constants.DispatchRecord, w
 
 	symbolState := workerMap[dispatchRec.BufferKey]
 
+	symbolState.Orderer.SetSymbolState(symbolState)
+
 	// conversion
 	normalizedMsg, err := symbolState.Converter.Convert(dispatchRec.Record.Value)
 	if err != nil {
@@ -99,7 +101,7 @@ func ProcessBuffer(normalizedBuffer []*constants.PipelineMessage, partitionKey s
 }
 
 func FlushBuffer(ctx context.Context, dispatchRec *constants.DispatchRecord, workerMap map[string]*constants.SymbolState) {
-	symbolState, _ := workerMap[dispatchRec.BufferKey]
+	symbolState := workerMap[dispatchRec.BufferKey]
 
 	// process buffermap in order of increasing seq/timestamp
 	// sort should happen based on orderer strategy
