@@ -76,13 +76,13 @@ func GetConverter(key string) (constants.ConverterStrategy, error) {
 
 type BinanceAggTradeConverter struct{}
 
-func (b *BinanceAggTradeConverter) Convert(raw []byte) (*constants.NormalizedMessage, error) {
+func (b *BinanceAggTradeConverter) Convert(raw []byte) (*constants.PipelineMessage, error) {
 	var aggTradeMsg constants.BinanceAggTradeMsg
 	if err := json.Unmarshal(raw, &aggTradeMsg); err != nil {
 		return nil, logger.LogAndWrap("Converter error: Could not deserialize for binance agg trade message.", err)
 	}
 
-	return &constants.NormalizedMessage{
+	return &constants.PipelineMessage{
 		SeqId:      aggTradeMsg.AggTradeID,
 		RawMessage: &aggTradeMsg,
 	}, nil
@@ -90,12 +90,12 @@ func (b *BinanceAggTradeConverter) Convert(raw []byte) (*constants.NormalizedMes
 
 type BinanceDepthConverter struct{}
 
-func (b *BinanceDepthConverter) Convert(raw []byte) (*constants.NormalizedMessage, error) {
+func (b *BinanceDepthConverter) Convert(raw []byte) (*constants.PipelineMessage, error) {
 	var depthUpdateMsg constants.BinanceDepthUpdateMsg
 	if err := json.Unmarshal(raw, &depthUpdateMsg); err != nil {
 		return nil, logger.LogAndWrap("Converter error: Could not deserialize for binance depth update message.", err)
 	}
-	return &constants.NormalizedMessage{
+	return &constants.PipelineMessage{
 		SeqId:      depthUpdateMsg.FinalUpdateID,
 		RawMessage: &depthUpdateMsg,
 	}, nil

@@ -93,13 +93,13 @@ type BinanceAggTradeOrderer struct {
 	// apply buffer updates to pipeline, update the last seq id with each and mark record for commit  
 
 func (b *BinanceAggTradeOrderer) Order(
-	msg *constants.NormalizedMessage, 
+	msg *constants.PipelineMessage, 
 	bufferKey string,
-	workerChannel chan *constants.DispatchRecord) ([]*constants.NormalizedMessage, error) {
+	workerChannel chan *constants.DispatchRecord) ([]*constants.PipelineMessage, error) {
 
 	if b.SymbolState.GapActive {
 		b.SymbolState.Buffer = append(b.SymbolState.Buffer, msg)
-		return []*constants.NormalizedMessage{}, nil 
+		return []*constants.PipelineMessage{}, nil 
 	}
 
 	// get the last seqId -> msg seq id should be that + 1
@@ -121,15 +121,15 @@ func (b *BinanceAggTradeOrderer) Order(
 
 	} else {
 		// can be <= last processed seq id + 1: just apply it.
-		return []*constants.NormalizedMessage{msg}, nil
+		return []*constants.PipelineMessage{msg}, nil
 	}
 }
 
-func (b *BinanceAggTradeOrderer) InitOrdererState(msg *constants.NormalizedMessage) {
+func (b *BinanceAggTradeOrderer) InitOrdererState(msg *constants.PipelineMessage) {
 	b.SymbolState.LastSeqId = uint64(msg.SeqId) - 1
 }
 
-func (b *BinanceAggTradeOrderer) Less(i, j *constants.NormalizedMessage) bool {
+func (b *BinanceAggTradeOrderer) Less(i, j *constants.PipelineMessage) bool {
 	return i.SeqId < j.SeqId
 }
 
