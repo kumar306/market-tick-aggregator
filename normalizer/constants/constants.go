@@ -53,6 +53,8 @@ const (
 	Book                     string = "book"
 	Depth                    string = "depth"
 	Level2                   string = "level2"
+	NormalizedTickerTopic    string = "normalized.ticker"
+	NormalizedBookTopic      string = "normalized.book"
 )
 
 // worker state per product id
@@ -63,7 +65,7 @@ type SymbolState struct {
 	// seq ordering
 	LastSeqId int64
 	// buffer map of sequence id to record
-	Buffer    []*NormalizedMessage
+	Buffer    []*PipelineMessage
 	Gap       time.Timer
 	GapActive bool
 
@@ -75,7 +77,7 @@ type SymbolState struct {
 }
 
 // uniform message type in pipeline
-type NormalizedMessage struct {
+type PipelineMessage struct {
 	Exchange   string
 	Channel    string
 	Symbol     string
@@ -86,25 +88,27 @@ type NormalizedMessage struct {
 
 // converts the byte stream into the respective struct and returns it
 type ConverterStrategy interface {
-	Convert([]byte) (*NormalizedMessage, error)
+	Convert([]byte) (*PipelineMessage, error)
 }
 
 // orders the stream of messages
 type OrdererStrategy interface {
-	Order(*NormalizedMessage, string, chan *DispatchRecord) ([]*NormalizedMessage, error)
-	InitOrdererState(*NormalizedMessage)
+	Order(*PipelineMessage, string, chan *DispatchRecord) ([]*PipelineMessage, error)
+	InitOrdererState(*PipelineMessage)
 	// comparator sort the buffer in order before flushing
-	Less(i, j *NormalizedMessage) bool
+	Less(i, j *PipelineMessage) bool
 }
 
 // publishes to downstream topic based on channel type
 type PublisherStrategy interface {
-	Publish([]byte) error
+	Publish(raw, partitionKey []byte, exchange, channel string)
+	// fetch its publish topic
+	PublishTopic() string
 }
 
 // converts the raw ordered message to normalized protobuf byte stream
 type NormalizerStrategy interface {
-	Normalize(msg *NormalizedMessage) ([]byte, error)
+	Normalize(msg *PipelineMessage) ([]byte, error)
 }
 
 type BinanceAggTradeMsg struct {

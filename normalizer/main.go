@@ -22,8 +22,7 @@ func main() {
 
 	logger.Log.Info("Normalizer starting...")
 
-	// init all pipeline registries
-	factory.InitConverterRegistry()
+	InitPipelineRegistries()
 
 	// load the consumer config
 	cfg, err := config.GetConfig(constants.ConfigFilePath)
@@ -58,4 +57,12 @@ func main() {
 	<-ctx.Done()
 
 	logger.Log.Info("Received interrupt.. shutting down")
+}
+
+func InitPipelineRegistries() {
+	// init all pipeline registries
+	factory.InitConverterRegistry()
+	factory.InitOrdererRegistry()
+	factory.InitNormalizerRegistry()
+	factory.InitPublisherRegistry()
 }

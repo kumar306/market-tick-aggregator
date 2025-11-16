@@ -71,12 +71,12 @@ func ProcessRecord(ctx context.Context, dispatchRec *constants.DispatchRecord, w
 	}
 
 	// convert to a normalized schema and publish to downstream
-	ProcessBuffer(normalizedBuf, symbolState.Normalizer, symbolState.Publisher)
+	ProcessBuffer(normalizedBuf, dispatchRec.BufferKey, symbolState.Normalizer, symbolState.Publisher)
 
 	return err
 }
 
-func ProcessBuffer(normalizedBuffer []*constants.NormalizedMessage, normalizer constants.NormalizerStrategy, publisher constants.PublisherStrategy) {
+func ProcessBuffer(normalizedBuffer []*constants.PipelineMessage, partitionKey string, normalizer constants.NormalizerStrategy, publisher constants.PublisherStrategy) {
 
 	for _, msg := range normalizedBuffer {
 
@@ -85,10 +85,7 @@ func ProcessBuffer(normalizedBuffer []*constants.NormalizedMessage, normalizer c
 			// log the normalizer error
 		}
 
-		err = publisher.Publish(protoStream)
-		if err != nil {
-			// log the publisher error
-		}
+		publisher.Publish(protoStream, []byte(partitionKey), msg.Exchange, msg.Channel)
 
 		// mark the record for commit.
 		// remove pointer from buffer
@@ -104,5 +101,5 @@ func FlushBuffer(ctx context.Context, dispatchRec *constants.DispatchRecord, wor
 		return symbolState.Orderer.Less(symbolState.Buffer[i], symbolState.Buffer[j])
 	})
 
-	ProcessBuffer(symbolState.Buffer, symbolState.Normalizer, symbolState.Publisher)
+	ProcessBuffer(symbolState.Buffer, dispatchRec.BufferKey, symbolState.Normalizer, symbolState.Publisher)
 }
