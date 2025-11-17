@@ -13,3 +13,4 @@ kafka:
   commit_offset_interval_millis: 5000
 
 worker_count: 16
+redis_ttl_minutes: 15   

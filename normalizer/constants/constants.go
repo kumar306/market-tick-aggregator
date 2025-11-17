@@ -7,8 +7,9 @@ import (
 )
 
 type Config struct {
-	KafkaConfig *KafkaConfig `yaml:"kafka"`
-	WorkerCount int          `yaml:"worker_count"`
+	KafkaConfig     *KafkaConfig `yaml:"kafka"`
+	WorkerCount     int          `yaml:"worker_count"`
+	RedisTtlMinutes int          `yaml:"redis_ttl_minutes"`
 }
 
 type KafkaConfig struct {
@@ -113,11 +114,13 @@ type OrdererStrategy interface {
 	Ack(*PipelineMessage)
 	// cleanup after buffer processed
 	Cleanup()
+	// get back orderer id for dedupe key construction
+	GetOrderingId(*PipelineMessage) string
 }
 
 // publishes to downstream topic based on channel type
 type PublisherStrategy interface {
-	Publish(raw, partitionKey []byte, msg *PipelineMessage)
+	Publish(raw []byte, partitionKey string, msg *PipelineMessage)
 	// fetch its publish topic
 	PublishTopic() string
 }

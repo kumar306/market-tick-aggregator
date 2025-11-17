@@ -73,8 +73,8 @@ func (t *TickerPublisher) PublishTopic() string {
 
 // input is proto byte stream
 // uses kafka client - to publish to its relevant topic
-func (t *TickerPublisher) Publish(raw, partitionKey []byte, msg *constants.PipelineMessage) {
-	kafka.ProduceAsync(t.PublishTopic(), msg, partitionKey, raw)
+func (t *TickerPublisher) Publish(raw []byte, partitionKey string, msg *constants.PipelineMessage) {
+	kafka.ProduceAsync(t.PublishTopic(), msg, []byte(partitionKey), raw)
 }
 
 type BookPublisher struct{}
@@ -83,6 +83,6 @@ func (b *BookPublisher) PublishTopic() string {
 	return constants.NormalizedBookTopic
 }
 
-func (b *BookPublisher) Publish(raw, partitionKey []byte, msg *constants.PipelineMessage) {
-	kafka.ProduceAsync(b.PublishTopic(), msg, partitionKey, raw)
+func (b *BookPublisher) Publish(raw []byte, partitionKey string, msg *constants.PipelineMessage) {
+	kafka.ProduceAsync(b.PublishTopic(), msg, []byte(partitionKey), raw)
 }

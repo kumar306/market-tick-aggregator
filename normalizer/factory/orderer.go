@@ -4,6 +4,7 @@ import (
 	"market-normalizer/constants"
 	"shared/logger"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -80,10 +81,6 @@ type BinanceAggTradeOrderer struct {
 
 func (b *BinanceAggTradeOrderer) SetSymbolState(symbolState *constants.SymbolState) {
 	b.SymbolState = symbolState
-	b.SymbolState.BufferSeqMap = make(map[int64]*constants.PipelineMessage)
-	b.SymbolState.BufferSeqId = make([]int64, 0, 100)
-	b.SymbolState.Gap = nil
-	b.SymbolState.GapActive = false
 }
 
 func (b *BinanceAggTradeOrderer) Order(
@@ -136,6 +133,11 @@ func (b *BinanceAggTradeOrderer) Order(
 }
 
 func (b *BinanceAggTradeOrderer) InitOrdererState(msg *constants.PipelineMessage) {
+	// pre allocate cap
+	b.SymbolState.BufferSeqMap = make(map[int64]*constants.PipelineMessage, 128)
+	b.SymbolState.BufferSeqId = make([]int64, 0, 100)
+	b.SymbolState.Gap = nil
+	b.SymbolState.GapActive = false
 	b.SymbolState.LastSeqId = int64(msg.SeqId) - 1
 }
 
@@ -165,7 +167,8 @@ func (b *BinanceAggTradeOrderer) Ack(msg *constants.PipelineMessage) {
 // cleanup buffer after flush
 func (b *BinanceAggTradeOrderer) Cleanup() {
 	b.SymbolState.BufferSeqId = b.SymbolState.BufferSeqId[:0]
-	b.SymbolState.BufferSeqMap = make(map[int64]*constants.PipelineMessage)
+	// pre allocate cap
+	b.SymbolState.BufferSeqMap = make(map[int64]*constants.PipelineMessage, 128)
 	if b.SymbolState.Gap != nil {
 		if !b.SymbolState.Gap.Stop() {
 			// drain timer channel if needed
@@ -177,6 +180,10 @@ func (b *BinanceAggTradeOrderer) Cleanup() {
 		b.SymbolState.Gap = nil
 	}
 	b.SymbolState.GapActive = false
+}
+
+func (b *BinanceAggTradeOrderer) GetOrderingId(msg *constants.PipelineMessage) string {
+	return strconv.FormatInt(msg.SeqId, 10)
 }
 
 // binance depth orderer: similar seq. the depth orderer and agg trade orderer can share the same code

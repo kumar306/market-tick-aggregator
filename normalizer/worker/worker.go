@@ -3,20 +3,19 @@ package worker
 import (
 	"context"
 	"market-normalizer/constants"
+	"market-normalizer/dedupe"
 	"market-normalizer/factory"
 	"shared/logger"
 )
 
-func ProcessRecord(ctx context.Context, dispatchRec *constants.DispatchRecord, workerMap map[string]*constants.SymbolState, workerChannel chan *constants.DispatchRecord) error {
-	var err error
-
-	// todo the pipeline logic:
-	// redis dedupe check - do this at the last
+func ProcessRecord(ctx context.Context,
+	dispatchRec *constants.DispatchRecord,
+	workerMap map[string]*constants.SymbolState,
+	workerChannel chan *constants.DispatchRecord) error {
 
 	// if key not in map - insert into the map and plug its strategies based on feed
 	_, exists := workerMap[dispatchRec.BufferKey]
 	if !exists {
-		// no need seq id backup here, i would go with current seq id - 1 as lastseqid for new worker map entry
 		converter, err := factory.GetRegisteredConverter(dispatchRec.Exchange, dispatchRec.Channel)
 		if err != nil {
 			return logger.LogAndWrap("Error when fetching registered converter to worker", err)
@@ -37,10 +36,8 @@ func ProcessRecord(ctx context.Context, dispatchRec *constants.DispatchRecord, w
 			return logger.LogAndWrap("Error when fetching registered publisher to worker", err)
 		}
 
-		// have a method in orderer to init the orderer state
+		// creating the symbol state per bufferkey on init insertion
 		workerMap[dispatchRec.BufferKey] = &constants.SymbolState{
-			// creating the symbol state
-			// LastSeqId: dispatchRec.Rec. current sequence id - this is fetched under different keys in binance, coinbase, kraken
 			Orderer:    orderer,
 			Converter:  converter,
 			Normalizer: normalizer,
@@ -50,22 +47,38 @@ func ProcessRecord(ctx context.Context, dispatchRec *constants.DispatchRecord, w
 
 	symbolState := workerMap[dispatchRec.BufferKey]
 
-	symbolState.Orderer.SetSymbolState(symbolState)
-
 	// conversion
 	normalizedMsg, err := symbolState.Converter.Convert(dispatchRec.Record.Value)
 	if err != nil {
-		// log the error
+		return logger.LogAndWrap("Error in worker converter stage", err, "exchange", dispatchRec.Exchange, "channel", dispatchRec.Channel)
+	}
+
+	// worker insertion scenario
+	if !exists {
+		symbolState.Orderer.SetSymbolState(symbolState)
+		symbolState.Orderer.InitOrdererState(normalizedMsg)
+		exists = true
+	}
+
+	// dedupe check
+	dedupeKey := dedupe.ConstructDedupeKey(
+		dispatchRec.Exchange,
+		dispatchRec.Channel,
+		dispatchRec.Symbol,
+		symbolState.Orderer.GetOrderingId(normalizedMsg))
+
+	dedupeExists, err := dedupe.IsDuplicate(ctx, dedupeKey)
+	if err != nil {
+		return logger.LogAndWrap("Error in worker dedupe check", err, "key", dedupeKey)
+	}
+
+	if dedupeExists {
+		logger.Log.Warn("Duplicate message detected. Skipping", "key", dedupeKey)
+		return nil
 	}
 
 	// include the original record so it can be marked for commit in the publisher
 	normalizedMsg.Record = dispatchRec.Record
-
-	if !exists {
-		// worker insertion scenario
-		symbolState.Orderer.InitOrdererState(normalizedMsg)
-		exists = true
-	}
 
 	normalizedBuf, err := symbolState.Orderer.Order(normalizedMsg, dispatchRec.BufferKey, workerChannel)
 
@@ -75,12 +88,14 @@ func ProcessRecord(ctx context.Context, dispatchRec *constants.DispatchRecord, w
 	}
 
 	// convert to a normalized schema and publish to downstream
-	ProcessBuffer(normalizedBuf, dispatchRec.BufferKey, symbolState.Normalizer, symbolState.Publisher, symbolState.Orderer)
+	ProcessBuffer(ctx, normalizedBuf, dispatchRec.BufferKey, symbolState.Normalizer, symbolState.Publisher, symbolState.Orderer)
 
 	return err
 }
 
-func ProcessBuffer(normalizedBuffer []*constants.PipelineMessage, partitionKey string,
+func ProcessBuffer(ctx context.Context,
+	normalizedBuffer []*constants.PipelineMessage,
+	partitionKey string,
 	normalizer constants.NormalizerStrategy,
 	publisher constants.PublisherStrategy,
 	orderer constants.OrdererStrategy) {
@@ -89,14 +104,21 @@ func ProcessBuffer(normalizedBuffer []*constants.PipelineMessage, partitionKey s
 
 		protoStream, err := normalizer.Normalize(msg)
 		if err != nil {
-			// log the normalizer error
+			logger.Log.Error(err.Error())
+			continue
 		}
 
-		publisher.Publish(protoStream, []byte(partitionKey), msg)
+		publisher.Publish(protoStream, partitionKey, msg)
 
 		// ack and update symbol state - by update strategy of orderer
 		// if worker crashes mid flush, it will resume from crash point
 		orderer.Ack(msg)
+
+		// mark for dedupe
+		dedupe.MarkForDedupe(ctx, dedupe.ConstructDedupeKey(msg.Exchange,
+			msg.Channel,
+			msg.Symbol,
+			orderer.GetOrderingId(msg)))
 	}
 
 	// final buffer internals cleanup
@@ -110,5 +132,5 @@ func FlushBuffer(ctx context.Context, dispatchRec *constants.DispatchRecord, wor
 	// sort should happen based on orderer strategy
 	sortedBuffer := symbolState.Orderer.PrepareBufferFlush()
 
-	ProcessBuffer(sortedBuffer, dispatchRec.BufferKey, symbolState.Normalizer, symbolState.Publisher, symbolState.Orderer)
+	ProcessBuffer(ctx, sortedBuffer, dispatchRec.BufferKey, symbolState.Normalizer, symbolState.Publisher, symbolState.Orderer)
 }

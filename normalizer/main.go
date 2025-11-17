@@ -4,6 +4,7 @@ import (
 	"context"
 	"market-normalizer/config"
 	"market-normalizer/constants"
+	"market-normalizer/dedupe"
 	"market-normalizer/dispatcher"
 	"market-normalizer/factory"
 	"market-normalizer/kafka"
@@ -11,6 +12,7 @@ import (
 	"os/signal"
 	"shared/logger"
 	"syscall"
+	"time"
 
 	"github.com/twmb/franz-go/pkg/kgo"
 )
@@ -22,14 +24,17 @@ func main() {
 
 	logger.Log.Info("Normalizer starting...")
 
-	InitPipelineRegistries()
-
 	// load the consumer config
 	cfg, err := config.GetConfig(constants.ConfigFilePath)
 	if err != nil {
 		logger.Log.Error("Failed to load normalizer config. Stopping main()", "err", err)
 		os.Exit(1)
 	}
+
+	InitPipelineRegistries()
+
+	// init redis for dedupe in pipeline
+	dedupe.InitRedis(time.Duration(cfg.RedisTtlMinutes) * time.Minute)
 
 	// consumer init
 	client := kafka.Init(cfg.KafkaConfig)
