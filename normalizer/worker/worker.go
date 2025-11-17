@@ -58,6 +58,9 @@ func ProcessRecord(ctx context.Context, dispatchRec *constants.DispatchRecord, w
 		// log the error
 	}
 
+	// include the original record so it can be marked for commit in the publisher
+	normalizedMsg.Record = dispatchRec.Record
+
 	if !exists {
 		// worker insertion scenario
 		symbolState.Orderer.InitOrdererState(normalizedMsg)
@@ -89,7 +92,7 @@ func ProcessBuffer(normalizedBuffer []*constants.PipelineMessage, partitionKey s
 			// log the normalizer error
 		}
 
-		publisher.Publish(protoStream, []byte(partitionKey), msg.Exchange, msg.Channel)
+		publisher.Publish(protoStream, []byte(partitionKey), msg)
 
 		// ack and update symbol state - by update strategy of orderer
 		// if worker crashes mid flush, it will resume from crash point

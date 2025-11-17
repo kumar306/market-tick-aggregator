@@ -50,6 +50,9 @@ func main() {
 	// setup dispatcher
 	go dispatcher.StartDispatcher(ctx, dispatchChannel, channelPool, cfg.WorkerCount)
 
+	// start offset committer
+	go kafka.OffsetCommitter(ctx, cfg.KafkaConfig.CommitOffsetIntervalMillis)
+
 	// start the consumer loop
 	go kafka.ConsumerLoop(ctx, client, dispatchChannel)
 

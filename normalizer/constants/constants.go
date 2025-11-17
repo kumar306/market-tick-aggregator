@@ -91,6 +91,7 @@ type PipelineMessage struct {
 	SeqId      int64
 	Ts         string
 	RawMessage interface{}
+	Record     *kgo.Record
 }
 
 // converts the byte stream into the respective struct and returns it
@@ -116,7 +117,7 @@ type OrdererStrategy interface {
 
 // publishes to downstream topic based on channel type
 type PublisherStrategy interface {
-	Publish(raw, partitionKey []byte, exchange, channel string)
+	Publish(raw, partitionKey []byte, msg *PipelineMessage)
 	// fetch its publish topic
 	PublishTopic() string
 }

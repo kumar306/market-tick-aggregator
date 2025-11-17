@@ -3,14 +3,15 @@ package kafka
 import (
 	"context"
 	"market-adapter/metrics"
+	"market-normalizer/constants"
 	"shared/logger"
 
 	"github.com/twmb/franz-go/pkg/kgo"
 )
 
-func ProduceAsync(topic string, name string, channel string, key, value []byte) {
+func ProduceAsync(topic string, msg *constants.PipelineMessage, key, value []byte) {
 
-	logger.Log.Info("Ready to publish normalized record to downstream services", "name", name, "channel", channel, "topic", topic, "key", string(key))
+	logger.Log.Info("Ready to publish normalized record to downstream services", "name", msg.Exchange, "channel", msg.Channel, "topic", topic, "key", string(key))
 
 	record := &kgo.Record{
 		Key:   key,
@@ -20,14 +21,14 @@ func ProduceAsync(topic string, name string, channel string, key, value []byte) 
 
 	client.Produce(context.Background(), record, func(r *kgo.Record, err error) {
 		if err != nil {
-			logger.Log.Error("Produce failed for topic", "topic", topic, "name", name, "error", err)
-			metrics.FeedErrors.WithLabelValues(name + "|" + channel).Inc()
+			logger.Log.Error("Produce failed for topic", "topic", topic, "name", msg.Exchange, "error", err)
+			metrics.FeedErrors.WithLabelValues(msg.Exchange + "|" + msg.Channel).Inc()
 		} else {
-			logger.Log.Info("Published record to kafka topic", "name", name, "channel", channel, "topic", topic)
-			metrics.KafkaPublishes.WithLabelValues(name + "|" + channel).Inc()
+			logger.Log.Info("Published record to kafka topic", "name", msg.Exchange, "channel", msg.Channel, "topic", topic)
+			metrics.KafkaPublishes.WithLabelValues(msg.Exchange + "|" + msg.Channel).Inc()
 		}
 	})
 
 	// mark the record for commit.
-	client.MarkCommitRecords(record)
+	client.MarkCommitRecords(msg.Record)
 }
