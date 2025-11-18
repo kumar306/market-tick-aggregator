@@ -2,15 +2,15 @@ kafka:
   brokers:
     - localhost:9092
   topics:
-    - "binance_raw_aggtrades"
-    - "binance_raw_depth"
-    - "coinbase_raw_ticker"
-    - "coinbase_raw_depth"
-    - "kraken_raw_ticker"
-    - "kraken_raw_depth"
+    - "binance.raw.ticks"
+    - "binance.raw.level2"
+    - "coinbase.raw.ticks"
+    - "coinbase.raw.level2"
+    - "kraken.raw.ticks"
+    - "kraken.raw.book"
   consumer_group: normalizer-group-1
   max_buffer_records: 5000
   commit_offset_interval_millis: 5000
 
 worker_count: 16
-redis_ttl_minutes: 15   
+redis_ttl_minutes: 15
