@@ -3,9 +3,9 @@ package internal
 import (
 	"context"
 	"market-adapter/constants"
-	"market-adapter/metrics"
 	"market-adapter/ring"
 	"shared/logger"
+	"shared/metrics"
 	"sync"
 	"time"
 
@@ -14,9 +14,9 @@ import (
 
 func ReadMessages(conn *websocket.Conn, ctx context.Context, wg *sync.WaitGroup, ring *ring.SpscDropOldestRing[[]byte]) {
 	name := ring.Name
-	metrics.SupervisorGoroutines.WithLabelValues(name).Inc()
+	metrics.Adapter_SupervisorGoroutines.WithLabelValues(name).Inc()
 	defer wg.Done()
-	defer metrics.SupervisorGoroutines.WithLabelValues(name).Dec()
+	defer metrics.Adapter_SupervisorGoroutines.WithLabelValues(name).Dec()
 	for {
 		select {
 		case <-ctx.Done():
@@ -42,9 +42,9 @@ func SendHeartbeat(conn *websocket.Conn,
 	handler *constants.StreamHandler,
 	ticker *time.Ticker,
 	name string) {
-	metrics.SupervisorGoroutines.WithLabelValues(name).Inc()
+	metrics.Adapter_SupervisorGoroutines.WithLabelValues(name).Inc()
 	defer wg.Done()
-	defer metrics.SupervisorGoroutines.WithLabelValues(name).Dec()
+	defer metrics.Adapter_SupervisorGoroutines.WithLabelValues(name).Dec()
 	for {
 		select {
 		case <-ticker.C:
@@ -60,9 +60,9 @@ func MonitorConnection(
 	supervisor *constants.Supervisor,
 	streamCfg *constants.Stream,
 	ticker *time.Ticker) {
-	metrics.SupervisorGoroutines.WithLabelValues(streamCfg.Name).Inc()
+	metrics.Adapter_SupervisorGoroutines.WithLabelValues(streamCfg.Name).Inc()
 	defer supervisor.Wg.Done()
-	defer metrics.SupervisorGoroutines.WithLabelValues(streamCfg.Name).Dec()
+	defer metrics.Adapter_SupervisorGoroutines.WithLabelValues(streamCfg.Name).Dec()
 	for {
 		select {
 		case <-ticker.C:

@@ -1,7 +1,7 @@
 package ring
 
 import (
-	"market-adapter/metrics"
+	"shared/metrics"
 	"sync/atomic"
 )
 
@@ -30,7 +30,7 @@ func NewSpscDropOldestRing[T any](capacity uint64, name string) *SpscDropOldestR
 		Name:     name,
 	}
 
-	metrics.BufferCapacity.WithLabelValues(name).Set(float64(capacity))
+	metrics.Adapter_BufferCapacity.WithLabelValues(name).Set(float64(capacity))
 	return r
 }
 
@@ -42,7 +42,7 @@ func (r *SpscDropOldestRing[T]) Push(v T) {
 	if t-h >= r.Capacity {
 		// inc head
 		atomic.StoreUint64(&r.Head, h+1)
-		metrics.BufferDrops.WithLabelValues(r.Name).Inc()
+		metrics.Adapter_BufferDrops.WithLabelValues(r.Name).Inc()
 	}
 
 	r.Buf[t&r.Mask] = v
@@ -68,5 +68,5 @@ func (r *SpscDropOldestRing[T]) Pop() (T, bool) {
 // update len metric
 func (r *SpscDropOldestRing[T]) updateLenMetric() {
 	curLen := atomic.LoadUint64(&r.Tail) - atomic.LoadUint64(&r.Head)
-	metrics.BufferLen.WithLabelValues(r.Name).Set(float64(curLen))
+	metrics.Adapter_BufferLen.WithLabelValues(r.Name).Set(float64(curLen))
 }

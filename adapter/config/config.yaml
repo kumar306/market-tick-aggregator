@@ -11,7 +11,7 @@ feeds:
         maxRetries: 5
         heartBeatInterval: 15
         pongTimeout: 25
-        kafkaTopic: binance_raw_aggtrades
+        kafkaTopic: binance.raw.ticks
         ringBufferSize: 1024
       - name: binance
         channel: depth
@@ -20,7 +20,7 @@ feeds:
         maxRetries: 5
         heartBeatInterval: 15
         pongTimeout: 25
-        kafkaTopic: binance_raw_depth
+        kafkaTopic: binance.raw.level2
         ringBufferSize: 1024
 
   - name: coinbase
@@ -32,7 +32,7 @@ feeds:
         maxRetries: 5
         heartBeatInterval: 15
         pongTimeout: 25
-        kafkaTopic: coinbase_raw_ticker
+        kafkaTopic: coinbase.raw.ticks
         ringBufferSize: 1024
       - channel: level2
         productIds:
@@ -40,7 +40,7 @@ feeds:
         maxRetries: 5
         heartBeatInterval: 15
         pongTimeout: 25
-        kafkaTopic: coinbase_raw_depth
+        kafkaTopic: coinbase.raw.level2
         ringBufferSize: 1024
 
   - name: kraken
@@ -53,7 +53,7 @@ feeds:
         maxRetries: 5
         heartBeatInterval: 15
         pongTimeout: 25
-        kafkaTopic: kraken_raw_ticker
+        kafkaTopic: kraken.raw.ticks
         ringBufferSize: 1024
       - name: kraken
         channel: book
@@ -62,7 +62,7 @@ feeds:
         maxRetries: 5
         heartBeatInterval: 15
         pongTimeout: 25
-        kafkaTopic: kraken_raw_depth
+        kafkaTopic: kraken.raw.book
         ringBufferSize: 1024
 
   # - name: bitfinex

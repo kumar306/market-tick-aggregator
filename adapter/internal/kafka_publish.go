@@ -4,9 +4,9 @@ import (
 	"context"
 	"market-adapter/constants"
 	"market-adapter/kafka"
-	"market-adapter/metrics"
 	"market-adapter/ring"
 	"shared/logger"
+	"shared/metrics"
 	"sync"
 	"time"
 )
@@ -19,8 +19,8 @@ func PublishToKafkaLoop(wg *sync.WaitGroup,
 	normalizer constants.Normalizer,
 	ring *ring.SpscDropOldestRing[[]byte]) {
 	defer wg.Done()
-	metrics.SupervisorGoroutines.WithLabelValues(name).Inc()
-	defer metrics.SupervisorGoroutines.WithLabelValues(name).Dec()
+	metrics.Adapter_SupervisorGoroutines.WithLabelValues(name).Inc()
+	defer metrics.Adapter_SupervisorGoroutines.WithLabelValues(name).Dec()
 	for {
 		select {
 		case <-ctx.Done():
@@ -39,7 +39,7 @@ func PublishToKafkaLoop(wg *sync.WaitGroup,
 			symbol, normalized, normalizeErr := normalizer.Normalize(msg)
 			if normalizeErr != nil {
 				logger.Log.Error("Failed to normalize message for feed", "name", name, "err", normalizeErr)
-				metrics.NormalizerErrors.WithLabelValues().Inc()
+				metrics.Adapter_NormalizerErrors.WithLabelValues().Inc()
 				continue
 			}
 

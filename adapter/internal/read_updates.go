@@ -2,8 +2,8 @@ package internal
 
 import (
 	"market-adapter/constants"
-	"market-adapter/metrics"
 	"shared/logger"
+	"shared/metrics"
 	"sync"
 )
 
@@ -34,7 +34,7 @@ func SupervisorLoop(
 					"url", feed.Url)
 
 				// prom metrics
-				metrics.FeedConnections.WithLabelValues(feed.Name).Inc()
+				metrics.Adapter_FeedConnections.WithLabelValues(feed.Name).Inc()
 
 			case constants.StatusTerminated:
 

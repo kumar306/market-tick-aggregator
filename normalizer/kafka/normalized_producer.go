@@ -2,7 +2,6 @@ package kafka
 
 import (
 	"context"
-	"market-adapter/metrics"
 	"market-normalizer/constants"
 	"shared/logger"
 
@@ -22,10 +21,8 @@ func ProduceAsync(topic string, msg *constants.PipelineMessage, key, value []byt
 	client.Produce(context.Background(), record, func(r *kgo.Record, err error) {
 		if err != nil {
 			logger.Log.Error("Produce failed for topic", "topic", topic, "name", msg.Exchange, "error", err)
-			metrics.FeedErrors.WithLabelValues(msg.Exchange + "|" + msg.Channel).Inc()
 		} else {
 			logger.Log.Info("Published record to kafka topic", "name", msg.Exchange, "channel", msg.Channel, "topic", topic)
-			metrics.KafkaPublishes.WithLabelValues(msg.Exchange + "|" + msg.Channel).Inc()
 		}
 	})
 

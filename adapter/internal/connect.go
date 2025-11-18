@@ -2,8 +2,8 @@ package internal
 
 import (
 	"market-adapter/constants"
-	"market-adapter/metrics"
 	"shared/logger"
+	"shared/metrics"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -20,7 +20,7 @@ func Connect(feed *constants.Feed, streamCfg *constants.Stream, supervisor *cons
 	conn, _, err := websocket.DefaultDialer.Dial(feed.Url, nil)
 	if err != nil {
 		logger.Log.Error("Error when connecting to server. Retry queued", "err", err)
-		metrics.FeedErrors.WithLabelValues(feed.Name).Inc()
+		metrics.Adapter_FeedErrors.WithLabelValues(feed.Name).Inc()
 
 		// hook for plugging in during testing
 		if isRetry && nil != RetryHook {
@@ -44,7 +44,7 @@ func Connect(feed *constants.Feed, streamCfg *constants.Stream, supervisor *cons
 	if err != nil {
 		logger.Log.Error("Subscription failed for stream with error",
 			"feed_name", feed.Name, "stream_channel", streamCfg.Channel, "error", err)
-		metrics.FeedErrors.WithLabelValues(feed.Name).Inc()
+		metrics.Adapter_FeedErrors.WithLabelValues(feed.Name).Inc()
 		supervisor.StatusChan <- constants.StatusBackoff
 		return
 	}
@@ -56,7 +56,7 @@ func Connect(feed *constants.Feed, streamCfg *constants.Stream, supervisor *cons
 			"name", feed.Name,
 			"url", feed.Url,
 			"last_pong_time", supervisor.LastPongTime)
-		metrics.LastPongTimes.WithLabelValues(feed.Name).Set(float64(time.Since(supervisor.LastPongTime) * time.Second))
+		metrics.Adapter_LastPongTimes.WithLabelValues(feed.Name).Set(float64(time.Since(supervisor.LastPongTime) * time.Second))
 		return nil
 	})
 
@@ -84,9 +84,9 @@ func Connect(feed *constants.Feed, streamCfg *constants.Stream, supervisor *cons
 		"pong_timeout", streamCfg.PongTimeout)
 
 	// inc metric for supervisor count
-	metrics.Supervisors.Inc()
+	metrics.Adapter_SupervisorCount.Inc()
 	// metric for ring cap upon supervisor init
-	metrics.BufferCapacity.WithLabelValues(feed.Name).Set(float64(streamHandler.Ring.Capacity))
+	metrics.Adapter_BufferCapacity.WithLabelValues(feed.Name).Set(float64(streamHandler.Ring.Capacity))
 
 	// exit this connect only when the goroutines end. if it crosses this point, some connection failure (didnt receive pongs on time)
 	supervisor.Wg.Wait()
@@ -97,7 +97,7 @@ func Connect(feed *constants.Feed, streamCfg *constants.Stream, supervisor *cons
 		"url", feed.Url)
 
 	// dec metric for supervisor count
-	metrics.Supervisors.Dec()
+	metrics.Adapter_SupervisorCount.Dec()
 
 	// notify the supervisor its backed off and to retry
 	supervisor.StatusChan <- constants.StatusBackoff

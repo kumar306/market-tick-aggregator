@@ -1,8 +1,8 @@
 package ring_test
 
 import (
-	"market-adapter/metrics"
 	"market-adapter/ring"
+	"shared/metrics"
 	"sync/atomic"
 	"testing"
 
@@ -38,10 +38,10 @@ func Test_RingBufferDropsOldest(t *testing.T) {
 
 	require.Equal(t, expected, result, "Ring buffer should drop oldest entries")
 
-	dropMetric := testutil.ToFloat64(metrics.BufferDrops.WithLabelValues(bufName))
+	dropMetric := testutil.ToFloat64(metrics.Adapter_BufferDrops.WithLabelValues(bufName))
 	require.Equal(t, float64(2), dropMetric, "expected 2 drops")
 
-	lenMetric := testutil.ToFloat64(metrics.BufferLen.WithLabelValues(bufName))
+	lenMetric := testutil.ToFloat64(metrics.Adapter_BufferLen.WithLabelValues(bufName))
 	require.Equal(t, float64(0), lenMetric, "expected buffer to be empty after full pop")
 }
 
@@ -101,7 +101,7 @@ func Test_RingBufferConcurrency(t *testing.T) {
 			producedVal := atomic.LoadUint64(&produced)
 			consumedVal := atomic.LoadUint64(&consumed)
 
-			drops := testutil.ToFloat64(metrics.BufferDrops.WithLabelValues(tc.name))
+			drops := testutil.ToFloat64(metrics.Adapter_BufferDrops.WithLabelValues(tc.name))
 			t.Logf("Capacity: %v, Produced: %v, Consumed: %v, Buffer drops: %v", tc.cap, producedVal, consumedVal, drops)
 
 			require.LessOrEqual(t, drops, float64(producedVal), "buffer drops should be less than total produced")

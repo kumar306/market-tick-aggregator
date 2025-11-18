@@ -10,11 +10,11 @@ import (
 	"market-adapter/feeds/kraken"
 	"market-adapter/internal"
 	"market-adapter/kafka"
-	"market-adapter/metrics"
 	"net/http"
 	"os"
 	"os/signal"
 	"shared/logger"
+	"shared/metrics"
 	"sync"
 	"syscall"
 	"time"
@@ -28,10 +28,8 @@ func main() {
 	// register the feed factories
 	go registerFeedFactories()
 
-	// init and expose prometheus metrics
-	metrics.Init()
 	// inc app starts metric
-	metrics.AppStarts.Inc()
+	metrics.Adapter_AppStarts.Inc()
 
 	go exposeMetrics()
 
@@ -65,7 +63,7 @@ func main() {
 			handler, handlerErr := feedFactory.GetStreamHandler(feed.Name, stream)
 			if handlerErr != nil {
 				logger.Log.Error("Error occurred when retrieving stream handler for stream", "error", handlerErr, "name", feed.Name)
-				metrics.FeedErrors.WithLabelValues("feed_name", feed.Name).Inc()
+				metrics.Adapter_FeedErrors.WithLabelValues("feed_name", feed.Name).Inc()
 				continue
 			}
 
@@ -91,15 +89,15 @@ func main() {
 	logger.Log.Info("Stopped all supervisors and its processes")
 
 	// inc app shutdown metric
-	metrics.AppShutdowns.Inc()
+	metrics.Adapter_AppShutdowns.Inc()
 }
 
 func exposeMetrics() {
 	http.Handle("/metrics", promhttp.Handler())
-	logger.Log.Info("Exposed metrics endpoint at 2112", "url", ":2112/metrics")
+	logger.Log.Info("Exposed adapter metrics endpoint at 2112", "url", ":2112/metrics")
 	err := http.ListenAndServe("0.0.0.0:2112", nil)
 	if err != nil {
-		logger.Log.Error("Metrics have stopped", "err", err)
+		logger.Log.Error("Adapter metrics have stopped", "err", err)
 	}
 }
 
