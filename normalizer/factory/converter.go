@@ -83,6 +83,9 @@ func (b *BinanceAggTradeConverter) Convert(raw []byte) (*constants.PipelineMessa
 	}
 
 	return &constants.PipelineMessage{
+		Exchange:   constants.Binance,
+		Channel:    constants.AggTrade,
+		Symbol:     aggTradeMsg.Symbol,
 		SeqId:      aggTradeMsg.AggTradeID,
 		RawMessage: &aggTradeMsg,
 	}, nil
@@ -96,6 +99,9 @@ func (b *BinanceDepthConverter) Convert(raw []byte) (*constants.PipelineMessage,
 		return nil, logger.LogAndWrap("Converter error: Could not deserialize for binance depth update message.", err)
 	}
 	return &constants.PipelineMessage{
+		Exchange:   constants.Binance,
+		Channel:    constants.Depth,
+		Symbol:     depthUpdateMsg.Symbol,
 		SeqId:      depthUpdateMsg.FinalUpdateID,
 		RawMessage: &depthUpdateMsg,
 	}, nil

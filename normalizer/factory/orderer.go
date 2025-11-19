@@ -2,13 +2,10 @@ package factory
 
 import (
 	"market-normalizer/constants"
+	"market-normalizer/utils"
 	"shared/logger"
-	"shared/metrics"
-	"sort"
-	"strconv"
 	"strings"
 	"sync"
-	"time"
 )
 
 // create a registry of ordererStrategy constructors
@@ -29,7 +26,9 @@ func InitOrdererRegistry() {
 			{constants.Binance, constants.AggTrade, func() constants.OrdererStrategy {
 				return &BinanceAggTradeOrderer{}
 			}},
-			// {constants.Binance, constants.Depth},
+			{constants.Binance, constants.Depth, func() constants.OrdererStrategy {
+				return &BinanceDepthOrderer{}
+			}},
 			// {constants.Coinbase, constants.Ticker},
 			// {constants.Coinbase, constants.Level2},
 			// {constants.Kraken, constants.Ticker},
@@ -89,105 +88,63 @@ func (b *BinanceAggTradeOrderer) Order(
 	bufferKey string,
 	workerChannel chan *constants.DispatchRecord) ([]*constants.PipelineMessage, error) {
 
-	if b.SymbolState.GapActive {
-		b.SymbolState.BufferSeqMap[msg.SeqId] = msg
-		b.SymbolState.BufferSeqId = append(b.SymbolState.BufferSeqId, msg.SeqId)
-		return []*constants.PipelineMessage{}, nil
-	}
-
-	// if worker buffer not empty and it resumed after crash/shutdown
-	// send a flush event after enqueuing the current message
-	if len(b.SymbolState.BufferSeqMap) > 0 {
-		b.SymbolState.BufferSeqMap[msg.SeqId] = msg
-		b.SymbolState.BufferSeqId = append(b.SymbolState.BufferSeqId, msg.SeqId)
-		workerChannel <- &constants.DispatchRecord{
-			Event:     constants.FlushBuffer,
-			BufferKey: bufferKey,
-		}
-		return []*constants.PipelineMessage{}, nil
-	}
-
-	// get the last seqId -> msg seq id should be that + 1
-	if msg.SeqId > b.SymbolState.LastSeqId+1 {
-		// dropped message. start timer
-		logger.Log.Warn("Detected a message drop")
-		b.SymbolState.GapActive = true
-		b.SymbolState.BufferSeqMap[msg.SeqId] = msg
-		b.SymbolState.BufferSeqId = append(b.SymbolState.BufferSeqId, msg.SeqId)
-		b.SymbolState.Gap = time.NewTimer(10 * time.Second)
-
-		// send a timer event to worker channel to flush the buffer
-		go func(t *time.Timer) {
-			<-t.C
-			workerChannel <- &constants.DispatchRecord{
-				Event:     constants.FlushBuffer,
-				BufferKey: bufferKey,
-			}
-		}(b.SymbolState.Gap)
-
-		metrics.Normalizer_DroppedTimerTotal.WithLabelValues(msg.Exchange, msg.Channel, msg.Symbol).Inc()
-
-		return []*constants.PipelineMessage{}, nil
-
-	} else {
-		// can be <= last processed seq id + 1: just apply it.
-		return []*constants.PipelineMessage{msg}, nil
-	}
+	return utils.SequenceOrderer(msg, b.SymbolState, bufferKey, workerChannel)
 }
 
 func (b *BinanceAggTradeOrderer) InitOrdererState(msg *constants.PipelineMessage) {
-	// pre allocate cap
-	b.SymbolState.BufferSeqMap = make(map[int64]*constants.PipelineMessage, 128)
-	b.SymbolState.BufferSeqId = make([]int64, 0, 100)
-	b.SymbolState.Gap = nil
-	b.SymbolState.GapActive = false
-	b.SymbolState.LastSeqId = int64(msg.SeqId) - 1
+	utils.InitSequenceOrdererState(b.SymbolState, msg)
 }
 
 // sort in seq ids and create a new view of the buffer
 func (b *BinanceAggTradeOrderer) PrepareBufferFlush() []*constants.PipelineMessage {
-	var preparedBuffer []*constants.PipelineMessage
-	sort.Slice(b.SymbolState.BufferSeqId, func(i, j int) bool {
-		return b.SymbolState.BufferSeqId[i] < b.SymbolState.BufferSeqId[j]
-	})
-
-	for _, seqId := range b.SymbolState.BufferSeqId {
-		if entry, exists := b.SymbolState.BufferSeqMap[seqId]; exists {
-			preparedBuffer = append(preparedBuffer, entry)
-		}
-	}
-
-	return preparedBuffer
+	return utils.SequenceSortBufferFlush(b.SymbolState)
 }
 
 // current seq number of the message - update it to msg and remove from buffer
 // ack ensures safe crash
 func (b *BinanceAggTradeOrderer) Ack(msg *constants.PipelineMessage) {
-	b.SymbolState.LastSeqId = msg.SeqId
-	delete(b.SymbolState.BufferSeqMap, msg.SeqId)
+	utils.SequenceAck(b.SymbolState, msg)
 }
 
 // cleanup buffer after flush
 func (b *BinanceAggTradeOrderer) Cleanup() {
-	b.SymbolState.BufferSeqId = b.SymbolState.BufferSeqId[:0]
-	// pre allocate cap
-	b.SymbolState.BufferSeqMap = make(map[int64]*constants.PipelineMessage, 128)
-	if b.SymbolState.Gap != nil {
-		if !b.SymbolState.Gap.Stop() {
-			// drain timer channel if needed
-			select {
-			case <-b.SymbolState.Gap.C:
-			default:
-			}
-		}
-		b.SymbolState.Gap = nil
-	}
-	b.SymbolState.GapActive = false
+	utils.SequenceOrdererCleanup(b.SymbolState)
 }
 
 func (b *BinanceAggTradeOrderer) GetOrderingId(msg *constants.PipelineMessage) string {
-	return strconv.FormatInt(msg.SeqId, 10)
+	return utils.GetSequenceOrderingId(msg)
 }
 
-// binance depth orderer: similar seq. the depth orderer and agg trade orderer can share the same code
-// utils.SequenceOrderer and pass in the type, field
+type BinanceDepthOrderer struct {
+	SymbolState *constants.SymbolState
+}
+
+func (b *BinanceDepthOrderer) SetSymbolState(symbolState *constants.SymbolState) {
+	b.SymbolState = symbolState
+}
+
+func (b *BinanceDepthOrderer) InitOrdererState(msg *constants.PipelineMessage) {
+	utils.InitSequenceOrdererState(b.SymbolState, msg)
+}
+
+func (b *BinanceDepthOrderer) Order(msg *constants.PipelineMessage,
+	bufferKey string,
+	workerChannel chan *constants.DispatchRecord) ([]*constants.PipelineMessage, error) {
+	return utils.SequenceOrderer(msg, b.SymbolState, bufferKey, workerChannel)
+}
+
+func (b *BinanceDepthOrderer) PrepareBufferFlush() []*constants.PipelineMessage {
+	return utils.SequenceSortBufferFlush(b.SymbolState)
+}
+
+func (b *BinanceDepthOrderer) Ack(msg *constants.PipelineMessage) {
+	utils.SequenceAck(b.SymbolState, msg)
+}
+
+func (b *BinanceDepthOrderer) Cleanup() {
+	utils.SequenceOrdererCleanup(b.SymbolState)
+}
+
+func (b *BinanceDepthOrderer) GetOrderingId(msg *constants.PipelineMessage) string {
+	return utils.GetSequenceOrderingId(msg)
+}
