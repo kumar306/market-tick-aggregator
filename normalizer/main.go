@@ -8,6 +8,7 @@ import (
 	"market-normalizer/dispatcher"
 	"market-normalizer/factory"
 	"market-normalizer/kafka"
+	"market-normalizer/worker"
 	"net/http"
 	"os"
 	"os/signal"
@@ -67,6 +68,9 @@ func main() {
 
 	// start the consumer loop
 	go kafka.ConsumerLoop(ctx, client, dispatchChannel)
+
+	// metrics goroutine for worker ingestion
+	go worker.StartWorkerMetrics(ctx, channelPool)
 
 	// wait until SIGTERM
 	<-ctx.Done()

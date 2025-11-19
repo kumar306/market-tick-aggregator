@@ -100,9 +100,6 @@ func StartWorkerPool(ctx context.Context, channelPool []chan *constants.Dispatch
 						continue
 					}
 
-					metrics.Normalizer_WorkerQueueSize.WithLabelValues(strconv.Itoa(i)).Set(float64(len(workerChannel)))
-					metrics.Normalizer_WorkerQueueUsage.WithLabelValues(strconv.Itoa(i)).Set(float64(len(workerChannel)) / float64(cap(workerChannel)))
-
 					// dispatched record can be a new message or buffer flush event
 					switch dispatchRec.Event {
 					case constants.FlushBuffer:
