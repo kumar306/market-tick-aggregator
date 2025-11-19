@@ -47,6 +47,9 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	// detect consumer lag for backpressure alert
+	go kafka.KafkaConsumerMetrics(ctx, cfg.KafkaConfig.Topics)
+
 	// create the dispatch channel
 	var dispatchChannel chan *kgo.Record = make(chan *kgo.Record, 1000)
 
@@ -60,7 +63,7 @@ func main() {
 	go dispatcher.StartDispatcher(ctx, dispatchChannel, channelPool, cfg.WorkerCount)
 
 	// start offset committer
-	go kafka.OffsetCommitter(ctx, cfg.KafkaConfig.CommitOffsetIntervalMillis)
+	go kafka.OffsetCommitter(ctx, cfg.KafkaConfig.CommitOffsetIntervalMillis, cfg.KafkaConfig.Topics)
 
 	// start the consumer loop
 	go kafka.ConsumerLoop(ctx, client, dispatchChannel)

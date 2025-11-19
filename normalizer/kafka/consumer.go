@@ -5,14 +5,18 @@ import (
 	"market-normalizer/constants"
 	"os"
 	"shared/logger"
+	"shared/metrics"
+	"strconv"
 	"sync"
 	"time"
 
+	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"
 )
 
 var (
 	client *kgo.Client
+	adm    *kadm.Client
 	once   sync.Once
 )
 
@@ -37,6 +41,8 @@ func Init(cfg *constants.KafkaConfig) *kgo.Client {
 		if err != nil {
 			logger.Log.Error("Error in pinging from kafka consumer. Returning", "error", err)
 		}
+
+		adm = kadm.NewClient(client)
 
 	})
 
@@ -98,6 +104,7 @@ func ConsumerLoop(ctx context.Context, client *kgo.Client, dispatchChannel chan 
 			// in event that channel is blocked, avoid hanging upon shutdown
 			select {
 			case dispatchChannel <- rec:
+				metrics.Normalizer_ConsumerMessagesTotal.WithLabelValues(rec.Topic, string(rec.Partition)).Inc()
 			case <-ctx.Done():
 				return
 			}
@@ -105,6 +112,50 @@ func ConsumerLoop(ctx context.Context, client *kgo.Client, dispatchChannel chan 
 
 		fetches.EachError(func(topic string, partition int32, err error) {
 			logger.Log.Error("Error occurred for fetch", "topic", topic, "partition", partition, "err", err)
+			metrics.Normalizer_ConsumerErrorsTotal.WithLabelValues(topic, string(partition)).Inc()
 		})
+	}
+}
+
+func KafkaConsumerMetrics(ctx context.Context, topics []string) {
+	ticker := time.NewTicker(10 * time.Second)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			// metrics to read - consumer lag = latest offset - latest committed offset
+			latestOffsets, err := adm.ListEndOffsets(ctx, topics...)
+			if err != nil {
+				logger.Log.Error("Error fetching latest offsets", "err", err)
+				continue
+			}
+			committedOffsets, err := adm.ListCommittedOffsets(ctx, topics...)
+			if err != nil {
+				logger.Log.Error("Error fetching committed offsets", "err", err)
+				continue
+			}
+
+			latestOffsets.Each(func(lo kadm.ListedOffset) {
+				latest := lo.Offset
+				var lastCommittedOffset int64
+				// coudn't find offset
+				if latest == -1 {
+					latest = 0
+				}
+
+				val, exists := committedOffsets.Lookup(lo.Topic, lo.Partition)
+				lastCommittedOffset = val.Offset
+
+				if !exists || lastCommittedOffset < 0 {
+					lastCommittedOffset = 0
+				}
+
+				lag := latest - lastCommittedOffset
+				metrics.Normalizer_ConsumerLag.WithLabelValues(lo.Topic, strconv.Itoa(int(lo.Partition))).Set(float64(lag))
+			})
+
+		}
 	}
 }

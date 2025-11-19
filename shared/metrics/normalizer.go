@@ -7,19 +7,20 @@ var (
 	// consumer metrics
 	Normalizer_ConsumerMessagesTotal = NewGaugeVec(
 		"consumer_messages_total",
-		"Number of unprocessed messages read from the consumer",
-		[]string{"exchange", "channel", "symbol"},
+		"Number of messages read from the consumer",
+		[]string{"topic", "partition"},
 	)
 
-	Normalizer_ConsumerLag = NewGauge(
+	Normalizer_ConsumerLag = NewGaugeVec(
 		"consumer_lag",
 		"Lag faced by the consumer",
+		[]string{"topic", "partition"},
 	)
 
 	Normalizer_ConsumerErrorsTotal = NewCounterVec(
 		"consumer_errors_total",
 		"Number of errors occurred during consumer processing",
-		[]string{"exchange", "channel", "symbol"},
+		[]string{"topic", "partition"},
 	)
 
 	// dedupe metrics
@@ -105,13 +106,14 @@ var (
 	Normalizer_ProducerLatencySeconds = NewHistogramVec(
 		"producer_latency_seconds",
 		"Producer latency in seconds",
-		prometheus.DefBuckets,
+		prometheus.ExponentialBuckets(0.001, 2, 12),
 		[]string{"topic"},
 	)
 
-	Normalizer_CommitOffsetsTotal = NewGauge(
+	Normalizer_CommitOffsetsTotal = NewGaugeVec(
 		"commit_offsets_total",
 		"Latest offset committed by offset committer",
+		[]string{"topic", "partition"},
 	)
 
 	Normalizer_CommitOffsetErrorsTotal = NewCounter(
@@ -123,7 +125,7 @@ var (
 	Normalizer_CommitLatencySeconds = NewHistogram(
 		"commit_latency_seconds",
 		"Commit latency in seconds",
-		prometheus.DefBuckets,
+		prometheus.ExponentialBuckets(0.001, 2, 12),
 	)
 
 	// worker metrics
