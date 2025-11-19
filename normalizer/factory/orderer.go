@@ -3,6 +3,7 @@ package factory
 import (
 	"market-normalizer/constants"
 	"shared/logger"
+	"shared/metrics"
 	"sort"
 	"strconv"
 	"strings"
@@ -123,6 +124,8 @@ func (b *BinanceAggTradeOrderer) Order(
 				BufferKey: bufferKey,
 			}
 		}(b.SymbolState.Gap)
+
+		metrics.Normalizer_DroppedTimerTotal.WithLabelValues(msg.Exchange, msg.Channel, msg.Symbol).Inc()
 
 		return []*constants.PipelineMessage{}, nil
 

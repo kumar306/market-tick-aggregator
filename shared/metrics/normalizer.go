@@ -60,21 +60,15 @@ var (
 	Normalizer_BufferFlushesTotal = NewCounterVec(
 		"buffer_flushes_total",
 		"Number of buffer flushes",
-		[]string{"exchange", "channel", "symbol"},
+		[]string{"id"},
 	)
 
 	// histogram
 	Normalizer_BufferFlushLatency = NewHistogramVec(
 		"buffer_flush_latency_seconds",
 		"Buffer flush latency in seconds",
-		prometheus.DefBuckets,
-		[]string{"exchange", "channel", "symbol"},
-	)
-
-	Normalizer_DroppedGapTotal = NewCounterVec(
-		"dropped_gap_total",
-		"Number of dropped gaps",
-		[]string{"exchange", "channel", "symbol"},
+		prometheus.ExponentialBuckets(0.001, 2, 12),
+		[]string{"id"},
 	)
 
 	Normalizer_DroppedTimerTotal = NewCounterVec(
@@ -135,6 +129,13 @@ var (
 		[]string{"exchange", "channel", "symbol"},
 	)
 
+	// worker metrics
+	Normalizer_NormalizedMessageErrorsTotal = NewCounterVec(
+		"normalized_message_errors_total",
+		"Number of proto normalizer errors in worker",
+		[]string{"exchange", "channel", "symbol"},
+	)
+
 	Normalizer_OrdererErrorsTotal = NewCounterVec(
 		"orderer_errors_total",
 		"Number of orderer errors in the worker",
@@ -147,16 +148,28 @@ var (
 		[]string{"worker_id"},
 	)
 
+	Normalizer_WorkerQueueUsage = NewGaugeVec(
+		"worker_queue_usage",
+		"Size/capacity of the dispatcher to worker channel",
+		[]string{"worker_id"},
+	)
+
 	Normalizer_WorkerLatencySeconds = NewHistogramVec(
 		"worker_latency_seconds",
 		"Latency of the worker ProcessRecord()",
-		prometheus.DefBuckets,
+		prometheus.ExponentialBuckets(0.001, 2, 12),
 		[]string{"worker_id"},
 	)
 
 	Normalizer_WorkerCrashesTotal = NewCounterVec(
 		"worker_crashes_total",
 		"Number of worker crashes",
+		[]string{"worker_id"},
+	)
+
+	Normalizer_WorkerProcessedMessagesTotal = NewCounterVec(
+		"worker_processed_messages_total",
+		"Number of worker processed messages per worker id",
 		[]string{"worker_id"},
 	)
 

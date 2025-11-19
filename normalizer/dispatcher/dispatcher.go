@@ -7,7 +7,10 @@ import (
 	"market-normalizer/constants"
 	"market-normalizer/worker"
 	"shared/logger"
+	"shared/metrics"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/twmb/franz-go/pkg/kgo"
 )
@@ -87,17 +90,38 @@ func StartWorkerPool(ctx context.Context, channelPool []chan *constants.Dispatch
 				case <-ctx.Done():
 					logger.Log.Info("Worker stopping.", "worker", i)
 					return
-				case dispatchRec := <-workerChannel:
+				case dispatchRec, ok := <-workerChannel:
+					if !ok {
+						logger.Log.Info("Channel is closed. Exiting")
+						return
+					}
+
 					if dispatchRec == nil {
 						continue
 					}
 
+					metrics.Normalizer_WorkerQueueSize.WithLabelValues(strconv.Itoa(i)).Set(float64(len(workerChannel)))
+					metrics.Normalizer_WorkerQueueUsage.WithLabelValues(strconv.Itoa(i)).Set(float64(len(workerChannel)) / float64(cap(workerChannel)))
+
 					// dispatched record can be a new message or buffer flush event
 					switch dispatchRec.Event {
 					case constants.FlushBuffer:
+						bufferFlushStart := time.Now()
+
 						worker.FlushBuffer(ctx, dispatchRec, workerMap)
+
+						bufferFlushLatency := time.Since(bufferFlushStart).Seconds()
+						metrics.Normalizer_BufferFlushLatency.WithLabelValues(strconv.Itoa(i)).Observe(bufferFlushLatency)
+						metrics.Normalizer_BufferFlushesTotal.WithLabelValues(strconv.Itoa(i)).Inc()
+
 					case constants.NewMessage:
+						workerStartTime := time.Now()
+
 						worker.ProcessRecord(ctx, dispatchRec, workerMap, workerChannel)
+
+						workerLatency := time.Since(workerStartTime).Seconds()
+						metrics.Normalizer_WorkerLatencySeconds.WithLabelValues(strconv.Itoa(i)).Observe(workerLatency)
+						metrics.Normalizer_WorkerProcessedMessagesTotal.WithLabelValues(strconv.Itoa(i)).Inc()
 					}
 				}
 			}
