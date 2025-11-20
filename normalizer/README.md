@@ -18,3 +18,6 @@
 	// whatever is returned from orderer strategy - []T
 	// its passed into protobuf normalizer strategy -
 	// passed into publisher strategy (normalized_tickers vs normalized_l2)
+
+	protoc command for compiling in normalizer path:
+	protoc --go_out=. .\proto\*.proto

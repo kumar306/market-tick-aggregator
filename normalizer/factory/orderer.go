@@ -29,7 +29,9 @@ func InitOrdererRegistry() {
 			{constants.Binance, constants.Depth, func() constants.OrdererStrategy {
 				return &BinanceDepthOrderer{}
 			}},
-			// {constants.Coinbase, constants.Ticker},
+			{constants.Coinbase, constants.Ticker, func() constants.OrdererStrategy {
+				return &CoinbaseTickerOrderer{}
+			}},
 			// {constants.Coinbase, constants.Level2},
 			// {constants.Kraken, constants.Ticker},
 			// {constants.Kraken, constants.Book},
@@ -146,5 +148,39 @@ func (b *BinanceDepthOrderer) Cleanup() {
 }
 
 func (b *BinanceDepthOrderer) GetOrderingId(msg *constants.PipelineMessage) string {
+	return utils.GetSequenceOrderingId(msg)
+}
+
+type CoinbaseTickerOrderer struct {
+	SymbolState *constants.SymbolState
+}
+
+func (c *CoinbaseTickerOrderer) SetSymbolState(symbolState *constants.SymbolState) {
+	c.SymbolState = symbolState
+}
+
+func (c *CoinbaseTickerOrderer) InitOrdererState(msg *constants.PipelineMessage) {
+	utils.InitSequenceOrdererState(c.SymbolState, msg)
+}
+
+func (c *CoinbaseTickerOrderer) Order(msg *constants.PipelineMessage,
+	bufferKey string,
+	workerChannel chan *constants.DispatchRecord) ([]*constants.PipelineMessage, error) {
+	return utils.SequenceOrderer(msg, c.SymbolState, bufferKey, workerChannel)
+}
+
+func (c *CoinbaseTickerOrderer) PrepareBufferFlush() []*constants.PipelineMessage {
+	return utils.SequenceSortBufferFlush(c.SymbolState)
+}
+
+func (c *CoinbaseTickerOrderer) Ack(msg *constants.PipelineMessage) {
+	utils.SequenceAck(c.SymbolState, msg)
+}
+
+func (c *CoinbaseTickerOrderer) Cleanup() {
+	utils.SequenceOrdererCleanup(c.SymbolState)
+}
+
+func (c *CoinbaseTickerOrderer) GetOrderingId(msg *constants.PipelineMessage) string {
 	return utils.GetSequenceOrderingId(msg)
 }

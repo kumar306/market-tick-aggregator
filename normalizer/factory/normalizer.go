@@ -7,8 +7,10 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // normalized ticker - convert from the pipeline message into the generated proto normalized ticker
@@ -68,6 +70,8 @@ func GetNormalizer(key string) (constants.NormalizerStrategy, error) {
 		return &BinanceAggTradeNormalizer{}, nil
 	case "binance:depth":
 		return &BinanceDepthNormalizer{}, nil
+	case "coinbase:ticker":
+		return &CoinbaseTickerNormalizer{}, nil
 	default:
 		return nil, logger.LogAndWrap("Could not find normalizer for given key", nil, "key", key)
 	}
@@ -93,13 +97,13 @@ func (b *BinanceAggTradeNormalizer) Normalize(msg *constants.PipelineMessage) ([
 	volumeFloat, _ := strconv.ParseFloat(rawMessage.Quantity, 64)
 
 	var normalizedMsg generated.NormalizedTicker = generated.NormalizedTicker{
-		Exchange: msg.Exchange,
-		Channel:  msg.Channel,
-		Symbol:   msg.Symbol,
-		EventTs:  rawMessage.EventTime,
-		Price:    priceFloat,
-		Volume:   volumeFloat,
-		SeqId:    msg.SeqId,
+		Exchange:      msg.Exchange,
+		Channel:       msg.Channel,
+		Symbol:        msg.Symbol,
+		EventTsMillis: rawMessage.EventTime,
+		Price:         priceFloat,
+		Volume:        volumeFloat,
+		SeqId:         msg.SeqId,
 	}
 
 	protoStream, err := proto.Marshal(&normalizedMsg)
@@ -149,6 +153,51 @@ func (b *BinanceDepthNormalizer) Normalize(msg *constants.PipelineMessage) ([]by
 			Price:  floatPrice,
 			Volume: floatVolume,
 		})
+	}
+
+	protoStream, err := proto.Marshal(&normalizedMsg)
+	if err != nil {
+		return nil, logger.LogAndWrap("Error in marshalling protobuf", err, "exchange", msg.Exchange, "channel", msg.Channel)
+	}
+
+	return protoStream, nil
+}
+
+type CoinbaseTickerNormalizer struct{}
+
+func (c *CoinbaseTickerNormalizer) Normalize(msg *constants.PipelineMessage) ([]byte, error) {
+	rawMessage, ok := msg.RawMessage.(*constants.CoinbaseTickerMsg)
+	if !ok {
+		return nil, logger.LogAndWrap("Failed to parse raw message", nil,
+			"feed", msg.Exchange,
+			"channel", msg.Channel,
+			"symbol", msg.Symbol,
+			"msg", msg.RawMessage)
+	}
+
+	floatPrice, _ := strconv.ParseFloat(rawMessage.Price, 64)
+	floatVolume, _ := strconv.ParseFloat(rawMessage.Volume24h, 64)
+	floatOpen, _ := strconv.ParseFloat(rawMessage.Open24h, 64)
+	floatLow, _ := strconv.ParseFloat(rawMessage.Low24h, 64)
+	floatHigh, _ := strconv.ParseFloat(rawMessage.High24h, 64)
+	floatClose := floatPrice
+	parsedTimestamp, err := time.Parse(time.RFC3339, rawMessage.Time)
+	if err != nil {
+		logger.Log.Warn("Error in parsing raw timestamp", "exchange", msg.Exchange, "channel", msg.Channel, "symbol", msg.Symbol, "seqId", msg.SeqId, "error", err)
+	}
+
+	var normalizedMsg generated.NormalizedTicker = generated.NormalizedTicker{
+		Exchange:  msg.Exchange,
+		Channel:   msg.Channel,
+		Symbol:    msg.Symbol,
+		Price:     floatPrice,
+		Volume:    floatVolume,
+		SeqId:     msg.SeqId,
+		Open:      floatOpen,
+		Close:     floatClose,
+		Low:       floatLow,
+		High:      floatHigh,
+		Timestamp: timestamppb.New(parsedTimestamp),
 	}
 
 	protoStream, err := proto.Marshal(&normalizedMsg)

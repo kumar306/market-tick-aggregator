@@ -2,12 +2,13 @@ syntax = "proto3";
 
 package normalizer;
 option go_package = "proto/generated";
+import "google/protobuf/timestamp.proto";
 
 message NormalizedTicker {
     string exchange = 1;
     string channel = 2;
     string symbol = 3;
-    int64 event_ts = 4;
+    int64 event_ts_millis = 4;
     double price = 5;
     double volume = 6;
     // optional fields - varies with exchange
@@ -16,4 +17,5 @@ message NormalizedTicker {
     double low = 9;
     double high = 10;
     int64 seq_id = 11;
+    google.protobuf.Timestamp timestamp = 12;
 }

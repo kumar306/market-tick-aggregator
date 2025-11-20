@@ -61,8 +61,8 @@ func GetConverter(key string) (constants.ConverterStrategy, error) {
 		return &BinanceAggTradeConverter{}, nil
 	case "binance:depth":
 		return &BinanceDepthConverter{}, nil
-	// case "coinbase:ticker":
-	// 	return &CoinbaseTickerConverter{}, nil
+	case "coinbase:ticker":
+		return &CoinbaseTickerConverter{}, nil
 	// case "coinbase:l2":
 	// 	return &CoinbaseDepthConverter{}, nil
 	// case "kraken:ticker":
@@ -109,7 +109,20 @@ func (b *BinanceDepthConverter) Convert(raw []byte) (*constants.PipelineMessage,
 
 type CoinbaseTickerConverter struct{}
 
-func (c *CoinbaseTickerConverter) Convert() {}
+func (c *CoinbaseTickerConverter) Convert(raw []byte) (*constants.PipelineMessage, error) {
+	var coinbaseTickerMsg constants.CoinbaseTickerMsg
+	if err := json.Unmarshal(raw, &coinbaseTickerMsg); err != nil {
+		return nil, logger.LogAndWrap("Converter error: Could not deserialize for coinbase ticker message.", err)
+	}
+
+	return &constants.PipelineMessage{
+		Exchange:   constants.Coinbase,
+		Channel:    constants.Ticker,
+		Symbol:     coinbaseTickerMsg.ProductID,
+		SeqId:      coinbaseTickerMsg.Sequence,
+		RawMessage: &coinbaseTickerMsg,
+	}, nil
+}
 
 type CoinbaseDepthConverter struct{}
 
