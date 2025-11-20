@@ -6,6 +6,7 @@ import (
 	"shared/logger"
 	"strings"
 	"sync"
+	"time"
 )
 
 // map of exchange:channel -> ConverterStrategies
@@ -124,9 +125,38 @@ func (c *CoinbaseTickerConverter) Convert(raw []byte) (*constants.PipelineMessag
 	}, nil
 }
 
-type CoinbaseDepthConverter struct{}
+type CoinbaseLevel2Converter struct{}
 
-func (c *CoinbaseDepthConverter) Convert() {}
+func (c *CoinbaseLevel2Converter) Convert(raw []byte) (*constants.PipelineMessage, error) {
+	var coinbaseLevel2Msg constants.CoinbaseLevel2Msg
+	if err := json.Unmarshal(raw, &coinbaseLevel2Msg); err != nil {
+		return nil, logger.LogAndWrap("Converter error: Could not deserialize for coinbase level2 message.", err)
+	}
+
+	msg := &constants.PipelineMessage{
+		Exchange:   constants.Coinbase,
+		Channel:    constants.Level2,
+		Symbol:     coinbaseLevel2Msg.ProductId,
+		RawMessage: &coinbaseLevel2Msg,
+	}
+
+	if coinbaseLevel2Msg.Type == "snapshot" {
+		msg.Ts = time.Now().UnixNano()
+	} else {
+		ts, err := time.Parse(time.RFC3339, coinbaseLevel2Msg.Time)
+		if err != nil {
+			return nil, logger.LogAndWrap("Error in parsing time from string to time",
+				err, "stage", "converter",
+				"exchange", msg.Exchange,
+				"channel", msg.Channel,
+				"symbol", msg.Symbol)
+		}
+
+		msg.Ts = ts.UnixNano()
+	}
+
+	return msg, nil
+}
 
 type KrakenTickerConverter struct{}
 

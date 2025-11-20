@@ -32,7 +32,9 @@ func InitOrdererRegistry() {
 			{constants.Coinbase, constants.Ticker, func() constants.OrdererStrategy {
 				return &CoinbaseTickerOrderer{}
 			}},
-			// {constants.Coinbase, constants.Level2},
+			{constants.Coinbase, constants.Level2, func() constants.OrdererStrategy {
+				return &CoinbaseLevel2Orderer{}
+			}},
 			// {constants.Kraken, constants.Ticker},
 			// {constants.Kraken, constants.Book},
 		}
@@ -183,4 +185,38 @@ func (c *CoinbaseTickerOrderer) Cleanup() {
 
 func (c *CoinbaseTickerOrderer) GetOrderingId(msg *constants.PipelineMessage) string {
 	return utils.GetSequenceOrderingId(msg)
+}
+
+type CoinbaseLevel2Orderer struct {
+	SymbolState *constants.SymbolState
+}
+
+func (c *CoinbaseLevel2Orderer) SetSymbolState(symbolState *constants.SymbolState) {
+	c.SymbolState = symbolState
+}
+
+func (c *CoinbaseLevel2Orderer) InitOrdererState(msg *constants.PipelineMessage) {
+	utils.InitTsOrdererState(c.SymbolState, msg)
+}
+
+func (c *CoinbaseLevel2Orderer) Order(msg *constants.PipelineMessage,
+	bufferKey string,
+	workerChannel chan *constants.DispatchRecord) ([]*constants.PipelineMessage, error) {
+	return utils.TsOrder(msg, c.SymbolState, bufferKey, workerChannel)
+}
+
+func (c *CoinbaseLevel2Orderer) PrepareBufferFlush() []*constants.PipelineMessage {
+	return utils.PrepareTsBufferFlush(c.SymbolState)
+}
+
+func (c *CoinbaseLevel2Orderer) Ack(msg *constants.PipelineMessage) {
+	utils.TsAck(msg, c.SymbolState)
+}
+
+func (c *CoinbaseLevel2Orderer) Cleanup() {
+	utils.TsCleanup(c.SymbolState)
+}
+
+func (c *CoinbaseLevel2Orderer) GetOrderingId(msg *constants.PipelineMessage) string {
+	return utils.GetTsOrderingId(msg)
 }

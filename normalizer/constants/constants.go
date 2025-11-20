@@ -69,7 +69,7 @@ type SymbolState struct {
 	BufferSeqMap map[int64]*PipelineMessage
 	BufferSeqId  []int64
 
-	// time ordering
+	// timestamp ordering
 	BufferTimeMap map[int64][]*PipelineMessage
 	BufferTime    []int64
 
@@ -81,7 +81,7 @@ type SymbolState struct {
 	Normalizer NormalizerStrategy
 	Publisher  PublisherStrategy
 
-	LastSeenTs time.Time
+	LastSeenTs int64
 }
 
 // uniform message type in pipeline
@@ -90,7 +90,7 @@ type PipelineMessage struct {
 	Channel    string
 	Symbol     string
 	SeqId      int64
-	Ts         string
+	Ts         int64 // ts in unix nano
 	RawMessage interface{}
 	Record     *kgo.Record
 }
@@ -173,4 +173,14 @@ type CoinbaseTickerMsg struct {
 	Time        string `json:"time"` // RFC3339 timestamp
 	TradeID     int64  `json:"trade_id"`
 	LastSize    string `json:"last_size"`
+}
+
+// if snapshot, then bids and asks are filled. if l2update then time and changes are filled
+type CoinbaseLevel2Msg struct {
+	Type      string     `json:"type"`
+	ProductId string     `json:"product_id"`
+	Bids      [][]string `json:"bids"`
+	Asks      [][]string `json:"asks"`
+	Time      string     `json:"time"`
+	Changes   [][]string `json:"changes"`
 }
