@@ -56,6 +56,7 @@ const (
 	Level2                   string = "level2"
 	Snapshot                 string = "snapshot"
 	L2Update                 string = "l2update"
+	Update                   string = "update"
 	Buy                      string = "buy"
 	Sell                     string = "sell"
 	NormalizedTickerTopic    string = "normalized.ticker"
@@ -188,4 +189,44 @@ type CoinbaseLevel2Msg struct {
 	Asks      [][]string `json:"asks"`
 	Time      string     `json:"time"`
 	Changes   [][]string `json:"changes"`
+}
+
+type KrakenTickerMsg struct {
+	Channel string             `json:"channel"`
+	Type    string             `json:"type"`
+	Data    []KrakenTickerData `json:"data"`
+}
+
+type KrakenTickerData struct {
+	Symbol    string  `json:"symbol"`
+	Bid       float64 `json:"bid"`
+	BidQty    float64 `json:"bid_qty"`
+	Ask       float64 `json:"ask"`
+	AskQty    float64 `json:"ask_qty"`
+	Last      float64 `json:"last"`
+	Volume    float64 `json:"volume"`
+	VWAP      float64 `json:"vwap"`
+	Low       float64 `json:"low"`
+	High      float64 `json:"high"`
+	Change    float64 `json:"change"`
+	ChangePct float64 `json:"change_pct"`
+}
+
+type KrakenBookMsg struct {
+	Channel string           `json:"channel"`
+	Type    string           `json:"type"`
+	Data    []KrakenBookData `json:"data"`
+}
+
+type KrakenBookData struct {
+	Symbol    string            `json:"symbol"`
+	Bids      []KrakenBookLevel `json:"bids"`
+	Asks      []KrakenBookLevel `json:"asks"`
+	Checksum  int64             `json:"checksum"`
+	Timestamp string            `json:"timestamp"`
+}
+
+type KrakenBookLevel struct {
+	Price float64 `json:"price"`
+	Qty   float64 `json:"qty"`
 }

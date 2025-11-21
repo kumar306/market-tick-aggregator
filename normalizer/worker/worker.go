@@ -4,7 +4,7 @@ import (
 	"context"
 	"market-normalizer/constants"
 	"market-normalizer/dedupe"
-	"market-normalizer/factory"
+	"market-normalizer/factory/registry"
 	"shared/logger"
 	"shared/metrics"
 	"time"
@@ -18,22 +18,22 @@ func ProcessRecord(ctx context.Context,
 	// if key not in map - insert into the map and plug its strategies based on feed
 	_, exists := workerMap[dispatchRec.BufferKey]
 	if !exists {
-		converter, err := factory.GetRegisteredConverter(dispatchRec.Exchange, dispatchRec.Channel)
+		converter, err := registry.GetRegisteredConverter(dispatchRec.Exchange, dispatchRec.Channel)
 		if err != nil {
 			return logger.LogAndWrap("Error when fetching registered converter to worker", err)
 		}
 
-		orderer, err := factory.GetRegisteredOrderer(dispatchRec.Exchange, dispatchRec.Channel)
+		orderer, err := registry.GetRegisteredOrderer(dispatchRec.Exchange, dispatchRec.Channel)
 		if err != nil {
 			return logger.LogAndWrap("Error when fetching registered orderer to worker", err)
 		}
 
-		normalizer, err := factory.GetRegisteredNormalizer(dispatchRec.Exchange, dispatchRec.Channel)
+		normalizer, err := registry.GetRegisteredNormalizer(dispatchRec.Exchange, dispatchRec.Channel)
 		if err != nil {
 			return logger.LogAndWrap("Error when fetching registered normalizer to worker", err)
 		}
 
-		publisher, err := factory.GetRegisteredPublisher(dispatchRec.Channel)
+		publisher, err := registry.GetRegisteredPublisher(dispatchRec.Channel)
 		if err != nil {
 			return logger.LogAndWrap("Error when fetching registered publisher to worker", err)
 		}

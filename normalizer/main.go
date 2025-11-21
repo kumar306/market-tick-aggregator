@@ -6,7 +6,7 @@ import (
 	"market-normalizer/constants"
 	"market-normalizer/dedupe"
 	"market-normalizer/dispatcher"
-	"market-normalizer/factory"
+	"market-normalizer/factory/registry"
 	"market-normalizer/kafka"
 	"market-normalizer/worker"
 	"net/http"
@@ -80,10 +80,10 @@ func main() {
 
 func InitPipelineRegistries() {
 	// init all pipeline registries
-	factory.InitConverterRegistry()
-	factory.InitOrdererRegistry()
-	factory.InitNormalizerRegistry()
-	factory.InitPublisherRegistry()
+	registry.InitConverterRegistry()
+	registry.InitOrdererRegistry()
+	registry.InitNormalizerRegistry()
+	registry.InitPublisherRegistry()
 }
 
 func exposeMetrics() {

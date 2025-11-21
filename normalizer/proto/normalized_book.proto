@@ -2,6 +2,7 @@ syntax = "proto3";
 
 package normalizer;
 option go_package = "proto/generated";
+import "google/protobuf/timestamp.proto";
 
 message NormalizedBook {
     string exchange = 1;
@@ -16,6 +17,7 @@ message NormalizedBook {
     repeated BookLevel bids = 4;
     repeated BookLevel asks = 5;
 
-    int64 event_time = 6;
+    int64 event_time_millis = 6;
     string event_type = 7;
+    google.protobuf.Timestamp timestamp = 8;
 }
