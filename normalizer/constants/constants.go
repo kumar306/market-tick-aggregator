@@ -54,6 +54,10 @@ const (
 	Book                     string = "book"
 	Depth                    string = "depth"
 	Level2                   string = "level2"
+	Snapshot                 string = "snapshot"
+	L2Update                 string = "l2update"
+	Buy                      string = "buy"
+	Sell                     string = "sell"
 	NormalizedTickerTopic    string = "normalized.ticker"
 	NormalizedBookTopic      string = "normalized.book"
 )
@@ -93,6 +97,7 @@ type PipelineMessage struct {
 	Ts         int64 // ts in unix nano
 	RawMessage interface{}
 	Record     *kgo.Record
+	EventType  string
 }
 
 // converts the byte stream into the respective struct and returns it

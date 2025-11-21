@@ -202,6 +202,10 @@ func (c *CoinbaseLevel2Orderer) InitOrdererState(msg *constants.PipelineMessage)
 func (c *CoinbaseLevel2Orderer) Order(msg *constants.PipelineMessage,
 	bufferKey string,
 	workerChannel chan *constants.DispatchRecord) ([]*constants.PipelineMessage, error) {
+	if msg.EventType == constants.Snapshot {
+		return []*constants.PipelineMessage{msg}, nil
+	}
+
 	return utils.TsOrder(msg, c.SymbolState, bufferKey, workerChannel)
 }
 
@@ -210,6 +214,10 @@ func (c *CoinbaseLevel2Orderer) PrepareBufferFlush() []*constants.PipelineMessag
 }
 
 func (c *CoinbaseLevel2Orderer) Ack(msg *constants.PipelineMessage) {
+	if msg.EventType == constants.Snapshot {
+		return
+	}
+
 	utils.TsAck(msg, c.SymbolState)
 }
 

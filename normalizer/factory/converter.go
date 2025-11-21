@@ -140,9 +140,7 @@ func (c *CoinbaseLevel2Converter) Convert(raw []byte) (*constants.PipelineMessag
 		RawMessage: &coinbaseLevel2Msg,
 	}
 
-	if coinbaseLevel2Msg.Type == "snapshot" {
-		msg.Ts = time.Now().UnixNano()
-	} else {
+	if coinbaseLevel2Msg.Type == constants.L2Update {
 		ts, err := time.Parse(time.RFC3339, coinbaseLevel2Msg.Time)
 		if err != nil {
 			return nil, logger.LogAndWrap("Error in parsing time from string to time",
@@ -153,6 +151,8 @@ func (c *CoinbaseLevel2Converter) Convert(raw []byte) (*constants.PipelineMessag
 		}
 
 		msg.Ts = ts.UnixNano()
+	} else {
+		msg.EventType = constants.Snapshot
 	}
 
 	return msg, nil
