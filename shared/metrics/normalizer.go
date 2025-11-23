@@ -36,6 +36,22 @@ var (
 		[]string{"exchange", "channel", "symbol"},
 	)
 
+	Normalizer_DedupeErrorsTotal = NewCounterVec(
+		"dedupe_errors_total",
+		"Number of errors when checking redis dedupe",
+		[]string{"exchange", "channel", "symbol"},
+	)
+
+	Normalizer_RedisCB_FallbacksTotal = NewCounter(
+		"dedupe_cb_fallbacks_total",
+		"Number of dedupe skips when circuit in open state",
+	)
+
+	Normalizer_RedisCB_State = NewGauge(
+		"dedupe_cb_state",
+		"Current redis circuit breaker state",
+	)
+
 	Normalizer_DedupeStoreErrorsTotal = NewCounterVec(
 		"dedupe_store_errors_total",
 		"Number of errors when writing dedupe key to redis",
@@ -184,5 +200,12 @@ var (
 		"backpressure_triggered_total",
 		"Number of backpressure triggers in Kafka/Redis",
 		[]string{"service", "exchange", "channel", "symbol"},
+	)
+
+	// circuit breaker state change metrics
+	Normalizer_RedisCB_StateChanges = NewCounterVec(
+		"redis_cb_state_changes",
+		"Number of redis circuit breaker state changes",
+		[]string{"to"},
 	)
 )

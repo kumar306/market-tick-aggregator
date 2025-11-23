@@ -7,9 +7,9 @@ import (
 )
 
 type Config struct {
-	KafkaConfig     *KafkaConfig `yaml:"kafka"`
-	WorkerCount     int          `yaml:"worker_count"`
-	RedisTtlMinutes int          `yaml:"redis_ttl_minutes"`
+	KafkaConfig *KafkaConfig `yaml:"kafka"`
+	WorkerCount int          `yaml:"worker_count"`
+	RedisConfig *RedisConfig `yaml:"redis"`
 }
 
 type KafkaConfig struct {
@@ -26,6 +26,13 @@ type BackpressureConfig struct {
 	QueueUsageLowThreshold  float64 `yaml:"queue_usage_low_threshold"`
 	ThresholdActiveMillis   int     `yaml:"threshold_active_millis"`
 	CooldownTimeMillis      int     `yaml:"cooldown_time_millis"`
+}
+
+type RedisConfig struct {
+	TtlMinutes      int     `yaml:"ttl_minutes"`
+	CBReqCount      uint32  `yaml:"cb_req_count"`
+	CBFailureRatio  float64 `yaml:"cb_failure_ratio"`
+	CBTimeoutMillis int     `yaml:"cb_timeout_millis"`
 }
 
 type Header struct {

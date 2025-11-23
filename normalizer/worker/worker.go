@@ -72,10 +72,12 @@ func ProcessRecord(ctx context.Context,
 		symbolState.Orderer.GetOrderingId(normalizedMsg))
 
 	dedupeExists, err := dedupe.IsDuplicate(ctx, dedupeKey)
-	metrics.Normalizer_DedupeChecksTotal.WithLabelValues(dispatchRec.Exchange, dispatchRec.Channel, dispatchRec.Symbol).Inc()
 	if err != nil {
+		metrics.Normalizer_DedupeErrorsTotal.WithLabelValues(dispatchRec.Exchange, dispatchRec.Channel, dispatchRec.Symbol).Inc()
 		return logger.LogAndWrap("Error in worker dedupe check", err, "key", dedupeKey)
 	}
+
+	metrics.Normalizer_DedupeChecksTotal.WithLabelValues(dispatchRec.Exchange, dispatchRec.Channel, dispatchRec.Symbol).Inc()
 
 	if dedupeExists {
 		metrics.Normalizer_DedupeHitsTotal.WithLabelValues(dispatchRec.Exchange, dispatchRec.Channel, dispatchRec.Symbol).Inc()

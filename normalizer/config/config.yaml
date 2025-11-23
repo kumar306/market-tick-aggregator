@@ -18,4 +18,8 @@ kafka:
     cooldown_time_millis: 5000
 
 worker_count: 16
-redis_ttl_minutes: 15
+redis:
+  ttl_minutes: 15
+  cb_req_count: 10
+  cb_failure_ratio: 0.25
+  cb_timeout_millis: 5000

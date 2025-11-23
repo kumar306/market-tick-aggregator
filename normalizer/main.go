@@ -14,7 +14,6 @@ import (
 	"os/signal"
 	"shared/logger"
 	"syscall"
-	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/twmb/franz-go/pkg/kgo"
@@ -39,7 +38,7 @@ func main() {
 	InitPipelineRegistries()
 
 	// init redis for dedupe in pipeline
-	dedupe.InitRedis(time.Duration(cfg.RedisTtlMinutes) * time.Minute)
+	dedupe.InitRedis(cfg.RedisConfig)
 
 	// consumer init
 	client := kafka.Init(cfg.KafkaConfig)

@@ -2,11 +2,15 @@ package dedupe
 
 import (
 	"context"
+	"errors"
+	"market-normalizer/constants"
 	"os"
 	"shared/logger"
+	"shared/metrics"
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"github.com/sony/gobreaker"
 )
 
 // use redis to store dedupe keys - set key if not exists - do it at the end of publish
@@ -15,19 +19,37 @@ import (
 // init redis
 var Rdb *redis.Client
 var Ttl time.Duration
+var redisBreaker *gobreaker.CircuitBreaker
 
 const (
 	REDIS_ADDR     string = "REDIS_ADDR"
 	REDIS_PASSWORD string = "REDIS_PASSWORD"
 )
 
-func InitRedis(ttl time.Duration) {
+func InitRedis(redisConfig *constants.RedisConfig) {
 	Rdb = redis.NewClient(&redis.Options{
 		Addr:     os.Getenv(REDIS_ADDR),
 		Password: os.Getenv(REDIS_PASSWORD),
 		DB:       0,
 	})
-	Ttl = ttl
+	Ttl = time.Duration(redisConfig.TtlMinutes) * time.Minute
+
+	redisBreaker = gobreaker.NewCircuitBreaker(gobreaker.Settings{
+		Name: "redis-dedupe-breaker",
+		ReadyToTrip: func(counts gobreaker.Counts) bool {
+			if counts.Requests < redisConfig.CBReqCount {
+				return false
+			}
+			failureRatio := float64(counts.TotalFailures) / float64(counts.Requests)
+			return failureRatio >= redisConfig.CBFailureRatio
+		},
+		Timeout: time.Duration(redisConfig.CBTimeoutMillis) * time.Millisecond,
+		OnStateChange: func(name string, from, to gobreaker.State) {
+			logger.Log.Warn("Redis circuit breaker state change", "name", name, "from", from.String(), "to", to.String())
+			metrics.Normalizer_RedisCB_StateChanges.WithLabelValues(to.String()).Inc()
+			metrics.Normalizer_RedisCB_State.Set(float64(to))
+		},
+	})
 
 	logger.Log.Info("Initialised Redis Client")
 }
@@ -38,12 +60,24 @@ func ConstructDedupeKey(exchange, channel, symbol string, orderingID string) str
 
 // set the dedupe key in redis with TTL
 func MarkForDedupe(ctx context.Context, key string) error {
-	ok, err := Rdb.SetNX(ctx, key, 1, Ttl).Result()
+
+	ok, err := redisBreaker.Execute(func() (interface{}, error) {
+		return Rdb.SetNX(ctx, key, 1, Ttl).Result()
+	})
+
 	if err != nil {
+
+		// don't stop pipeline processing if circuit is open
+		if errors.Is(err, gobreaker.ErrOpenState) || errors.Is(err, gobreaker.ErrTooManyRequests) {
+			metrics.Normalizer_RedisCB_FallbacksTotal.Inc()
+			logger.Log.Error("Dedupe MarkForDedupe skipped as circuit breaker - OPEN state", "err", err)
+			return nil
+		}
+
 		return logger.LogAndWrap("Error when setting dedupe key in redis", err, "key", key)
 	}
 
-	if !ok {
+	if !ok.(bool) {
 		// key exists
 		logger.Log.Warn("Key already exists in redis", "key", key)
 	}
@@ -52,10 +86,22 @@ func MarkForDedupe(ctx context.Context, key string) error {
 }
 
 func IsDuplicate(ctx context.Context, key string) (bool, error) {
-	ok, err := Rdb.Exists(ctx, key).Result()
+	ok, err := redisBreaker.Execute(func() (interface{}, error) {
+		return Rdb.Exists(ctx, key).Result()
+	})
+
 	if err != nil {
+
+		// don't stop pipeline processing if circuit is open
+		if errors.Is(err, gobreaker.ErrOpenState) || errors.Is(err, gobreaker.ErrTooManyRequests) {
+			metrics.Normalizer_RedisCB_FallbacksTotal.Inc()
+			logger.Log.Warn("Dedupe IsDuplicate skipped as circuit breaker - OPEN state", "err", err)
+			return false, nil
+		}
+
+		// actual redis error
 		return false, err
 	}
 
-	return ok == 1, nil
+	return ok.(int64) == 1, nil
 }
