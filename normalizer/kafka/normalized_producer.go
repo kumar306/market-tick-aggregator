@@ -28,12 +28,13 @@ func ProduceAsync(topic string, msg *constants.PipelineMessage, key, value []byt
 			metrics.Normalizer_ProducerPublishErrorsTotal.WithLabelValues(topic).Inc()
 		} else {
 			logger.Log.Info("Published record to kafka topic", "name", msg.Exchange, "channel", msg.Channel, "topic", topic)
+
+			// mark the record for commit.
+			client.MarkCommitRecords(msg.Record)
+
 			metrics.Normalizer_ProducerPublishesTotal.WithLabelValues(topic).Inc()
 			latency := time.Since(start).Seconds()
 			metrics.Normalizer_ProducerLatencySeconds.WithLabelValues(topic).Observe(latency)
 		}
 	})
-
-	// mark the record for commit.
-	client.MarkCommitRecords(msg.Record)
 }

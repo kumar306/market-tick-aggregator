@@ -11,6 +11,11 @@ kafka:
   consumer_group: normalizer-group-1
   max_buffer_records: 5000
   commit_offset_interval_millis: 5000
+  backpressure:
+    queue_usage_high_threshold: 0.8
+    queue_usage_low_threshold: 0.4
+    threshold_active_millis: 5000
+    cooldown_time_millis: 5000
 
 worker_count: 16
 redis_ttl_minutes: 15

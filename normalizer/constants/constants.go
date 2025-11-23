@@ -13,11 +13,19 @@ type Config struct {
 }
 
 type KafkaConfig struct {
-	Brokers                    []string `yaml:"brokers"`
-	Topics                     []string `yaml:"topics"`
-	ConsumerGroup              string   `yaml:"consumer_group"`
-	MaxBufferRecords           int      `yaml:"max_buffer_records"`
-	CommitOffsetIntervalMillis int      `yaml:"commit_offset_interval_ms"`
+	Brokers                    []string            `yaml:"brokers"`
+	Topics                     []string            `yaml:"topics"`
+	ConsumerGroup              string              `yaml:"consumer_group"`
+	MaxBufferRecords           int                 `yaml:"max_buffer_records"`
+	CommitOffsetIntervalMillis int                 `yaml:"commit_offset_interval_ms"`
+	BackpressureConfig         *BackpressureConfig `yaml:"backpressure"`
+}
+
+type BackpressureConfig struct {
+	QueueUsageHighThreshold float64 `yaml:"queue_usage_high_threshold"`
+	QueueUsageLowThreshold  float64 `yaml:"queue_usage_low_threshold"`
+	ThresholdActiveMillis   int     `yaml:"threshold_active_millis"`
+	CooldownTimeMillis      int     `yaml:"cooldown_time_millis"`
 }
 
 type Header struct {

@@ -148,6 +148,12 @@ var (
 		[]string{"worker_id"},
 	)
 
+	Normalizer_PausedPartitions = NewGaugeVec(
+		"worker_paused_partitions",
+		"Metric to track partitions paused",
+		[]string{"worker_id"},
+	)
+
 	Normalizer_WorkerQueueUsage = NewGaugeVec(
 		"worker_queue_usage",
 		"Size/capacity of the dispatcher to worker channel",

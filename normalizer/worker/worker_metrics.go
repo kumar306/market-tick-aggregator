@@ -6,8 +6,31 @@ import (
 	"shared/logger"
 	"shared/metrics"
 	"strconv"
+	"sync"
 	"time"
 )
+
+type WorkerQueueUsage struct {
+	mu sync.RWMutex
+	m  map[int]float64
+}
+
+var WorkerQueueUsageHandler *WorkerQueueUsage = &WorkerQueueUsage{
+	m: make(map[int]float64),
+}
+
+func (w *WorkerQueueUsage) GetQueueUsage(workerId int) float64 {
+	w.mu.RLock()
+	val := w.m[workerId]
+	w.mu.RUnlock()
+	return val
+}
+
+func (w *WorkerQueueUsage) SetQueueUsage(workerId int, usage float64) {
+	w.mu.Lock()
+	w.m[workerId] = usage
+	w.mu.Unlock()
+}
 
 func StartWorkerMetrics(ctx context.Context, channelPool []chan *constants.DispatchRecord) {
 
@@ -25,9 +48,9 @@ func StartWorkerMetrics(ctx context.Context, channelPool []chan *constants.Dispa
 				metrics.Normalizer_WorkerQueueSize.WithLabelValues(
 					strconv.Itoa(workerID)).Set(
 					float64(len(ch)))
+				WorkerQueueUsageHandler.SetQueueUsage(workerID, float64(len(ch))/float64(cap(ch)))
 				metrics.Normalizer_WorkerQueueUsage.WithLabelValues(
-					strconv.Itoa(workerID)).Set(
-					float64(len(ch)) / float64(cap(ch)))
+					strconv.Itoa(workerID)).Set(WorkerQueueUsageHandler.GetQueueUsage(workerID))
 			}
 		}
 	}
