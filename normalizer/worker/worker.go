@@ -128,7 +128,7 @@ func ProcessBuffer(ctx context.Context,
 
 		metrics.Normalizer_NormalizedMessagesTotal.WithLabelValues(msg.Exchange, msg.Channel, msg.Symbol).Inc()
 
-		publisher.Publish(protoStream, partitionKey, msg)
+		publisher.Publish(ctx, protoStream, partitionKey, msg)
 
 		// ack and update symbol state - by update strategy of orderer
 		// if worker crashes mid flush, it will resume from crash point

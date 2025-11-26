@@ -17,13 +17,13 @@ func OffsetCommitter(ctx context.Context, gapMillis int, topics []string) {
 		select {
 		case <-ctx.Done():
 			logger.Log.Info("Received context done.. shutting down kafka commit loop")
-			if err := client.CommitMarkedOffsets(context.Background()); err != nil {
+			if err := Client.CommitMarkedOffsets(context.Background()); err != nil {
 				logger.Log.Error("Final commit failed", "error", err)
 			}
 			return
 		case <-ticker.C:
 			start := time.Now()
-			err := client.CommitMarkedOffsets(context.Background())
+			err := Client.CommitMarkedOffsets(context.Background())
 			if err != nil {
 				logger.Log.Error("CommitMarkedOffsets failed", "error", err)
 				metrics.Normalizer_CommitOffsetErrorsTotal.Inc()

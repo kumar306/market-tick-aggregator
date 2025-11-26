@@ -1,6 +1,7 @@
 package constants
 
 import (
+	"context"
 	"time"
 
 	"github.com/twmb/franz-go/pkg/kgo"
@@ -18,7 +19,15 @@ type KafkaConfig struct {
 	ConsumerGroup              string              `yaml:"consumer_group"`
 	MaxBufferRecords           int                 `yaml:"max_buffer_records"`
 	CommitOffsetIntervalMillis int                 `yaml:"commit_offset_interval_ms"`
+	CBReqCount                 int                 `yaml:"cb_req_count"`
+	CBTimeoutMillis            int                 `yaml:"cb_timeout_millis"`
+	CBConsecutiveFailures      int                 `yaml:"cb_consecutive_failures"`
 	BackpressureConfig         *BackpressureConfig `yaml:"backpressure"`
+	CBProducerErrorBufferSize  int                 `yaml:"cb_producer_error_buffer_size"`
+	WALPath                    string              `yaml:"wal_path"`
+	WALMaxEntries              int64               `yaml:"wal_max_entries"`
+	WALBackpressureThreshold   float64             `yaml:"wal_backpressure_threshold"`
+	WALCooldownTimeMillis      int                 `yaml:"wal_cooldown_time_millis"`
 }
 
 type BackpressureConfig struct {
@@ -141,7 +150,7 @@ type OrdererStrategy interface {
 
 // publishes to downstream topic based on channel type
 type PublisherStrategy interface {
-	Publish(raw []byte, partitionKey string, msg *PipelineMessage)
+	Publish(ctx context.Context, raw []byte, partitionKey string, msg *PipelineMessage)
 	// fetch its publish topic
 	PublishTopic() string
 }

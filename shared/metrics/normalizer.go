@@ -208,4 +208,20 @@ var (
 		"Number of redis circuit breaker state changes",
 		[]string{"to"},
 	)
+
+	Normalizer_KafkaCB_StateChanges = NewCounterVec(
+		"kafka_cb_state_changes",
+		"Number of kafka circuit breaker state changes",
+		[]string{"to"},
+	)
+
+	Normalizer_KafkaCB_State = NewGauge(
+		"kafka_cb_state",
+		"Current kafka circuit breaker state",
+	)
+
+	Normalizer_KafkaCB_FallbacksTotal = NewCounter(
+		"kafka_cb_fallbacks_total",
+		"Number of kafka produce fallbacks when circuit in open state",
+	)
 )

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"market-normalizer/backpressure"
 	"market-normalizer/config"
 	"market-normalizer/constants"
 	"market-normalizer/dedupe"
@@ -35,17 +36,23 @@ func main() {
 		os.Exit(1)
 	}
 
+	_, err = kafka.NewWAL(cfg.KafkaConfig)
+	if err != nil {
+		logger.Log.Error("Failed to initialise WAL. Stopping main()", "err", err)
+		os.Exit(1)
+	}
+
 	InitPipelineRegistries()
 
 	// init redis for dedupe in pipeline
 	dedupe.InitRedis(cfg.RedisConfig)
 
-	// consumer init
-	client := kafka.Init(cfg.KafkaConfig)
-	defer kafka.Close()
-
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	// consumer init
+	client := kafka.Init(ctx, cfg.KafkaConfig)
+	defer kafka.Close()
 
 	// detect consumer lag for backpressure alert
 	go kafka.KafkaConsumerMetrics(ctx, cfg.KafkaConfig.Topics)
@@ -65,11 +72,17 @@ func main() {
 	// start offset committer
 	go kafka.OffsetCommitter(ctx, cfg.KafkaConfig.CommitOffsetIntervalMillis, cfg.KafkaConfig.Topics)
 
+	// kafka publish circuit breaker
+	go kafka.MonitorKafkaBreakerState(ctx)
+
 	// start the consumer loop
 	go kafka.ConsumerLoop(ctx, client, dispatchChannel)
 
 	// metrics goroutine for worker ingestion
 	go worker.StartWorkerMetrics(ctx, channelPool)
+
+	// start backpressure controller
+	go backpressure.BackpressureController(ctx, kafka.Client, channelPool, cfg.KafkaConfig.BackpressureConfig)
 
 	// wait until SIGTERM
 	<-ctx.Done()

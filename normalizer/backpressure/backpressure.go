@@ -25,7 +25,6 @@ type WorkerTime struct {
 func BackpressureController(ctx context.Context,
 	client *kgo.Client,
 	channelPool []chan *constants.DispatchRecord,
-	workerPartitionMap map[int]map[string]map[int32]bool,
 	backpressureConfig *constants.BackpressureConfig) {
 	ticker := time.NewTicker(1 * time.Second)
 
