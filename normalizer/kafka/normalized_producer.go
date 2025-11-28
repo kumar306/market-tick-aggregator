@@ -2,7 +2,6 @@ package kafka
 
 import (
 	"context"
-	"errors"
 	"market-normalizer/constants"
 	"shared/logger"
 	"shared/metrics"
@@ -14,9 +13,12 @@ import (
 
 func ProduceAsync(ctx context.Context, topic string, msg *constants.PipelineMessage, key, value []byte) {
 
-	if kafkaBreaker.State() == gobreaker.StateOpen {
+	if KafkaBreaker.State() == gobreaker.StateOpen {
 		// fallback - persist to a disk backed file
-		if err := wal.Append(topic, key, value); err != nil {
+		metrics.Normalizer_KafkaCB_FallbacksTotal.Inc()
+		logger.Log.Warn("Kafka normalizer produce skipped as circuit breaker - OPEN state")
+
+		if err := Wal.Append(topic, msg, key, value); err != nil {
 			logger.Log.Error("Error in WAL append", "err", err)
 		}
 
@@ -67,14 +69,10 @@ func MonitorKafkaBreakerState(ctx context.Context) {
 			logger.Log.Info("Received ctx done.. shutting down kafka circuit breaker loop")
 			return
 		case err := <-producerErrors:
-			_, execErr := kafkaBreaker.Execute(func() (interface{}, error) {
+
+			KafkaBreaker.Execute(func() (interface{}, error) {
 				return nil, err
 			})
-
-			if errors.Is(execErr, gobreaker.ErrOpenState) || errors.Is(execErr, gobreaker.ErrTooManyRequests) {
-				metrics.Normalizer_KafkaCB_FallbacksTotal.Inc()
-				logger.Log.Warn("Kafka normalizer produce skipped as circuit breaker - OPEN state", "err", execErr)
-			}
 		}
 	}
 }

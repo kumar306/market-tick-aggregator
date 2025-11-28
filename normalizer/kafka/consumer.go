@@ -2,6 +2,7 @@ package kafka
 
 import (
 	"context"
+	"fmt"
 	"market-normalizer/constants"
 	"os"
 	"shared/logger"
@@ -24,9 +25,10 @@ var (
 	Client         *kgo.Client
 	adm            *kadm.Client
 	once           sync.Once
-	kafkaBreaker   *gobreaker.CircuitBreaker
+	KafkaBreaker   *gobreaker.CircuitBreaker
 	producerErrors chan error
 	replayLock     sync.RWMutex
+	ReplayDone     chan struct{}
 )
 
 // todo: take care of partition rebalancing upon revocation/allocation/consumer group modification
@@ -43,27 +45,28 @@ func Init(ctx context.Context, cfg *constants.KafkaConfig) *kgo.Client {
 
 		Client = client
 
-		if err != nil || client == nil {
+		if err != nil || Client == nil {
 			logger.Log.Error("Error in creating kafka consumer. Returning", "error", err)
 			os.Exit(1)
 		}
 
-		err = client.Ping(ctx)
+		err = Client.Ping(ctx)
 		if err != nil {
 			logger.Log.Error("Error in pinging from kafka consumer. Returning", "error", err)
 		}
 
-		adm = kadm.NewClient(client)
+		adm = kadm.NewClient(Client)
 
-		kafkaBreaker = gobreaker.NewCircuitBreaker(gobreaker.Settings{
-			Name:    "kafka-circuit-breaker",
-			Timeout: time.Duration(cfg.CBTimeoutMillis) * time.Millisecond,
+		KafkaBreaker = gobreaker.NewCircuitBreaker(gobreaker.Settings{
+			Name:        "kafka-circuit-breaker",
+			Timeout:     time.Duration(cfg.CBTimeoutMillis) * time.Millisecond,
+			MaxRequests: 0,
 			ReadyToTrip: func(counts gobreaker.Counts) bool {
 				if counts.Requests < uint32(cfg.CBReqCount) {
 					return false
 				}
 
-				return counts.ConsecutiveFailures == uint32(cfg.CBConsecutiveFailures)
+				return counts.ConsecutiveFailures >= uint32(cfg.CBConsecutiveFailures)
 			},
 			OnStateChange: func(name string, from, to gobreaker.State) {
 				logger.Log.Warn("Kafka circuit breaker state change", "name", name, "from", from.String(), "to", to.String())
@@ -72,8 +75,13 @@ func Init(ctx context.Context, cfg *constants.KafkaConfig) *kgo.Client {
 
 				if to == gobreaker.StateClosed {
 					logger.Log.Info("State changed to closed. Replaying WAL if messages exists")
+					errorChan := make(chan error, 1)
+
+					if ReplayDone == nil {
+						ReplayDone = make(chan struct{})
+					}
+
 					go func() {
-						errorChan := make(chan error, 1)
 
 						// to ensure all workers wait until the wal buffer is flushed
 						replayLock.Lock()
@@ -82,13 +90,13 @@ func Init(ctx context.Context, cfg *constants.KafkaConfig) *kgo.Client {
 						flushCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 						defer cancel()
 
-						if err := client.Flush(flushCtx); err != nil {
+						if err := Client.Flush(flushCtx); err != nil {
 							// error occurred when flushing the just queued entries. kafka clearly not healthy. so dont replay
-							logger.Log.Error("Error occurred when flushing entries before replay. Stopping replay")
+							logger.Log.Error("Error occurred when flushing entries before replay. Stopping replay", "err", err)
 							return
 						}
 
-						wal.Replay(func(entry WALEntry) error {
+						Wal.Replay(func(entry WALEntry) error {
 
 							rec := &kgo.Record{
 								Key:   entry.Key,
@@ -96,16 +104,21 @@ func Init(ctx context.Context, cfg *constants.KafkaConfig) *kgo.Client {
 								Topic: entry.Topic,
 							}
 
-							client.Produce(ctx, rec, func(r *kgo.Record, err error) {
+							Client.Produce(ctx, rec, func(r *kgo.Record, err error) {
 								if err != nil {
 									errorChan <- err
 								} else {
 									errorChan <- nil
+									Client.MarkCommitRecords(entry.Msg.Record)
 								}
 							})
 
 							return <-errorChan
 						})
+
+						logger.Log.Info("onstatechange: closing ReplayDone", "addr", fmt.Sprintf("%p", ReplayDone), "value", ReplayDone)
+						close(ReplayDone)
+
 					}()
 				}
 			},

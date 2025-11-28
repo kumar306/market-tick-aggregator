@@ -2,7 +2,7 @@ package metrics
 
 import "github.com/prometheus/client_golang/prometheus"
 
-var Registry prometheus.Registry
+var Registry prometheus.Registry = *prometheus.NewRegistry()
 
 func NewCounter(name, help string) prometheus.Counter {
 	counter := prometheus.NewCounter(prometheus.CounterOpts{

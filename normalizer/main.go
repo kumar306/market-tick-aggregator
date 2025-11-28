@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/signal"
 	"shared/logger"
+	"shared/metrics"
 	"syscall"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -26,6 +27,8 @@ import (
 func main() {
 
 	logger.Log.Info("Normalizer starting...")
+
+	metrics.InitNormalizerMetrics()
 
 	go exposeMetrics()
 

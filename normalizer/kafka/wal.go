@@ -13,10 +13,11 @@ import (
 // simple log file which is filled up in the event of failed kafka produce (kafka down, network partition, auth error)
 // fill this log file up and later replay from it to downstream. maintain dedupe in aggregator too.
 type WALEntry struct {
-	Ts    int64  `json:"ts"`
-	Topic string `json:"topic"`
-	Key   []byte `json:"key"`
-	Value []byte `json:"value"`
+	Ts    int64                      `json:"ts"`
+	Topic string                     `json:"topic"`
+	Key   []byte                     `json:"key"`
+	Value []byte                     `json:"value"`
+	Msg   *constants.PipelineMessage `json:"msg"`
 }
 
 type WAL struct {
@@ -32,16 +33,16 @@ type WAL struct {
 }
 
 var (
-	wal *WAL
+	Wal *WAL
 )
 
 func NewWAL(cfg *constants.KafkaConfig) (*WAL, error) {
-	f, err := os.OpenFile(cfg.WALPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(cfg.WALPath, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0644)
 	if err != nil {
 		return nil, err
 	}
 
-	wal = &WAL{
+	Wal = &WAL{
 		file:               f,
 		path:               cfg.WALPath,
 		maxEntries:         cfg.WALMaxEntries,
@@ -51,13 +52,15 @@ func NewWAL(cfg *constants.KafkaConfig) (*WAL, error) {
 		topics:             cfg.Topics,
 	}
 
-	return wal, nil
+	return Wal, nil
 }
 
 // this takes the message, creates an entry and appends it to the file
-func (w *WAL) Append(topic string, key, value []byte) error {
+func (w *WAL) Append(topic string, msg *constants.PipelineMessage, key, value []byte) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+
+	logger.Log.Info("Ready to append record to WAL", "entryCount", w.entryCount+1, "topic", topic, "key", string(key), "exchange", msg.Exchange, "channel", msg.Channel, "symbol", msg.Symbol)
 
 	if w.entryCount >= w.maxEntries {
 		return logger.LogAndWrap("WAL entry count >= Max entries", nil, "entryCount", w.entryCount, "maxEntries", w.maxEntries)
@@ -77,6 +80,7 @@ func (w *WAL) Append(topic string, key, value []byte) error {
 		Topic: topic,
 		Key:   key,
 		Value: value,
+		Msg:   msg,
 	}
 
 	b, err := json.Marshal(entry)
@@ -97,6 +101,8 @@ func (w *WAL) Replay(handler func(entry WALEntry) error) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
+	logger.Log.Debug("Inside WAL Replay(entry) method")
+
 	w.writer.Flush()
 	w.file.Close()
 
@@ -104,7 +110,6 @@ func (w *WAL) Replay(handler func(entry WALEntry) error) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
 
 	scanner := bufio.NewScanner(f)
 	var entries []WALEntry
@@ -114,6 +119,7 @@ func (w *WAL) Replay(handler func(entry WALEntry) error) error {
 		if err := json.Unmarshal(scanner.Bytes(), &e); err != nil {
 			continue
 		}
+		logger.Log.Info("Read entry from WAL", "entry", e)
 		entries = append(entries, e)
 	}
 
@@ -135,17 +141,20 @@ func (w *WAL) Replay(handler func(entry WALEntry) error) error {
 	return w.RewriteWAL(nil)
 }
 
-// create a .tmp file, write the entries into this file and rename to my original file
+// rewrite the failed entries if exists into this file
 // in the case my wal replay failed in the middle, i dont want to replay already processed entries
 func (w *WAL) RewriteWAL(entries []WALEntry) error {
-	tmpPath := w.path + ".tmp"
-	tmpFile, err := os.OpenFile(tmpPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	logger.Log.Info("Starting Rewrite WAL")
+
+	w.Close()
+
+	f, err := os.OpenFile(w.path, os.O_TRUNC|os.O_APPEND|os.O_RDWR, 0644)
 	if err != nil {
 		return err
 	}
-	defer tmpFile.Close()
 
-	writer := bufio.NewWriter(tmpFile)
+	writer := bufio.NewWriter(f)
+
 	for _, entry := range entries {
 		b, err := json.Marshal(entry)
 		if err != nil {
@@ -158,17 +167,11 @@ func (w *WAL) RewriteWAL(entries []WALEntry) error {
 		return err
 	}
 
-	if err := os.Rename(tmpPath, w.path); err != nil {
-		return err
-	}
-
-	w.file, err = os.OpenFile(w.path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return err
-	}
-
-	w.writer = bufio.NewWriter(w.file)
+	w.file = f
+	w.writer = writer
 	w.entryCount = int64(len(entries))
+
+	logger.Log.Info("Exiting Rewrite WAL")
 
 	return nil
 }

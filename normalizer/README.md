@@ -1,23 +1,9 @@
-// creating the symbol state. at init: just the pluggable objects are configured.
-	// first need to determine what kind of orderer
-	// getOrderer(exchange, channel) -> returns Orderer
-	// BinanceAggTradeOrderer extends TimeOrderer
-	// BinanceAggTradeOrderer (its keys to retrieve time - time orderer) - E
-	// BinanceL2Orderer (diff keys to retrieve seq number - we fetch u so its seq order) - u
-	// CoinbaseTickerOrderer (seq number present - sequence), CoinbaseL2Orderer (timestamp - time field of l2 update)
-	// KrakenTickerOrderer - no time field present, KrakenBookOrderer - timestamp field present
-	// Each feed, channel has time/sequence ordering and its ways to extract the sequence number/timestamp
+proto command for my reference: protoc --go_out=. .\proto\*.proto
 
-	// convert to raw struct - get the raw struct converter strategy - and get the seq out. set symbol state set the last seq id as well
-	// DETERMINE WHAT ordering to use: getConverter(exchange, channel)
-	// BinanceAggTradeConverter, BinanceL2Converter, CoinbaseTickerConverter, CoinbaseDepthConverter, KrakenTickerConverter, KrakenBookConverter
-	// one of the above is returned
+test plan:
 
-	// the orderer strategy. start the deadline if dropped. update lastseqID to current processed seqID
-	// orderer - sequenceorderer (coinbase ticker+book, binance book) / timestamporderer (binance ticker, kraken book) / nooporderer (kraken ticker has no time field)
-	// whatever is returned from orderer strategy - []T
-	// its passed into protobuf normalizer strategy -
-	// passed into publisher strategy (normalized_tickers vs normalized_l2)
-
-	protoc command for compiling in normalizer path:
-	protoc --go_out=. .\proto\*.proto
+wal tests:
+1. first need to somehow make the breaker in open state. then need to test that append works and only append happens. 
+2. need to toggle the breaker to open. then make it closed and then the replay triggers. so i need to ensure the downstream produce happened. and the file is cleared. 
+3. mock a error for the 3rd or 4th record processing out of 10 records. then need to ensure the new file contains the 4th to 10th record. 
+4. test for new message to enter the pipeline at the same time replay is happening and it is blocked until the replay is done (testing replayLock)

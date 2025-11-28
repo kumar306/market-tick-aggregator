@@ -121,7 +121,7 @@ type PipelineMessage struct {
 	SeqId      int64
 	Ts         int64 // ts in unix nano
 	RawMessage interface{}
-	Record     *kgo.Record
+	Record     *kgo.Record `json:"record"`
 	EventType  string
 }
 

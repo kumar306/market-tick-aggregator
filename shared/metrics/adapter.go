@@ -1,6 +1,26 @@
 package metrics
 
+import "github.com/prometheus/client_golang/prometheus"
+
 var (
+	Adapter_BuildInfo            *prometheus.GaugeVec
+	Adapter_AppShutdowns         prometheus.Counter
+	Adapter_AppStarts            prometheus.Counter
+	Adapter_FeedConnections      *prometheus.CounterVec
+	Adapter_FeedErrors           *prometheus.CounterVec
+	Adapter_SupervisorCount      prometheus.Gauge
+	Adapter_SupervisorGoroutines *prometheus.GaugeVec
+	Adapter_LastPongTimes        *prometheus.GaugeVec
+
+	// ring buffer metrics
+	Adapter_BufferCapacity   *prometheus.GaugeVec
+	Adapter_BufferLen        *prometheus.GaugeVec
+	Adapter_BufferDrops      *prometheus.CounterVec
+	Adapter_KafkaPublishes   *prometheus.CounterVec
+	Adapter_NormalizerErrors *prometheus.CounterVec
+)
+
+func InitAdapterMetrics() {
 	Adapter_BuildInfo = NewGaugeVec("build_info",
 		"Build Info with Version and Commit SHA",
 		[]string{"version", "commit"})
@@ -50,4 +70,4 @@ var (
 	Adapter_NormalizerErrors = NewCounterVec("normalizer_errors",
 		"Normalizer errors per stream",
 		[]string{"stream"})
-)
+}

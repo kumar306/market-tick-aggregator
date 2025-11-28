@@ -5,6 +5,61 @@ import "github.com/prometheus/client_golang/prometheus"
 var (
 
 	// consumer metrics
+	Normalizer_ConsumerMessagesTotal *prometheus.GaugeVec
+	Normalizer_ConsumerLag           *prometheus.GaugeVec
+	Normalizer_ConsumerErrorsTotal   *prometheus.CounterVec
+
+	// dedupe metrics
+	Normalizer_DedupeChecksTotal      *prometheus.CounterVec
+	Normalizer_DedupeHitsTotal        *prometheus.CounterVec
+	Normalizer_DedupeErrorsTotal      *prometheus.CounterVec
+	Normalizer_RedisCB_FallbacksTotal prometheus.Counter
+	Normalizer_RedisCB_State          prometheus.Gauge
+	Normalizer_DedupeStoreErrorsTotal *prometheus.CounterVec
+	Normalizer_DedupeLatencySeconds   *prometheus.HistogramVec
+
+	// orderer metrics
+	Normalizer_BufferSize         *prometheus.GaugeVec
+	Normalizer_BufferFlushesTotal *prometheus.CounterVec
+	Normalizer_BufferFlushLatency *prometheus.HistogramVec
+	Normalizer_DroppedTimerTotal  *prometheus.CounterVec
+
+	// publisher metrics
+	Normalizer_ProducerPublishesTotal     *prometheus.CounterVec
+	Normalizer_ProducerPublishErrorsTotal *prometheus.CounterVec
+	Normalizer_ProducerQueueSize          *prometheus.GaugeVec
+
+	// producer lag
+	Normalizer_ProducerLatencySeconds  *prometheus.HistogramVec
+	Normalizer_CommitOffsetsTotal      *prometheus.GaugeVec
+	Normalizer_CommitOffsetErrorsTotal prometheus.Counter
+
+	// commit lag
+	Normalizer_CommitLatencySeconds prometheus.Histogram
+
+	// worker metrics
+	Normalizer_NormalizedMessagesTotal      *prometheus.CounterVec
+	Normalizer_NormalizedMessageErrorsTotal *prometheus.CounterVec
+	Normalizer_OrdererErrorsTotal           *prometheus.CounterVec
+	Normalizer_WorkerQueueSize              *prometheus.GaugeVec
+	Normalizer_PausedPartitions             *prometheus.GaugeVec
+	Normalizer_WorkerQueueUsage             *prometheus.GaugeVec
+	Normalizer_WorkerLatencySeconds         *prometheus.HistogramVec
+	Normalizer_WorkerCrashesTotal           *prometheus.CounterVec
+	Normalizer_WorkerProcessedMessagesTotal *prometheus.CounterVec
+
+	// if kafka saturated or redis overloaded - for circuit breaker
+	Normalizer_BackpressureTriggeredTotal *prometheus.CounterVec
+
+	// circuit breaker state change metrics
+	Normalizer_RedisCB_StateChanges   *prometheus.CounterVec
+	Normalizer_KafkaCB_StateChanges   *prometheus.CounterVec
+	Normalizer_KafkaCB_State          prometheus.Gauge
+	Normalizer_KafkaCB_FallbacksTotal prometheus.Counter
+)
+
+func InitNormalizerMetrics() {
+	// consumer metrics
 	Normalizer_ConsumerMessagesTotal = NewGaugeVec(
 		"consumer_messages_total",
 		"Number of messages read from the consumer",
@@ -224,4 +279,4 @@ var (
 		"kafka_cb_fallbacks_total",
 		"Number of kafka produce fallbacks when circuit in open state",
 	)
-)
+}

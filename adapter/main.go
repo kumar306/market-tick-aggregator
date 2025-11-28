@@ -25,6 +25,8 @@ import (
 // start feeds
 func main() {
 
+	metrics.InitAdapterMetrics()
+
 	// register the feed factories
 	go registerFeedFactories()
 
