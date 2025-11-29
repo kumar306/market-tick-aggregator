@@ -33,7 +33,10 @@ type WAL struct {
 }
 
 var (
-	Wal *WAL
+	Wal                     *WAL
+	ReplayFailureHookRecord int
+	ReplayFailureHook       func(int) error
+	ReplayStartedHook       func()
 )
 
 func NewWAL(cfg *constants.KafkaConfig) (*WAL, error) {
@@ -97,9 +100,13 @@ func (w *WAL) Append(topic string, msg *constants.PipelineMessage, key, value []
 }
 
 // to replay the entries from wal file upon circuit closed
-func (w *WAL) Replay(handler func(entry WALEntry) error) error {
+func (w *WAL) Replay(handler func(idx int, entry WALEntry) error) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+
+	if ReplayStartedHook != nil {
+		ReplayStartedHook()
+	}
 
 	logger.Log.Debug("Inside WAL Replay(entry) method")
 
@@ -124,8 +131,9 @@ func (w *WAL) Replay(handler func(entry WALEntry) error) error {
 	}
 
 	entriesProcessed := 0
-	for _, entry := range entries {
-		if err := handler(entry); err != nil {
+	for i, entry := range entries {
+
+		if err := handler(i, entry); err != nil {
 			logger.Log.Error("Error occurred in WAL Replay", "err", err)
 			// rewrite wal with the new entries starting from where error came
 			remaining := entries[entriesProcessed:]

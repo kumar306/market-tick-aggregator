@@ -16,19 +16,16 @@ import (
 	"github.com/twmb/franz-go/pkg/kgo"
 )
 
-type ProduceCBResponse struct {
-	isError bool
-	err     error
-}
-
 var (
-	Client         *kgo.Client
-	adm            *kadm.Client
-	once           sync.Once
-	KafkaBreaker   *gobreaker.CircuitBreaker
-	producerErrors chan error
-	replayLock     sync.RWMutex
-	ReplayDone     chan struct{}
+	Client           *kgo.Client
+	adm              *kadm.Client
+	once             sync.Once
+	KafkaBreaker     *gobreaker.CircuitBreaker
+	producerErrors   chan error
+	replayLock       sync.RWMutex
+	ReplayDone       chan struct{}
+	ReplayStarted    chan struct{}
+	ProduceUnblocked chan struct{}
 )
 
 // todo: take care of partition rebalancing upon revocation/allocation/consumer group modification
@@ -96,7 +93,12 @@ func Init(ctx context.Context, cfg *constants.KafkaConfig) *kgo.Client {
 							return
 						}
 
-						Wal.Replay(func(entry WALEntry) error {
+						Wal.Replay(func(idx int, entry WALEntry) error {
+
+							// this hook used for testing only to simulate failure mid replay and test if processed records are truncated
+							if ReplayFailureHook != nil && idx == ReplayFailureHookRecord {
+								return ReplayFailureHook(idx)
+							}
 
 							rec := &kgo.Record{
 								Key:   entry.Key,
