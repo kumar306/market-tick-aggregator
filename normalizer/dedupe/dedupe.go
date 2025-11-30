@@ -19,7 +19,7 @@ import (
 // init redis
 var Rdb *redis.Client
 var Ttl time.Duration
-var redisBreaker *gobreaker.CircuitBreaker
+var RedisBreaker *gobreaker.CircuitBreaker
 var TestingHook func() error
 
 const (
@@ -35,7 +35,7 @@ func InitRedis(redisConfig *constants.RedisConfig) {
 	})
 	Ttl = time.Duration(redisConfig.TtlMinutes) * time.Minute
 
-	redisBreaker = gobreaker.NewCircuitBreaker(gobreaker.Settings{
+	RedisBreaker = gobreaker.NewCircuitBreaker(gobreaker.Settings{
 		Name: "redis-dedupe-breaker",
 		ReadyToTrip: func(counts gobreaker.Counts) bool {
 			if counts.Requests < redisConfig.CBReqCount {
@@ -62,12 +62,12 @@ func ConstructDedupeKey(exchange, channel, symbol string, orderingID string) str
 // set the dedupe key in redis with TTL
 func MarkForDedupe(ctx context.Context, key string) error {
 
-	// only during test - for mock dedupe
+	// only during test - for mock dedupe in worker pipeline
 	if TestingHook != nil {
 		return TestingHook()
 	}
 
-	ok, err := redisBreaker.Execute(func() (interface{}, error) {
+	ok, err := RedisBreaker.Execute(func() (interface{}, error) {
 		return Rdb.SetNX(ctx, key, 1, Ttl).Result()
 	})
 
@@ -98,7 +98,7 @@ func IsDuplicate(ctx context.Context, key string) (bool, error) {
 		return false, TestingHook()
 	}
 
-	ok, err := redisBreaker.Execute(func() (interface{}, error) {
+	ok, err := RedisBreaker.Execute(func() (interface{}, error) {
 		return Rdb.Exists(ctx, key).Result()
 	})
 
