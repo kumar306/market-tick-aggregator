@@ -21,7 +21,7 @@ func InitPublisherRegistry() {
 		constants.Book,
 	}
 
-	onceNormalizer.Do(func() {
+	oncePublisher.Do(func() {
 		for _, ch := range channels {
 			if err := RegisterPublisher(ch); err != nil {
 				logger.Log.Error("Failed to register publisher, shutting down", "channel", ch, "error", err)

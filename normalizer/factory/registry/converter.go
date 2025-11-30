@@ -63,7 +63,7 @@ func GetConverter(key string) (constants.ConverterStrategy, error) {
 		return &converter.BinanceDepthConverter{}, nil
 	case "coinbase:ticker":
 		return &converter.CoinbaseTickerConverter{}, nil
-	case "coinbase:l2":
+	case "coinbase:level2":
 		return &converter.CoinbaseLevel2Converter{}, nil
 	case "kraken:ticker":
 		return &converter.KrakenTickerConverter{}, nil

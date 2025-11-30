@@ -10,6 +10,7 @@ import (
 	"io"
 	"market-normalizer/constants"
 	"market-normalizer/kafka"
+	"market-normalizer/utils/kafkatest"
 	"os"
 	"runtime"
 	"shared/metrics"
@@ -20,8 +21,6 @@ import (
 	"github.com/sony/gobreaker"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
-	kf "github.com/testcontainers/testcontainers-go/modules/kafka"
-	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"
 )
 
@@ -137,81 +136,13 @@ func TestAppend(t *testing.T) {
 
 }
 
-// func to init kafka produce client out of testcontainers
-func initKafkaContainer(t *testing.T) (*kgo.Client, *kf.KafkaContainer) {
-	ctx := context.Background()
-
-	kafkaContainer, err := kf.Run(ctx,
-		"confluentinc/confluent-local:7.4.4",
-		kf.WithClusterID("123"))
-	require.NoError(t, err)
-
-	if err != nil {
-		t.Fatalf("Error in starting the kafka container: %v", err)
-	}
-
-	brokers, err := kafkaContainer.Brokers(ctx)
-	if err != nil || len(brokers) == 0 {
-		t.Fatalf("Error in fetching broker connections: %v", err)
-	}
-
-	// topics := []string{"binance.raw.ticks", "binance.raw.level2", "coinbase.raw.ticks",
-	// 	"coinbase.raw.level2", "kraken.raw.ticks", "kraken.raw.book"}
-	topics := []string{"normalized.ticks"}
-
-	cfg := &constants.KafkaConfig{
-		Brokers:               brokers,
-		Topics:                topics,
-		ConsumerGroup:         "normalizer-group-1",
-		MaxBufferRecords:      5000,
-		CBTimeoutMillis:       1000,
-		CBConsecutiveFailures: 2,
-		CBReqCount:            0,
-	}
-
-	client := kafka.Init(ctx, cfg)
-	if err != nil || client == nil {
-		t.Fatalf("Error in init kafka producer client: %v", err)
-	}
-
-	// create the topic with partitions and replication factor via kadm
-	adm := kadm.NewClient(client)
-
-	numPartitions := int32(3)
-	replicationFactor := int16(1)
-
-	_, err = adm.CreateTopics(ctx, numPartitions, replicationFactor, nil, topics...)
-	if err != nil {
-		t.Fatalf("Error in creating the test topic: %v", err)
-	}
-
-	// make sure client can consume from the topics - else timeout on poll
-	client.AddConsumeTopics(topics...)
-
-	deadline := time.Now().Add(10 * time.Second)
-	for {
-		metadata, _ := adm.Metadata(ctx, topics...)
-		t.Logf("Received metadata topics: %v", metadata.Topics.Names())
-		if len(metadata.Topics.Names()) > 0 {
-			t.Logf("Client ready to consume from topics")
-			break
-		}
-
-		if time.Now().After(deadline) {
-			t.Fatalf("Client timed out waiting for topic metadata")
-		}
-	}
-
-	return client, kafkaContainer
-}
-
 // need to toggle the breaker to open. do some appends. then make it closed and then the replay triggers.
 // need to ensure the downstream produce happened. and the file is cleared.
 func TestReplay(t *testing.T) {
 
 	metrics.InitNormalizerMetrics()
 
-	_, kafkaContainer := initKafkaContainer(t)
+	_, kafkaContainer := kafkatest.InitKafkaContainer(t)
 	defer func() {
 		if err := testcontainers.TerminateContainer(kafkaContainer); err != nil {
 			t.Fatalf("Error in terminating the kafka container: %v", err)
@@ -353,7 +284,7 @@ func TestReplay(t *testing.T) {
 func TestReplayError(t *testing.T) {
 	metrics.InitNormalizerMetrics()
 
-	_, kafkaContainer := initKafkaContainer(t)
+	_, kafkaContainer := kafkatest.InitKafkaContainer(t)
 	defer func() {
 		if err := testcontainers.TerminateContainer(kafkaContainer); err != nil {
 			t.Fatalf("Error in terminating the kafka container: %v", err)
@@ -473,7 +404,7 @@ func TestReplayError(t *testing.T) {
 func TestOrdering(t *testing.T) {
 	metrics.InitNormalizerMetrics()
 
-	_, kafkaContainer := initKafkaContainer(t)
+	_, kafkaContainer := kafkatest.InitKafkaContainer(t)
 	defer func() {
 		if err := testcontainers.TerminateContainer(kafkaContainer); err != nil {
 			t.Fatalf("Error in terminating the kafka container: %v", err)

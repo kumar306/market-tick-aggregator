@@ -16,6 +16,9 @@ import (
 	"github.com/twmb/franz-go/pkg/kgo"
 )
 
+var DispatchTestingHook func()
+var WorkerTestingHook func()
+
 // for controlled access to the worker partition map
 // written by dispatcher and read by backpressure controller
 type WorkerPartitionAssignments struct {
@@ -53,20 +56,15 @@ goroutine which reads from dispatch channel
 parses the top level information
 forwards to respective worker
 */
-func StartDispatcher(ctx context.Context, dispatchChannel <-chan *kgo.Record, channelPool []chan *constants.DispatchRecord, numWorkers int) {
+func StartDispatcher(ctx context.Context, dispatchChannel chan *kgo.Record, channelPool []chan *constants.DispatchRecord) {
 	for {
 		select {
 		case <-ctx.Done():
 			logger.Log.Info("Received context done. Stopping dispatcher")
 			return
 		case rec := <-dispatchChannel:
-			var symbol string
+			var symbol string = string(rec.Key)
 			var header constants.Header
-
-			if err := json.Unmarshal(rec.Key, &symbol); err != nil {
-				logger.Log.Error("Error in unmarshalling record key", "error", err)
-				continue
-			}
 
 			if err := json.Unmarshal(rec.Value, &header); err != nil {
 				logger.Log.Error("Error in unmarshalling record header fields", "error", err)
@@ -81,7 +79,7 @@ func StartDispatcher(ctx context.Context, dispatchChannel <-chan *kgo.Record, ch
 			hash.Write([]byte(dedupeKey))
 			sum := hash.Sum32()
 
-			shardKey := sum % uint32(numWorkers)
+			shardKey := sum % uint32(len(channelPool))
 
 			WorkerPartitionAssignmentsHandler.SetPartitionAssignments(int(shardKey), rec.Topic, rec.Partition)
 
@@ -94,6 +92,12 @@ func StartDispatcher(ctx context.Context, dispatchChannel <-chan *kgo.Record, ch
 				Channel:   header.Channel,
 				Symbol:    symbol,
 			}
+
+			// injected only in testing to signal done
+			if DispatchTestingHook != nil {
+				DispatchTestingHook()
+			}
+
 		}
 	}
 }
@@ -154,6 +158,11 @@ func StartWorkerPool(ctx context.Context, channelPool []chan *constants.Dispatch
 						workerLatency := time.Since(workerStartTime).Seconds()
 						metrics.Normalizer_WorkerLatencySeconds.WithLabelValues(strconv.Itoa(i)).Observe(workerLatency)
 						metrics.Normalizer_WorkerProcessedMessagesTotal.WithLabelValues(strconv.Itoa(i)).Inc()
+
+						// used only in tests
+						if WorkerTestingHook != nil {
+							WorkerTestingHook()
+						}
 					}
 				}
 			}

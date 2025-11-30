@@ -26,6 +26,7 @@ var (
 	ReplayDone       chan struct{}
 	ReplayStarted    chan struct{}
 	ProduceUnblocked chan struct{}
+	TestingHook      func()
 )
 
 // todo: take care of partition rebalancing upon revocation/allocation/consumer group modification

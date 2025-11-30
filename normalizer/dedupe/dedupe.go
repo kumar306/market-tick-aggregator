@@ -20,6 +20,7 @@ import (
 var Rdb *redis.Client
 var Ttl time.Duration
 var redisBreaker *gobreaker.CircuitBreaker
+var TestingHook func() error
 
 const (
 	REDIS_ADDR     string = "REDIS_ADDR"
@@ -61,6 +62,11 @@ func ConstructDedupeKey(exchange, channel, symbol string, orderingID string) str
 // set the dedupe key in redis with TTL
 func MarkForDedupe(ctx context.Context, key string) error {
 
+	// only during test - for mock dedupe
+	if TestingHook != nil {
+		return TestingHook()
+	}
+
 	ok, err := redisBreaker.Execute(func() (interface{}, error) {
 		return Rdb.SetNX(ctx, key, 1, Ttl).Result()
 	})
@@ -86,6 +92,12 @@ func MarkForDedupe(ctx context.Context, key string) error {
 }
 
 func IsDuplicate(ctx context.Context, key string) (bool, error) {
+
+	// only during test - for mock dedupe
+	if TestingHook != nil {
+		return false, TestingHook()
+	}
+
 	ok, err := redisBreaker.Execute(func() (interface{}, error) {
 		return Rdb.Exists(ctx, key).Result()
 	})

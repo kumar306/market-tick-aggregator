@@ -70,7 +70,7 @@ func main() {
 	dispatcher.StartWorkerPool(ctx, channelPool)
 
 	// setup dispatcher
-	go dispatcher.StartDispatcher(ctx, dispatchChannel, channelPool, cfg.WorkerCount)
+	go dispatcher.StartDispatcher(ctx, dispatchChannel, channelPool)
 
 	// start offset committer
 	go kafka.OffsetCommitter(ctx, cfg.KafkaConfig.CommitOffsetIntervalMillis, cfg.KafkaConfig.Topics)

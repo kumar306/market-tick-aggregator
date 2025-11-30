@@ -83,7 +83,7 @@ const (
 	Update                   string = "update"
 	Buy                      string = "buy"
 	Sell                     string = "sell"
-	NormalizedTickerTopic    string = "normalized.ticker"
+	NormalizedTickerTopic    string = "normalized.ticks"
 	NormalizedBookTopic      string = "normalized.book"
 )
 

@@ -13,7 +13,7 @@ import (
 // this prevents corruption of the orderer/buffer state
 type OrdererCtor func() constants.OrdererStrategy
 
-var ordererCtorRegistry = make(map[string]OrdererCtor)
+var OrdererCtorRegistry = make(map[string]OrdererCtor)
 var onceOrderer sync.Once
 
 func InitOrdererRegistry() {
@@ -53,7 +53,7 @@ func InitOrdererRegistry() {
 
 func GetRegisteredOrderer(exchange string, channel string) (constants.OrdererStrategy, error) {
 	key := strings.ToLower(exchange) + ":" + strings.ToLower(channel)
-	if v, ok := ordererCtorRegistry[key]; ok {
+	if v, ok := OrdererCtorRegistry[key]; ok {
 		return v(), nil
 	}
 
@@ -62,7 +62,7 @@ func GetRegisteredOrderer(exchange string, channel string) (constants.OrdererStr
 
 func RegisterOrdererCtor(exchange, channel string, ordererCtor OrdererCtor) error {
 	key := strings.ToLower(exchange) + ":" + strings.ToLower(channel)
-	ordererCtorRegistry[key] = ordererCtor
+	OrdererCtorRegistry[key] = ordererCtor
 	logger.Log.Info("Registered orderer constructor for key", "key", key)
 	return nil
 }
