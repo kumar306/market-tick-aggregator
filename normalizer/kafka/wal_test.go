@@ -142,7 +142,7 @@ func TestReplay(t *testing.T) {
 
 	metrics.InitNormalizerMetrics()
 
-	_, kafkaContainer := kafkatest.InitKafkaContainer(t)
+	_, kafkaContainer := kafkatest.InitKafkaContainer(t, []string{"normalized.ticks"})
 	defer func() {
 		if err := testcontainers.TerminateContainer(kafkaContainer); err != nil {
 			t.Fatalf("Error in terminating the kafka container: %v", err)
@@ -284,7 +284,7 @@ func TestReplay(t *testing.T) {
 func TestReplayError(t *testing.T) {
 	metrics.InitNormalizerMetrics()
 
-	_, kafkaContainer := kafkatest.InitKafkaContainer(t)
+	_, kafkaContainer := kafkatest.InitKafkaContainer(t, []string{"normalized.ticks"})
 	defer func() {
 		if err := testcontainers.TerminateContainer(kafkaContainer); err != nil {
 			t.Fatalf("Error in terminating the kafka container: %v", err)
@@ -404,7 +404,7 @@ func TestReplayError(t *testing.T) {
 func TestOrdering(t *testing.T) {
 	metrics.InitNormalizerMetrics()
 
-	_, kafkaContainer := kafkatest.InitKafkaContainer(t)
+	_, kafkaContainer := kafkatest.InitKafkaContainer(t, []string{"normalized.ticks"})
 	defer func() {
 		if err := testcontainers.TerminateContainer(kafkaContainer); err != nil {
 			t.Fatalf("Error in terminating the kafka container: %v", err)

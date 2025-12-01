@@ -44,7 +44,7 @@ func TestWorker(t *testing.T) {
 		wg.Done()
 	}
 
-	_, kafkaContainer := kafkatest.InitKafkaContainer(t)
+	_, kafkaContainer := kafkatest.InitKafkaContainer(t, []string{"normalized.ticks"})
 	defer func() {
 		if err := testcontainers.TerminateContainer(kafkaContainer); err != nil {
 			t.Fatalf("Error in terminating the kafka container: %v", err)

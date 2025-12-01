@@ -192,6 +192,11 @@ func ConsumerLoop(ctx context.Context, client *kgo.Client, dispatchChannel chan 
 			case <-ctx.Done():
 				return
 			}
+
+			if TestingHook != nil {
+				TestingHook()
+			}
+
 		})
 
 		fetches.EachError(func(topic string, partition int32, err error) {

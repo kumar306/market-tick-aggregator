@@ -14,7 +14,7 @@ import (
 )
 
 // func to init kafka produce client out of testcontainers
-func InitKafkaContainer(t *testing.T) (*kgo.Client, *kf.KafkaContainer) {
+func InitKafkaContainer(t *testing.T, topics []string) (*kgo.Client, *kf.KafkaContainer) {
 	ctx := context.Background()
 
 	kafkaContainer, err := kf.Run(ctx,
@@ -33,7 +33,6 @@ func InitKafkaContainer(t *testing.T) (*kgo.Client, *kf.KafkaContainer) {
 
 	// topics := []string{"binance.raw.ticks", "binance.raw.level2", "coinbase.raw.ticks",
 	// 	"coinbase.raw.level2", "kraken.raw.ticks", "kraken.raw.book"}
-	topics := []string{"normalized.ticks"}
 
 	cfg := &constants.KafkaConfig{
 		Brokers:               brokers,
