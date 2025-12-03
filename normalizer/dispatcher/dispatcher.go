@@ -38,11 +38,15 @@ func (w *WorkerPartitionAssignments) SetPartitionAssignments(workerId int, topic
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if _, ok := w.workerPartitionMap[workerId]; !ok {
+		logger.Log.Info("WorkerPartitionAssignments - Creating new worker map for worker id as it doesnt exist", "id", workerId)
 		w.workerPartitionMap[workerId] = make(map[string]map[int32]bool)
 	}
 	if _, ok := w.workerPartitionMap[workerId][topic]; !ok {
+		logger.Log.Info("WorkerPartitionAssignments - Creating new topic map for worker id as it doesnt exist", "id", workerId)
 		w.workerPartitionMap[workerId][topic] = make(map[int32]bool)
 	}
+
+	logger.Log.Info("WorkerPartitionAssignments - setting partition entry for worker", "id", workerId, "topic", topic, "partition", partition)
 	w.workerPartitionMap[workerId][topic][partition] = true
 
 }
@@ -105,11 +109,11 @@ func StartDispatcher(ctx context.Context, dispatchChannel chan *kgo.Record, chan
 /*
 method to create the worker channels
 */
-func CreateWorkerChannels(numWorkers int) []chan *constants.DispatchRecord {
+func CreateWorkerChannels(numWorkers int, chanSize int) []chan *constants.DispatchRecord {
 	var channelPool []chan *constants.DispatchRecord
 	for i := 0; i < numWorkers; i++ {
 		// bounded so it doesnt block
-		workerChannel := make(chan *constants.DispatchRecord, 1000)
+		workerChannel := make(chan *constants.DispatchRecord, chanSize)
 		channelPool = append(channelPool, workerChannel)
 	}
 	return channelPool

@@ -4,14 +4,13 @@ import (
 	"context"
 	"market-normalizer/constants"
 	"market-normalizer/dispatcher"
+	"market-normalizer/utils/kafkatest"
 	"market-normalizer/worker"
 	"shared/logger"
 	"shared/metrics"
 	"strconv"
 	"sync/atomic"
 	"time"
-
-	"github.com/twmb/franz-go/pkg/kgo"
 )
 
 type WorkerTime struct {
@@ -23,7 +22,7 @@ type WorkerTime struct {
 // track the metrics for worker queue usage and do the pause fetches here to slow down rate of consuming and let the system catch up
 // pause/resume as per metrics
 func BackpressureController(ctx context.Context,
-	client *kgo.Client,
+	client kafkatest.PauseResumer,
 	channelPool []chan *constants.DispatchRecord,
 	backpressureConfig *constants.BackpressureConfig) {
 	ticker := time.NewTicker(1 * time.Second)
@@ -53,7 +52,6 @@ func BackpressureController(ctx context.Context,
 				// if worker is not assigned a partition during temporary partition rebalance, this can occur so check it
 				parts := dispatcher.WorkerPartitionAssignmentsHandler.GetPartitionAssignments(workerId)
 				if len(parts) == 0 {
-					logger.Log.Info("No partitions present for the worker", "workerId", workerId)
 					continue
 				}
 
@@ -70,9 +68,13 @@ func BackpressureController(ctx context.Context,
 				// identify all the topics and partitions assigned to a worker and store in memory
 				if val >= backpressureConfig.QueueUsageHighThreshold {
 
+					logger.Log.Info("Queue usage is high for worker", "workerId", workerId, "usage", val)
+
 					if workerTimerMap[workerId].PauseActive {
 						continue
 					}
+
+					logger.Log.Info("Worker having high queue usage is not paused", "workerId", workerId)
 
 					if workerTimerMap[workerId].ThresholdStartTime == nil {
 						curTime := time.Now()
@@ -87,12 +89,13 @@ func BackpressureController(ctx context.Context,
 							constructPartitionMap(dispatcher.WorkerPartitionAssignmentsHandler.GetPartitionAssignments(workerId)))
 
 						metrics.Normalizer_PausedPartitions.WithLabelValues(strconv.Itoa(workerId)).Set(1.0)
-						logger.Log.Info("Pausing fetch partitions for worker", "worker", workerId)
+						logger.Log.Info("Backpressure - Pausing fetch partitions for worker", "worker", workerId)
 
 						workerTimerMap[workerId].PauseActive = true
 						workerTimerMap[workerId].CooldownActive.Store(true)
 
 						time.AfterFunc(time.Duration(backpressureConfig.CooldownTimeMillis)*time.Millisecond, func() {
+							logger.Log.Info("Backpressure - Cooldown completed for pause partitions", "worker", workerId)
 							workerTimerMap[workerId].CooldownActive.Store(false)
 						})
 					}

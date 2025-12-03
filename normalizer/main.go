@@ -64,7 +64,7 @@ func main() {
 	var dispatchChannel chan *kgo.Record = make(chan *kgo.Record, 1000)
 
 	// create the worker channels
-	channelPool := dispatcher.CreateWorkerChannels(cfg.WorkerCount)
+	channelPool := dispatcher.CreateWorkerChannels(cfg.WorkerCount, 1000)
 
 	// start worker pool
 	dispatcher.StartWorkerPool(ctx, channelPool)

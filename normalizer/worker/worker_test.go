@@ -31,7 +31,7 @@ func TestWorker(t *testing.T) {
 
 	ctx, _ := context.WithCancel(context.Background())
 	dispatchChannel := make(chan *kgo.Record, 1000)
-	workerChannels := dispatcher.CreateWorkerChannels(8)
+	workerChannels := dispatcher.CreateWorkerChannels(8, 1000)
 	dispatcher.StartWorkerPool(ctx, workerChannels)
 	go dispatcher.StartDispatcher(ctx, dispatchChannel, workerChannels)
 	wg := sync.WaitGroup{}
