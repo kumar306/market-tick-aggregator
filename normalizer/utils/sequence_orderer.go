@@ -45,8 +45,11 @@ func SequenceOrderer(
 		return []*constants.PipelineMessage{}, nil
 	}
 
+	lastSeqId := symbolState.LastSeqId
+	symbolState.LastSeqId = msg.SeqId
+
 	// get the last seqId -> msg seq id should be that + 1
-	if msg.SeqId > symbolState.LastSeqId+1 {
+	if msg.SeqId > lastSeqId+1 {
 		// dropped message. start timer
 		logger.Log.Warn("Detected a message drop")
 		symbolState.GapActive = true
