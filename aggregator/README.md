@@ -1,0 +1,52 @@
+metrics to be calculated:
+
+price and volume:
+
+1. vwap - 1m, 5m, 10m, 30m, 1h, 24h rolling, session vwap - used for benchmark algos, slippage measurement
+2. twap - used to measure distribution of orders
+3.1 rolling volume - 1m, 5m, 10m, 30m, 1h, 24h - to calculate liquidity
+3.2 volume acceleration (delta volume/delta time) 
+
+volatility and risk:
+
+1. volatility - welford algo - used for position sizing and stop placement - high volatility means we will buy less to manage our risk
+2. average true range (ATR) - high ATR means there is a high fluctuation of price so we will buy lesser, whereas low ATR means low fluctuation so we can confidently buy more
+
+trend and momentum:
+
+1. EMA/SMA - to track price trends. EMA is faster and more sensitive whereas SMA is slower and smoother. I will enter a trade when i know price has crossed the EMA
+2. returns - log returns, normal returns - it tells me the change in price for a candlestick period - by showing percentage gain or loss using end price and begin price for a period
+
+behaviour:
+
+1. maintain sets of windows each computing low latent stats, mid to long running stats
+2. some stats are tumbling (candlesticks), some are rolling (EMA, SMA)
+3. should be able to add new windows without modifying other windows logic
+4. should be able to add more metrics to a window without modifying the code for a window processing
+5. worker should remain stateless, his job is just to flush the windows on ticker. all symbols follow flush at same time. let the window handle the state. worker's job is to hold pointers to windows held for a symbol and he manages multiple symbols.
+on a tick arrival, worker maintains pointer to 6-8 windows for the tick symbol and updates all its windows. each window has its flush time - which triggers for all the symbols. 
+6. upon flush event, window state is read and persisted to kafka. if its a tumbling window, the state is reset. if its a rolling window, we will go with decayed window for metrics like EMA/SMA, volatility to take recent prices to have more priority rather than evicting - this is to keep compute fast. larger the window, smaller the alpha value. 1hour rolling window vs 2 hour rolling window - alpha is larger in the 1hour rolling window to make it more sensitive to newer data than the 2 hour window. for metrics like rolling volume, rolling vwap we will go with bucketed rolling. 
+7. window handles metrics - but the actual metric itself is intelligent. the window doesnt care how the metric is aggregated. we can have many different kind of metrics in a single window (EMA/VWAP/candlestick, etc) which follow different rolling/tumbling patterns.
+
+tick schema:
+AggregatedTick
+├── identity (exchange, channel, symbol)
+├── window metadata (duration, start, end, type)
+├── price-based metrics
+│   ├── ohlc
+│   ├── vwap
+│   ├── twap
+│   ├── microprice
+├── volume-based metrics
+│   ├── volume
+│   ├── rolling_volume
+│   ├── volume_acceleration
+├── volatility & risk
+│   ├── volatility
+│   ├── atr
+├── trend & momentum
+│   ├── ema
+│   ├── sma
+│   ├── log_return
+│   ├── simple_return
+└── extensibility (future)

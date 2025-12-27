@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+package aggregator;
+option go_package = "proto/generated";
+
+message AggregatedTick {
+    string exchange = 1;
+    string channel = 2;
+    string symbol = 3;
+    string window_id = 4; // 1m, 5m, 15m, 1h, etc
+    int64 start_ts_ms = 5;
+    int64 end_ts_ms = 6;
+    PriceMetrics price_metrics = 7;
+    VolumeMetrics volume_metrics = 8;
+    VolatilityMetrics volatility_metrics = 9;
+    TrendMetrics trend_metrics = 10;
+}
+
+message OHLC {
+    double open = 1;
+    double high = 2;
+    double low = 3;
+    double close = 4;
+}
+
+message PriceMetrics {
+    OHLC ohlc = 1;
+    double vwap = 2;
+    double rolling_vwap = 3;
+    double twap = 4;
+    double microprice = 5;
+}
+
+message VolumeMetrics {
+    double volume = 1;
+    double rolling_volume = 2;
+    double volume_acceleration = 3;
+}
+
+message VolatilityMetrics {
+    double volatility = 1;
+    double atr = 2;
+}
+
+message TrendMetrics {
+    double ema = 1;
+    double sma = 2;
+    double log_return = 3;
+    double simple_return = 4;
+}
