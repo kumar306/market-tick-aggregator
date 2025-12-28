@@ -19,51 +19,64 @@ window:
   - id: 5s
     duration_ms: 5000
     flush_cadency_ms: 1000
+    bucket_size_ms: 500
 
   - id: 10s
     duration_ms: 10000
     flush_cadency_ms: 2000
+    bucket_size_ms: 1000
   
   - id: 30s
     duration_ms: 30000
     flush_cadency_ms: 5000
+    bucket_size_ms: 2500
 
   - id: 1m
     duration_ms: 60000
     flush_cadency_ms: 10000
+    bucket_size_ms: 5000
 
   - id: 2m
     duration_ms: 120000
     flush_cadency_ms: 20000
+    bucket_size_ms: 10000
 
   - id: 5m
     duration_ms: 300000
     flush_cadency_ms: 60000
+    bucket_size_ms: 10000
   
   - id: 10m
     duration_ms: 600000
     flush_cadency_ms: 120000
+    bucket_size_ms: 30000
 
   - id: 30m
     duration_ms: 1800000
     flush_cadency_ms: 300000
+    bucket_size_ms: 60000
   
   - id: 1h
     duration_ms: 3600000
-    flush_cadency_ms: 60000
+    flush_cadency_ms: 600000
+    bucket_size_ms: 120000
   
   - id: 2h
     duration_ms: 7200000
-    flush_cadency_ms: 120000
+    flush_cadency_ms: 1200000
+    bucket_size_ms: 240000
   
   - id: 6h
     duration_ms: 21600000
-    flush_cadency_ms: 600000
+    flush_cadency_ms: 6000000
+    bucket_size_ms: 360000
 
   - id: 12h
     duration_ms: 43200000
     flush_cadency_ms: 1200000
+    bucket_size_ms: 600000
 
   - id: 24h
     duration_ms: 86400000
     flush_cadency_ms: 3600000
+    bucket_size_ms: 900000

@@ -33,21 +33,24 @@ type WindowConfig struct {
 	Id             string `yaml:"id"`
 	DurationMs     int64  `yaml:"duration_ms"`
 	FlushCadencyMs int64  `yaml:"flush_cadency_ms"`
-}
-
-type MetricValue interface {
-	Name() string
-	Apply(*generated.AggregatedTick)
+	BucketSizeMs   int64  `yaml:"bucket_size_ms"`
 }
 
 type Metric interface {
 	Update(*generated.NormalizedTick)
-	Snapshot() MetricValue
+	Apply(*generated.AggregatedTick)
 	Reset()
 }
 
-type Window interface {
-	Flush()
+type Window struct {
+	Id             string
+	DurationMs     int64
+	FlushCadencyMs int64
+	Metrics        map[string]*Metric
+	LastFlushTsMs  int64
+}
+
+type Bucket struct {
 }
 
 // tick arrives - a particular symbol

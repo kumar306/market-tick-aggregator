@@ -10,8 +10,6 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// ensure no duplicate windows
-
 func GetConfig(cfgFilePath string) (*constants.Config, error) {
 
 	var c constants.Config
