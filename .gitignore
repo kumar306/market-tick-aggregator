@@ -1,4 +1,4 @@
-normalizer/proto/generated
+**/proto/generated
 .env
 .VSCodeCounter*
 .vscode
