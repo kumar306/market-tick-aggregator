@@ -7,6 +7,7 @@ kafka:
     upstream: normalized_ticks
     downstream: aggregated_ticks
   consumer_group: aggregator-group-1
+  max_buffer_records: 5000
   backpressure:
     queue_usage_high_threshold: 0.8
     queue_usage_low_threshold: 0.4

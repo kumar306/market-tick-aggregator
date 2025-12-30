@@ -15,6 +15,7 @@ type KafkaConfig struct {
 	TopicConfig        TopicConfig        `yaml:"topics"`
 	ConsumerGroup      string             `yaml:"consumer_group"`
 	BackpressureConfig BackpressureConfig `yaml:"backpressure"`
+	MaxBufferRecords   int                `yaml:"max_buffer_records"`
 }
 
 type BackpressureConfig struct {
