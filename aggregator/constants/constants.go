@@ -1,6 +1,10 @@
 package constants
 
-import "market-aggregator/proto/generated"
+import (
+	"market-aggregator/proto/generated"
+
+	"github.com/twmb/franz-go/pkg/kgo"
+)
 
 const ConfigFile string = "./config/config.yaml"
 
@@ -37,6 +41,21 @@ type WindowConfig struct {
 	BucketSizeMs   int64  `yaml:"bucket_size_ms"`
 }
 
+type EventType int
+
+const (
+	ProcessEvent EventType = iota
+	FlushEvent
+)
+
+type DispatchRecord struct {
+	Event     EventType
+	Tick      *generated.NormalizedTick
+	Record    *kgo.Record
+	BufferKey string
+	WorkerIdx int
+}
+
 type Metric interface {
 	Update(*generated.NormalizedTick)
 	Apply(*generated.AggregatedTick)
@@ -49,9 +68,6 @@ type Window struct {
 	FlushCadencyMs int64
 	Metrics        map[string]*Metric
 	LastFlushTsMs  int64
-}
-
-type Bucket struct {
 }
 
 // tick arrives - a particular symbol
