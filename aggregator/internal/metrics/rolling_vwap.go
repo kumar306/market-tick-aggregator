@@ -19,7 +19,7 @@ type RollingVWAP struct {
 	totalSumV      float64
 }
 
-func NewRollingVWAP(cfg constants.WindowConfig) constants.Metric {
+func NewRollingVWAP(cfg *constants.WindowConfig) constants.Metric {
 	bucketSizeMs := cfg.DurationMs / 100
 	if bucketSizeMs <= 0 {
 		bucketSizeMs = 1000

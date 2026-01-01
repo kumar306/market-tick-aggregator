@@ -62,11 +62,13 @@ type Metric interface {
 	Reset()
 }
 
+type MetricName string
+
 type Window struct {
 	Id             string
 	DurationMs     int64
 	FlushCadencyMs int64
-	Metrics        map[string]*Metric
+	Metrics        map[MetricName]Metric
 	LastFlushTsMs  int64
 }
 
