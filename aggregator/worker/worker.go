@@ -4,31 +4,39 @@ import (
 	"context"
 	"market-aggregator/constants"
 	"market-aggregator/internal"
+	"market-aggregator/kafka"
+	"market-aggregator/proto/generated"
 	"shared/logger"
+	"time"
 )
 
 // make worker a struct so it has its state within instead of passing state like a parameter
 // and let the worker have process and flush function
 type Worker struct {
-	ID          int
-	Channel     chan *constants.DispatchRecord
-	SymbolState map[string]*WindowState
+	ID           int
+	Channel      chan *constants.DispatchRecord
+	SymbolState  map[string]*WindowState
+	WindowConfig []*constants.WindowConfig
 }
 
 type WindowState struct {
-	Windows map[string]*constants.Window
+	Exchange string
+	Channel  string
+	Symbol   string
+	Windows  map[string]*constants.Window
 }
 
-func NewWorker(id int, ch chan *constants.DispatchRecord) *Worker {
+func NewWorker(id int, ch chan *constants.DispatchRecord, cfg []*constants.WindowConfig) *Worker {
 	symbolState := make(map[string]*WindowState)
 	return &Worker{
-		ID:          id,
-		Channel:     ch,
-		SymbolState: symbolState,
+		ID:           id,
+		Channel:      ch,
+		SymbolState:  symbolState,
+		WindowConfig: cfg,
 	}
 }
 
-func (w *Worker) Run(ctx context.Context, idx int, ch chan *constants.DispatchRecord, cfg []*constants.WindowConfig) {
+func (w *Worker) Run(ctx context.Context, idx int, ch chan *constants.DispatchRecord) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -41,9 +49,9 @@ func (w *Worker) Run(ctx context.Context, idx int, ch chan *constants.DispatchRe
 			}
 			switch dispatchRec.Event {
 			case constants.ProcessEvent:
-				w.ProcessTick(ctx, cfg, dispatchRec)
+				w.ProcessTick(ctx, dispatchRec)
 			case constants.FlushEvent:
-				w.FlushWindows()
+				w.FlushWindow(dispatchRec.WindowConfig, time.Now().UnixMilli())
 			default:
 				logger.Log.Info("Aggregator worker event received didn't match any known event", "event", dispatchRec.Event)
 			}
@@ -52,7 +60,6 @@ func (w *Worker) Run(ctx context.Context, idx int, ch chan *constants.DispatchRe
 }
 
 func (w *Worker) ProcessTick(ctx context.Context,
-	cfg []*constants.WindowConfig,
 	dispatchRec *constants.DispatchRecord) {
 	// if not present, wire it and create all metrics - from the wired registry
 	// else skip
@@ -65,7 +72,10 @@ func (w *Worker) ProcessTick(ctx context.Context,
 		// create window objects. for each window object, wire up the metrics
 		// get window objects created via a window registry
 		windowState := &WindowState{
-			Windows: internal.BuildWindows(cfg),
+			Windows:  internal.BuildWindows(w.WindowConfig),
+			Exchange: dispatchRec.Tick.Exchange,
+			Channel:  dispatchRec.Tick.Channel,
+			Symbol:   dispatchRec.Tick.Symbol,
 		}
 
 		w.SymbolState[dispatchRec.BufferKey] = windowState
@@ -80,8 +90,45 @@ func (w *Worker) ProcessTick(ctx context.Context,
 	}
 }
 
-func (w *Worker) FlushWindows() {
+func (w *Worker) FlushWindow(cfg *constants.WindowConfig, nowMillis int64) {
+	// get the worker state - get those windows having particular ID
 	// flushing for a particular window ID
-	// call snapshot
+	// call apply
 	// post into kafka aggregated_ticks
+
+	logger.Log.Info("Preparing to flush for window", "ID", cfg.Id, "Duration Ms", cfg.DurationMs, "Flush Cadency Ms", cfg.FlushCadencyMs, "Flush Timestamp", time.UnixMilli(nowMillis))
+
+	// per symbol window, create an aggregated tick,
+	// enrich it with its window metric information
+	// then persist to kafka
+
+	for _, windowState := range w.SymbolState {
+		window := windowState.Windows[cfg.Id]
+		if window == nil {
+			continue
+		}
+
+		aggregatedTick := &generated.AggregatedTick{}
+		aggregatedTick.Symbol = windowState.Symbol
+		aggregatedTick.Exchange = windowState.Exchange
+		aggregatedTick.Channel = windowState.Channel
+		aggregatedTick.WindowId = window.Id
+		aggregatedTick.EndTsMs = nowMillis
+		aggregatedTick.StartTsMs = nowMillis - cfg.DurationMs
+
+		for _, metric := range window.Metrics {
+
+			metric.Apply(aggregatedTick)
+
+			// all metrics should implement reset
+			// rolling metrics have no-op for Reset()
+			// tumbling metrics are reset here
+			metric.Reset()
+		}
+
+		kafka.PublishAggregate(aggregatedTick)
+
+		logger.Log.Info("Produce fired for flush for window", "ID", cfg.Id, "Duration Ms", cfg.DurationMs, "Flush Cadency Ms", cfg.FlushCadencyMs, "Flush Timestamp", time.UnixMilli(nowMillis))
+
+	}
 }

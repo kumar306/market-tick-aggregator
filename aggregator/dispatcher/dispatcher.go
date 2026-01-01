@@ -80,6 +80,6 @@ func StartWorkerChannels(ctx context.Context, workerChannels []chan *constants.D
 
 func startWorker(ctx context.Context, idx int, ch chan *constants.DispatchRecord, cfg []*constants.WindowConfig) {
 	logger.Log.Info("Starting worker.", "workerIdx", idx)
-	worker := worker.NewWorker(idx, ch)
-	worker.Run(ctx, idx, ch, cfg)
+	worker := worker.NewWorker(idx, ch, cfg)
+	worker.Run(ctx, idx, ch)
 }

@@ -49,11 +49,12 @@ const (
 )
 
 type DispatchRecord struct {
-	Event     EventType
-	Tick      *generated.NormalizedTick
-	Record    *kgo.Record
-	BufferKey string
-	WorkerIdx int
+	Event        EventType
+	Tick         *generated.NormalizedTick
+	Record       *kgo.Record
+	BufferKey    string
+	WorkerIdx    int
+	WindowConfig *WindowConfig
 }
 
 type Metric interface {
