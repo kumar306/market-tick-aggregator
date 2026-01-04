@@ -25,14 +25,14 @@ func NewRollingVWAP(cfg *constants.WindowConfig) constants.Metric {
 		bucketSizeMs = 1000
 	}
 
-	bucketSize := cfg.DurationMs / cfg.BucketSizeMs
+	bucketsSize := cfg.DurationMs / cfg.BucketSizeMs
 
-	if bucketSize <= 0 {
+	if bucketsSize <= 0 {
 		panic("Invalid bucket configuration")
 	}
 
 	return &RollingVWAP{
-		buckets:        make([]VWAPBucket, bucketSize),
+		buckets:        make([]VWAPBucket, bucketsSize),
 		idx:            0,
 		bucketSizeMs:   bucketSizeMs,
 		lastBucketTsMs: 0,
