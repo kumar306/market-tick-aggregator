@@ -51,7 +51,7 @@ func (w *Worker) Run(ctx context.Context, idx int, ch chan *constants.DispatchRe
 			case constants.ProcessEvent:
 				w.ProcessTick(ctx, dispatchRec)
 			case constants.FlushEvent:
-				w.FlushWindow(dispatchRec.WindowConfig, time.Now().UnixMilli())
+				w.FlushWindow(ctx, dispatchRec)
 			default:
 				logger.Log.Info("Aggregator worker event received didn't match any known event", "event", dispatchRec.Event)
 			}
@@ -90,13 +90,14 @@ func (w *Worker) ProcessTick(ctx context.Context,
 	}
 }
 
-func (w *Worker) FlushWindow(cfg *constants.WindowConfig, nowMillis int64) {
+func (w *Worker) FlushWindow(ctx context.Context, flushRec *constants.DispatchRecord) {
 	// get the worker state - get those windows having particular ID
 	// flushing for a particular window ID
 	// call apply
 	// post into kafka aggregated_ticks
+	cfg := flushRec.WindowConfig
 
-	logger.Log.Info("Preparing to flush for window", "ID", cfg.Id, "Duration Ms", cfg.DurationMs, "Flush Cadency Ms", cfg.FlushCadencyMs, "Flush Timestamp", time.UnixMilli(nowMillis))
+	logger.Log.Info("Preparing to flush for window", "ID", cfg.Id, "Duration Ms", cfg.DurationMs, "Flush Cadency Ms", cfg.FlushCadencyMs, "Flush Timestamp", time.UnixMilli(flushRec.FlushTsMs))
 
 	// per symbol window, create an aggregated tick,
 	// enrich it with its window metric information
@@ -113,8 +114,8 @@ func (w *Worker) FlushWindow(cfg *constants.WindowConfig, nowMillis int64) {
 		aggregatedTick.Exchange = windowState.Exchange
 		aggregatedTick.Channel = windowState.Channel
 		aggregatedTick.WindowId = window.Id
-		aggregatedTick.EndTsMs = nowMillis
-		aggregatedTick.StartTsMs = nowMillis - cfg.DurationMs
+		aggregatedTick.EndTsMs = flushRec.FlushTsMs
+		aggregatedTick.StartTsMs = flushRec.FlushTsMs - cfg.DurationMs
 
 		for _, metric := range window.Metrics {
 
@@ -128,7 +129,7 @@ func (w *Worker) FlushWindow(cfg *constants.WindowConfig, nowMillis int64) {
 
 		kafka.PublishAggregate(aggregatedTick)
 
-		logger.Log.Info("Produce fired for flush for window", "ID", cfg.Id, "Duration Ms", cfg.DurationMs, "Flush Cadency Ms", cfg.FlushCadencyMs, "Flush Timestamp", time.UnixMilli(nowMillis))
+		logger.Log.Info("Produce fired for flush for window", "ID", cfg.Id, "Duration Ms", cfg.DurationMs, "Flush Cadency Ms", cfg.FlushCadencyMs, "Flush Timestamp", time.UnixMilli(flushRec.FlushTsMs))
 
 	}
 }
