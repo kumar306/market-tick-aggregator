@@ -13,11 +13,13 @@ import (
 )
 
 var (
-	Client *kgo.Client
-	once   sync.Once
+	Client          *kgo.Client
+	once            sync.Once
+	UpstreamTopic   string
+	DownstreamTopic string
 )
 
-func Init(ctx context.Context, cfg constants.KafkaConfig) {
+func Init(ctx context.Context, cfg *constants.KafkaConfig) {
 	once.Do(func() {
 		client, err := kgo.NewClient(
 			kgo.SeedBrokers(cfg.BootstrapServers...),
@@ -36,6 +38,8 @@ func Init(ctx context.Context, cfg constants.KafkaConfig) {
 			logger.Log.Error("Error in pinging from kafka consumer. Returning", "error", err)
 		}
 
+		UpstreamTopic = cfg.TopicConfig.Upstream
+		DownstreamTopic = cfg.TopicConfig.Downstream
 	})
 }
 
