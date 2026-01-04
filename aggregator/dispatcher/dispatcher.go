@@ -12,7 +12,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func DispatchRecord(ctx context.Context, dispatchChannel chan *kgo.Record, workerChannels []chan *constants.DispatchRecord) {
+func RunDispatcher(ctx context.Context, dispatchChannel chan *kgo.Record, workerChannels []chan *constants.DispatchRecord) {
 	// goroutine reads from the dispatch channel, shards it and routes it to respective worker
 	for {
 		select {

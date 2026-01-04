@@ -9,9 +9,9 @@ import (
 const ConfigFile string = "./config/config.yaml"
 
 type Config struct {
-	KafkaConfig  KafkaConfig    `yaml:"kafka"`
-	WorkerCount  int            `yaml:"worker_count"`
-	WindowConfig []WindowConfig `yaml:"window"`
+	KafkaConfig  *KafkaConfig    `yaml:"kafka"`
+	WorkerCount  int             `yaml:"worker_count"`
+	WindowConfig []*WindowConfig `yaml:"window"`
 }
 
 type KafkaConfig struct {
@@ -55,6 +55,7 @@ type DispatchRecord struct {
 	BufferKey    string
 	WorkerIdx    int
 	WindowConfig *WindowConfig
+	FlushTsMs    int64
 }
 
 type Metric interface {
