@@ -17,7 +17,7 @@ type RollingVolume struct {
 	FlushCadencyMs   int64
 }
 
-func CreateRollingVolume(cfg *constants.WindowConfig) *RollingVolume {
+func NewRollingVolume(cfg *constants.WindowConfig) *RollingVolume {
 	bucketsLength := cfg.DurationMs / cfg.BucketSizeMs
 	return &RollingVolume{
 		idx:            0,

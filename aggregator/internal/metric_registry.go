@@ -13,8 +13,16 @@ var MetricCtorRegistry = make(map[constants.MetricName]MetricCtor)
 var MetricRegisterer sync.Once
 
 const (
-	OhlcKey        constants.MetricName = "ohlc"
-	RollingVWAPKey constants.MetricName = "rollingVWAP"
+	OhlcKey          constants.MetricName = "ohlc"
+	RollingVWAPKey   constants.MetricName = "rollingVWAP"
+	RollingVolumeKey constants.MetricName = "rollingVolume"
+	AtrKey           constants.MetricName = "atr"
+	TwapSmaKey       constants.MetricName = "twapSma"
+	VolatilityKey    constants.MetricName = "volatility"
+	VolumeKey        constants.MetricName = "volume"
+	VwapKey          constants.MetricName = "vwap"
+	ReturnsKey       constants.MetricName = "returns"
+	EmaKey           constants.MetricName = "ema"
 )
 
 // add the things into map - struct of name, function
@@ -24,11 +32,35 @@ func InitMetricRegistry() {
 			id   constants.MetricName
 			ctor MetricCtor
 		}{
-			{OhlcKey, func(cfg *constants.WindowConfig) constants.Metric {
+			{OhlcKey, func(wc *constants.WindowConfig) constants.Metric {
 				return &metrics.OHLC{}
 			}},
-			{RollingVWAPKey, func(cfg *constants.WindowConfig) constants.Metric {
-				return metrics.NewRollingVWAP(cfg)
+			{VwapKey, func(wc *constants.WindowConfig) constants.Metric {
+				return &metrics.VWAP{}
+			}},
+			{TwapSmaKey, func(wc *constants.WindowConfig) constants.Metric {
+				return &metrics.Returns{}
+			}},
+			{RollingVWAPKey, func(wc *constants.WindowConfig) constants.Metric {
+				return metrics.NewRollingVWAP(wc)
+			}},
+			{VolumeKey, func(wc *constants.WindowConfig) constants.Metric {
+				return &metrics.Volume{}
+			}},
+			{RollingVolumeKey, func(wc *constants.WindowConfig) constants.Metric {
+				return metrics.NewRollingVolume(wc)
+			}},
+			{VolatilityKey, func(wc *constants.WindowConfig) constants.Metric {
+				return &metrics.Volatility{}
+			}},
+			{AtrKey, func(wc *constants.WindowConfig) constants.Metric {
+				return metrics.NewATR(wc)
+			}},
+			{EmaKey, func(wc *constants.WindowConfig) constants.Metric {
+				return metrics.NewEMA(wc)
+			}},
+			{ReturnsKey, func(wc *constants.WindowConfig) constants.Metric {
+				return &metrics.Returns{}
 			}},
 		}
 

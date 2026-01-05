@@ -28,7 +28,7 @@ type EMA struct {
 	Init  bool
 }
 
-func CreateEMA(cfg *constants.WindowConfig) *EMA {
+func NewEMA(cfg *constants.WindowConfig) *EMA {
 	numUpdates := cfg.DurationMs / 1000 // number of seconds as 1 tick/sec estimation
 	alpha := 1 - math.Exp(math.Log(0.5)/float64(numUpdates))
 	return &EMA{
