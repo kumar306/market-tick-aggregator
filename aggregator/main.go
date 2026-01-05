@@ -13,6 +13,7 @@ import (
 
 	"os"
 	"shared/logger"
+	"shared/metrics"
 
 	"github.com/twmb/franz-go/pkg/kgo"
 )
@@ -25,6 +26,9 @@ func main() {
 		logger.Log.Error("Failed to load aggregator config. Stopping main()", "err", err)
 		os.Exit(1)
 	}
+
+	// init prom metrics
+	metrics.InitAggregatorMetrics()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

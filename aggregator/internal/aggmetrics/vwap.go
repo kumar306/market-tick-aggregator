@@ -1,4 +1,4 @@
-package metrics
+package aggmetrics
 
 import "market-aggregator/proto/generated"
 

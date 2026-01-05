@@ -7,6 +7,8 @@ import (
 	"market-aggregator/kafka"
 	"market-aggregator/proto/generated"
 	"shared/logger"
+	"shared/metrics"
+	"strconv"
 	"time"
 )
 
@@ -64,6 +66,7 @@ func (w *Worker) ProcessTick(ctx context.Context,
 	// if not present, wire it and create all metrics - from the wired registry
 	// else skip
 	// update all window metrics
+	start := time.Now().UnixMilli()
 
 	workerState := w.SymbolState
 	_, ok := workerState[dispatchRec.BufferKey]
@@ -79,6 +82,13 @@ func (w *Worker) ProcessTick(ctx context.Context,
 		}
 
 		w.SymbolState[dispatchRec.BufferKey] = windowState
+
+		metrics.Aggregator_WindowsPerSymbol.
+			WithLabelValues(strconv.Itoa(w.ID), windowState.Exchange, windowState.Channel, windowState.Symbol).
+			Set(float64(len(windowState.Windows)))
+		metrics.Aggregator_SymbolsPerWorker.
+			WithLabelValues(strconv.Itoa(w.ID)).
+			Set(float64(len(w.SymbolState)))
 	}
 
 	tick := dispatchRec.Tick
@@ -88,6 +98,11 @@ func (w *Worker) ProcessTick(ctx context.Context,
 			metric.Update(tick)
 		}
 	}
+
+	processingTime := time.Now().UnixMilli() - start
+	metrics.Aggregator_TickProcessingDurationMs.
+		WithLabelValues(strconv.Itoa(w.ID)).
+		Observe(float64(processingTime))
 }
 
 func (w *Worker) FlushWindow(ctx context.Context, flushRec *constants.DispatchRecord) {
@@ -104,6 +119,8 @@ func (w *Worker) FlushWindow(ctx context.Context, flushRec *constants.DispatchRe
 	// then persist to kafka
 
 	for _, windowState := range w.SymbolState {
+		start := time.Now().UnixMilli()
+
 		window := windowState.Windows[cfg.Id]
 		if window == nil {
 			continue
@@ -129,7 +146,10 @@ func (w *Worker) FlushWindow(ctx context.Context, flushRec *constants.DispatchRe
 
 		kafka.PublishAggregate(aggregatedTick)
 
-		logger.Log.Info("Produce fired for flush for window", "ID", cfg.Id, "Duration Ms", cfg.DurationMs, "Flush Cadency Ms", cfg.FlushCadencyMs, "Flush Timestamp", time.UnixMilli(flushRec.FlushTsMs))
-
+		processingTime := time.Now().UnixMilli() - start
+		metrics.Aggregator_WindowFlushDurationMs.WithLabelValues(
+			aggregatedTick.WindowId, strconv.Itoa(w.ID)).
+			Observe(float64(processingTime))
+		metrics.Aggregator_AggregatesProducedTotal.WithLabelValues(strconv.Itoa(w.ID)).Inc()
 	}
 }

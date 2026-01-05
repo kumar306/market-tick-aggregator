@@ -7,6 +7,8 @@ import (
 	"market-aggregator/proto/generated"
 	"market-aggregator/worker"
 	"shared/logger"
+	"shared/metrics"
+	"strconv"
 
 	"github.com/twmb/franz-go/pkg/kgo"
 	"google.golang.org/protobuf/proto"
@@ -48,9 +50,11 @@ func RunDispatcher(ctx context.Context, dispatchChannel chan *kgo.Record, worker
 
 			select {
 			case workerChannels[workerIdx] <- dispatchRecord:
+				metrics.Aggregator_TicksIngestedTotal.WithLabelValues(strconv.Itoa(workerIdx)).Inc()
 			case <-ctx.Done():
 			default:
 				logger.Log.Warn("Dropping record as the worker channel is blocking", "worker", workerIdx)
+				metrics.Aggregator_TicksDroppedTotal.WithLabelValues(strconv.Itoa(workerIdx)).Inc()
 			}
 
 		case <-ctx.Done():

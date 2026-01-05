@@ -4,6 +4,7 @@ import (
 	"context"
 	"market-aggregator/proto/generated"
 	"shared/logger"
+	"shared/metrics"
 
 	"github.com/twmb/franz-go/pkg/kgo"
 	"google.golang.org/protobuf/proto"
@@ -28,6 +29,9 @@ func PublishAggregate(aggregate *generated.AggregatedTick) {
 	Client.Produce(context.Background(), rec, func(r *kgo.Record, err error) {
 		if err != nil {
 			logger.Log.Error("Produce failed for aggregated ticks", "error", err)
+			metrics.Aggregator_ProduceFailuresTotal.WithLabelValues(aggregate.Exchange, aggregate.Channel, aggregate.Symbol, string(rec.Partition)).Inc()
+		} else {
+			metrics.Aggregator_ProduceSuccessesTotal.WithLabelValues(aggregate.Exchange, aggregate.Channel, aggregate.Symbol, string(rec.Partition)).Inc()
 		}
 	})
 }

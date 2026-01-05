@@ -78,7 +78,7 @@ func StartConsumer(ctx context.Context, dispatchChannel chan *kgo.Record) {
 		fetches.EachRecord(func(rec *kgo.Record) {
 			select {
 			case dispatchChannel <- rec:
-				metrics.Aggregator_ConsumerMessagesTotal.WithLabelValues(rec.Topic, string(rec.Partition)).Inc()
+				metrics.Aggregator_ConsumerSuccessesTotal.WithLabelValues(string(rec.Partition)).Inc()
 			case <-ctx.Done():
 				return
 			}
@@ -86,7 +86,7 @@ func StartConsumer(ctx context.Context, dispatchChannel chan *kgo.Record) {
 
 		fetches.EachError(func(topic string, partition int32, err error) {
 			logger.Log.Info("Error occurred in fetch", "topic", topic, "partition", partition, "err", err)
-			metrics.Aggregator_ConsumerErrorsTotal.WithLabelValues(topic, string(partition)).Inc()
+			metrics.Aggregator_ConsumerErrorsTotal.WithLabelValues(string(partition)).Inc()
 		})
 	}
 }

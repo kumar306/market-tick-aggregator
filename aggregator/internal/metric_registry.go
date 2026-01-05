@@ -2,7 +2,7 @@ package internal
 
 import (
 	"market-aggregator/constants"
-	"market-aggregator/internal/metrics"
+	"market-aggregator/internal/aggmetrics"
 	"shared/logger"
 	"sync"
 )
@@ -33,34 +33,34 @@ func InitMetricRegistry() {
 			ctor MetricCtor
 		}{
 			{OhlcKey, func(wc *constants.WindowConfig) constants.Metric {
-				return &metrics.OHLC{}
+				return &aggmetrics.OHLC{}
 			}},
 			{VwapKey, func(wc *constants.WindowConfig) constants.Metric {
-				return &metrics.VWAP{}
+				return &aggmetrics.VWAP{}
 			}},
 			{TwapSmaKey, func(wc *constants.WindowConfig) constants.Metric {
-				return &metrics.Returns{}
+				return &aggmetrics.Returns{}
 			}},
 			{RollingVWAPKey, func(wc *constants.WindowConfig) constants.Metric {
-				return metrics.NewRollingVWAP(wc)
+				return aggmetrics.NewRollingVWAP(wc)
 			}},
 			{VolumeKey, func(wc *constants.WindowConfig) constants.Metric {
-				return &metrics.Volume{}
+				return &aggmetrics.Volume{}
 			}},
 			{RollingVolumeKey, func(wc *constants.WindowConfig) constants.Metric {
-				return metrics.NewRollingVolume(wc)
+				return aggmetrics.NewRollingVolume(wc)
 			}},
 			{VolatilityKey, func(wc *constants.WindowConfig) constants.Metric {
-				return &metrics.Volatility{}
+				return &aggmetrics.Volatility{}
 			}},
 			{AtrKey, func(wc *constants.WindowConfig) constants.Metric {
-				return metrics.NewATR(wc)
+				return aggmetrics.NewATR(wc)
 			}},
 			{EmaKey, func(wc *constants.WindowConfig) constants.Metric {
-				return metrics.NewEMA(wc)
+				return aggmetrics.NewEMA(wc)
 			}},
 			{ReturnsKey, func(wc *constants.WindowConfig) constants.Metric {
-				return &metrics.Returns{}
+				return &aggmetrics.Returns{}
 			}},
 		}
 
