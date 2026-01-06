@@ -37,6 +37,9 @@ func main() {
 	kafka.Init(ctx, cfg.KafkaConfig)
 	defer kafka.Close()
 
+	// breaker monitoring init
+	go kafka.MonitorKafkaBreaker(ctx)
+
 	// wires up the metrics into metric registry
 	internal.InitMetricRegistry()
 

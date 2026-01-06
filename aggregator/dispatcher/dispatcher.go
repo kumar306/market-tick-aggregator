@@ -14,6 +14,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+var DispatchTestingHook func()
+
 func RunDispatcher(ctx context.Context, dispatchChannel chan *kgo.Record, workerChannels []chan *constants.DispatchRecord) {
 	// goroutine reads from the dispatch channel, shards it and routes it to respective worker
 	for {
@@ -51,10 +53,14 @@ func RunDispatcher(ctx context.Context, dispatchChannel chan *kgo.Record, worker
 			select {
 			case workerChannels[workerIdx] <- dispatchRecord:
 				metrics.Aggregator_TicksIngestedTotal.WithLabelValues(strconv.Itoa(workerIdx)).Inc()
-			case <-ctx.Done():
 			default:
 				logger.Log.Warn("Dropping record as the worker channel is blocking", "worker", workerIdx)
 				metrics.Aggregator_TicksDroppedTotal.WithLabelValues(strconv.Itoa(workerIdx)).Inc()
+			}
+
+			// injected only in testing to signal done
+			if DispatchTestingHook != nil {
+				DispatchTestingHook()
 			}
 
 		case <-ctx.Done():
@@ -85,5 +91,5 @@ func StartWorkerChannels(ctx context.Context, workerChannels []chan *constants.D
 func startWorker(ctx context.Context, idx int, ch chan *constants.DispatchRecord, cfg []*constants.WindowConfig) {
 	logger.Log.Info("Starting worker.", "workerIdx", idx)
 	worker := worker.NewWorker(idx, ch, cfg)
-	worker.Run(ctx, idx, ch)
+	worker.Run(ctx)
 }

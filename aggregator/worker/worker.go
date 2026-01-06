@@ -14,6 +14,8 @@ import (
 	"github.com/sony/gobreaker"
 )
 
+var WorkerTestingHook func()
+
 // make worker a struct so it has its state within instead of passing state like a parameter
 // and let the worker have process and flush function
 type Worker struct {
@@ -40,15 +42,15 @@ func NewWorker(id int, ch chan *constants.DispatchRecord, cfg []*constants.Windo
 	}
 }
 
-func (w *Worker) Run(ctx context.Context, idx int, ch chan *constants.DispatchRecord) {
+func (w *Worker) Run(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			logger.Log.Info("Received context shutdown. Stopping aggregator worker channel", "idx", idx)
+			logger.Log.Info("Received context shutdown. Stopping aggregator worker channel", "idx", w.ID)
 			return
-		case dispatchRec, ok := <-ch:
+		case dispatchRec, ok := <-w.Channel:
 			if !ok {
-				logger.Log.Error("The worker channel is closed", "workerIdx", idx)
+				logger.Log.Error("The worker channel is closed", "workerIdx", w.ID)
 				return
 			}
 			switch dispatchRec.Event {
@@ -105,6 +107,10 @@ func (w *Worker) ProcessTick(ctx context.Context,
 	metrics.Aggregator_TickProcessingDurationMs.
 		WithLabelValues(strconv.Itoa(w.ID)).
 		Observe(float64(processingTime))
+
+	if nil != WorkerTestingHook {
+		WorkerTestingHook()
+	}
 }
 
 func (w *Worker) FlushWindow(ctx context.Context, flushRec *constants.DispatchRecord) {
