@@ -47,3 +47,8 @@ func (o *OHLC) Reset() {
 	o.Open = 0.0
 	o.OpenSet = false
 }
+
+func (o *OHLC) GetValue() float64 {
+	// returning a random value just to ensure it got populated during test
+	return o.High
+}

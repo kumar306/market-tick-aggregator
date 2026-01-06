@@ -61,3 +61,12 @@ func (v *Volatility) Reset() {
 	v.m2 = 0
 	v.prevPrice = 0
 }
+
+func (v *Volatility) GetValue() float64 {
+	if v.n < 2 {
+		// for testing purpose. this is not invoked in normal flow
+		v.n = 2
+	}
+
+	return math.Sqrt(v.m2 / float64(v.n-1))
+}

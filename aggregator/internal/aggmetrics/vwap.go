@@ -24,3 +24,7 @@ func (v *VWAP) Reset() {
 	v.SumPV = 0.0
 	v.SumV = 0.0
 }
+
+func (v *VWAP) GetValue() float64 {
+	return v.SumPV / v.SumV
+}

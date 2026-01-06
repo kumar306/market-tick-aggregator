@@ -56,3 +56,7 @@ func (e *EMA) Apply(a *generated.AggregatedTick) {
 
 // no-op as decayed rolling
 func (e *EMA) Reset() {}
+
+func (e *EMA) GetValue() float64 {
+	return e.Value
+}

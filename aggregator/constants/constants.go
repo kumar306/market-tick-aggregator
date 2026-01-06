@@ -65,6 +65,7 @@ type Metric interface {
 	Update(*generated.NormalizedTick)
 	Apply(*generated.AggregatedTick)
 	Reset()
+	GetValue() float64
 }
 
 type MetricName string

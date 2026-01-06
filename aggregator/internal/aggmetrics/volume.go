@@ -20,3 +20,7 @@ func (v *Volume) Apply(a *generated.AggregatedTick) {
 func (v *Volume) Reset() {
 	v.Volume = 0.0
 }
+
+func (v *Volume) GetValue() float64 {
+	return v.Volume
+}

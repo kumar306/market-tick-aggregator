@@ -64,3 +64,7 @@ func (r *RollingVolume) Apply(a *generated.AggregatedTick) {
 // no-op as its rolling
 func (r *RollingVolume) Reset() {
 }
+
+func (r *RollingVolume) GetValue() float64 {
+	return r.RunningTotal
+}

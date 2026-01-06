@@ -41,3 +41,7 @@ func (r *Returns) Reset() {
 	r.LogReturn = 0.0
 	r.SimpleReturn = 0.0
 }
+
+func (r *Returns) GetValue() float64 {
+	return r.LogReturn
+}

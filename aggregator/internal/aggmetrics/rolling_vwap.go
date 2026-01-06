@@ -88,3 +88,7 @@ func (r *RollingVWAP) Apply(target *generated.AggregatedTick) {
 func (r *RollingVWAP) Reset() {
 	// rolling metric so no-op
 }
+
+func (r *RollingVWAP) GetValue() float64 {
+	return r.totalSumPV / r.totalSumV
+}

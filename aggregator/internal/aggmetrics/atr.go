@@ -60,3 +60,7 @@ func (atr *ATR) Apply(a *generated.AggregatedTick) {
 func (atr *ATR) Reset() {
 
 }
+
+func (atr *ATR) GetValue() float64 {
+	return atr.value
+}

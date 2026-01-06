@@ -34,3 +34,7 @@ func (t *TWAP) Reset() {
 	t.SumPrice = 0
 	t.Count = 0
 }
+
+func (t *TWAP) GetValue() float64 {
+	return t.SumPrice / t.Count
+}
