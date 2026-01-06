@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sony/gobreaker"
 	"github.com/twmb/franz-go/pkg/kgo"
 )
 
@@ -17,6 +18,8 @@ var (
 	once            sync.Once
 	UpstreamTopic   string
 	DownstreamTopic string
+	ProducerErrors  chan error
+	KafkaBreaker    *gobreaker.CircuitBreaker
 )
 
 func Init(ctx context.Context, cfg *constants.KafkaConfig) {
@@ -40,6 +43,22 @@ func Init(ctx context.Context, cfg *constants.KafkaConfig) {
 
 		UpstreamTopic = cfg.TopicConfig.Upstream
 		DownstreamTopic = cfg.TopicConfig.Downstream
+
+		KafkaBreaker = gobreaker.NewCircuitBreaker(gobreaker.Settings{
+			Name: "kafka-cb",
+			ReadyToTrip: func(counts gobreaker.Counts) bool {
+				if counts.Requests < uint32(cfg.CBReqCount) {
+					return false
+				}
+				failureRatio := float64(counts.TotalFailures) / float64(counts.Requests)
+				return failureRatio >= cfg.CBFailureRatio
+			},
+			OnStateChange: func(name string, from, to gobreaker.State) {
+				logger.Log.Info("Aggregator kafka cb changed states", "from", from, "to", to)
+			},
+		})
+
+		ProducerErrors = make(chan error, cfg.ProduceErrorBufferSize)
 	})
 }
 

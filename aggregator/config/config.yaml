@@ -13,6 +13,9 @@ kafka:
     queue_usage_low_threshold: 0.4
     threshold_active_millis: 5000
     cooldown_time_millis: 5000
+  cb_req_count: 1
+  cb_failure_ratio: 0.8
+  produce_error_buffer_size: 1000
 
 worker_count: 16
   

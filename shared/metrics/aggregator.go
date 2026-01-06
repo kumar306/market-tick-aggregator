@@ -11,8 +11,8 @@ var (
 	Aggregator_WindowFlushDurationMs    *prometheus.HistogramVec
 	Aggregator_AggregatesProducedTotal  *prometheus.CounterVec
 	Aggregator_TickProcessingDurationMs *prometheus.HistogramVec
-	Aggregator_BackpressureActive       prometheus.Gauge
-	Aggregator_KafkaPartitionsPaused    *prometheus.GaugeVec
+	Aggregator_AggregatesDroppedTotal   *prometheus.CounterVec
+	Aggregator_CircuitBreakerActive     prometheus.Gauge
 	Aggregator_ProduceFailuresTotal     *prometheus.CounterVec
 	Aggregator_ProduceSuccessesTotal    *prometheus.CounterVec
 	Aggregator_SymbolsPerWorker         *prometheus.GaugeVec
@@ -70,12 +70,12 @@ func InitAggregatorMetrics() {
 		[]string{"worker_id"},
 	)
 
-	Aggregator_BackpressureActive = NewGauge(
+	Aggregator_CircuitBreakerActive = NewGauge(
 		"backpressure_active",
 		"Flag which is set when backpressure is active",
 	)
 
-	Aggregator_KafkaPartitionsPaused = NewGaugeVec(
+	Aggregator_AggregatesDroppedTotal = NewCounterVec(
 		"kafka_partitions_paused",
 		"Kafka partitions which are paused when backpressure is active",
 		[]string{"partition"},

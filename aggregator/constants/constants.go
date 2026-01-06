@@ -15,11 +15,14 @@ type Config struct {
 }
 
 type KafkaConfig struct {
-	BootstrapServers   []string           `yaml:"bootstrap_servers"`
-	TopicConfig        TopicConfig        `yaml:"topics"`
-	ConsumerGroup      string             `yaml:"consumer_group"`
-	BackpressureConfig BackpressureConfig `yaml:"backpressure"`
-	MaxBufferRecords   int                `yaml:"max_buffer_records"`
+	BootstrapServers       []string           `yaml:"bootstrap_servers"`
+	TopicConfig            TopicConfig        `yaml:"topics"`
+	ConsumerGroup          string             `yaml:"consumer_group"`
+	BackpressureConfig     BackpressureConfig `yaml:"backpressure"`
+	MaxBufferRecords       int                `yaml:"max_buffer_records"`
+	CBReqCount             int                `yaml:"cb_req_count"`
+	CBFailureRatio         float64            `yaml:"cb_failure_ratio"`
+	ProduceErrorBufferSize int                `yaml:"produce_error_buffer_size"`
 }
 
 type BackpressureConfig struct {

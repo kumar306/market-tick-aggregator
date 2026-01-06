@@ -10,6 +10,8 @@ import (
 	"shared/metrics"
 	"strconv"
 	"time"
+
+	"github.com/sony/gobreaker"
 )
 
 // make worker a struct so it has its state within instead of passing state like a parameter
@@ -144,12 +146,15 @@ func (w *Worker) FlushWindow(ctx context.Context, flushRec *constants.DispatchRe
 			metric.Reset()
 		}
 
-		kafka.PublishAggregate(aggregatedTick)
-
-		processingTime := time.Now().UnixMilli() - start
-		metrics.Aggregator_WindowFlushDurationMs.WithLabelValues(
-			aggregatedTick.WindowId, strconv.Itoa(w.ID)).
-			Observe(float64(processingTime))
-		metrics.Aggregator_AggregatesProducedTotal.WithLabelValues(strconv.Itoa(w.ID)).Inc()
+		if kafka.KafkaBreaker.State() == gobreaker.StateOpen {
+			metrics.Aggregator_AggregatesDroppedTotal.WithLabelValues(strconv.Itoa(w.ID)).Inc()
+		} else {
+			kafka.PublishAggregate(aggregatedTick)
+			processingTime := time.Now().UnixMilli() - start
+			metrics.Aggregator_WindowFlushDurationMs.WithLabelValues(
+				aggregatedTick.WindowId, strconv.Itoa(w.ID)).
+				Observe(float64(processingTime))
+			metrics.Aggregator_AggregatesProducedTotal.WithLabelValues(strconv.Itoa(w.ID)).Inc()
+		}
 	}
 }

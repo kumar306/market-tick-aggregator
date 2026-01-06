@@ -30,8 +30,26 @@ func PublishAggregate(aggregate *generated.AggregatedTick) {
 		if err != nil {
 			logger.Log.Error("Produce failed for aggregated ticks", "error", err)
 			metrics.Aggregator_ProduceFailuresTotal.WithLabelValues(aggregate.Exchange, aggregate.Channel, aggregate.Symbol, string(rec.Partition)).Inc()
+			ProducerErrors <- err
 		} else {
 			metrics.Aggregator_ProduceSuccessesTotal.WithLabelValues(aggregate.Exchange, aggregate.Channel, aggregate.Symbol, string(rec.Partition)).Inc()
+			ProducerErrors <- nil
 		}
 	})
+}
+
+// goroutine to read producer Errors channel and pass it into breaker
+// breaker is triggered by this
+func MonitorKafkaBreaker(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			logger.Log.Info("Received ctx done.. exiting monitor kafka breaker loop")
+			return
+		case err := <-ProducerErrors:
+			KafkaBreaker.Execute(func() (interface{}, error) {
+				return nil, err
+			})
+		}
+	}
 }
