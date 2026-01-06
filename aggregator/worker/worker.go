@@ -6,6 +6,7 @@ import (
 	"market-aggregator/internal"
 	"market-aggregator/kafka"
 	"market-aggregator/proto/generated"
+	"market-aggregator/utils"
 	"shared/logger"
 	"shared/metrics"
 	"strconv"
@@ -42,7 +43,7 @@ func NewWorker(id int, ch chan *constants.DispatchRecord, cfg []*constants.Windo
 	}
 }
 
-func (w *Worker) Run(ctx context.Context) {
+func (w *Worker) Run(ctx context.Context, client utils.KafkaClient) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -57,7 +58,7 @@ func (w *Worker) Run(ctx context.Context) {
 			case constants.ProcessEvent:
 				w.ProcessTick(ctx, dispatchRec)
 			case constants.FlushEvent:
-				w.FlushWindow(ctx, dispatchRec)
+				w.FlushWindow(ctx, dispatchRec, client)
 			default:
 				logger.Log.Info("Aggregator worker event received didn't match any known event", "event", dispatchRec.Event)
 			}
@@ -113,7 +114,7 @@ func (w *Worker) ProcessTick(ctx context.Context,
 	}
 }
 
-func (w *Worker) FlushWindow(ctx context.Context, flushRec *constants.DispatchRecord) {
+func (w *Worker) FlushWindow(ctx context.Context, flushRec *constants.DispatchRecord, client utils.KafkaClient) {
 	// get the worker state - get those windows having particular ID
 	// flushing for a particular window ID
 	// call apply
@@ -155,12 +156,13 @@ func (w *Worker) FlushWindow(ctx context.Context, flushRec *constants.DispatchRe
 		if kafka.KafkaBreaker.State() == gobreaker.StateOpen {
 			metrics.Aggregator_AggregatesDroppedTotal.WithLabelValues(strconv.Itoa(w.ID)).Inc()
 		} else {
-			kafka.PublishAggregate(aggregatedTick)
+			kafka.PublishAggregate(aggregatedTick, client)
 			processingTime := time.Now().UnixMilli() - start
 			metrics.Aggregator_WindowFlushDurationMs.WithLabelValues(
 				aggregatedTick.WindowId, strconv.Itoa(w.ID)).
 				Observe(float64(processingTime))
 			metrics.Aggregator_AggregatesProducedTotal.WithLabelValues(strconv.Itoa(w.ID)).Inc()
 		}
+
 	}
 }

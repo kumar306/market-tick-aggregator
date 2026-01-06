@@ -58,7 +58,7 @@ backpressure: non blocking producer, non blocking dispatch channel, drop message
 
 testing plan:
 1. similar records should be routed to same worker by dispatcher //
-2. worker builds windows and wires metrics for each window on symbol insertion
+2. worker builds windows and wires metrics for each window on symbol insertion //
 3. flush goroutine should correctly post events and aggregated tick to be constructed correctly
 4. tumbling metrics to be reset and rolling metrics to be no-op
 5. no publish when circuit breaker is open

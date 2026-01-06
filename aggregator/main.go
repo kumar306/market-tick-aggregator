@@ -45,7 +45,7 @@ func main() {
 
 	// create worker channels and workers
 	workerChannels := dispatcher.CreateWorkerChannels(cfg.WorkerCount, 1000)
-	dispatcher.StartWorkerChannels(ctx, workerChannels, cfg.WindowConfig)
+	dispatcher.StartWorkerChannels(ctx, workerChannels, cfg.WindowConfig, kafka.Client)
 
 	// start metric flush schedulers
 	flush.StartFlushSchedulers(ctx, workerChannels, cfg.WindowConfig)

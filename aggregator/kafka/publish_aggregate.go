@@ -3,6 +3,7 @@ package kafka
 import (
 	"context"
 	"market-aggregator/proto/generated"
+	"market-aggregator/utils"
 	"shared/logger"
 	"shared/metrics"
 
@@ -10,7 +11,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func PublishAggregate(aggregate *generated.AggregatedTick) {
+func PublishAggregate(aggregate *generated.AggregatedTick, client utils.KafkaClient) {
 	logger.Log.Info("Ready to publish aggregate to Kafka")
 
 	val, err := proto.Marshal(aggregate)
@@ -26,7 +27,7 @@ func PublishAggregate(aggregate *generated.AggregatedTick) {
 		Topic: DownstreamTopic,
 	}
 
-	Client.Produce(context.Background(), rec, func(r *kgo.Record, err error) {
+	client.Produce(context.Background(), rec, func(r *kgo.Record, err error) {
 		if err != nil {
 			logger.Log.Error("Produce failed for aggregated ticks", "error", err)
 			metrics.Aggregator_ProduceFailuresTotal.WithLabelValues(aggregate.Exchange, aggregate.Channel, aggregate.Symbol, string(rec.Partition)).Inc()

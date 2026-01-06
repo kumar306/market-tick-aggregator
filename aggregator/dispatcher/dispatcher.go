@@ -5,6 +5,7 @@ import (
 	"hash/fnv"
 	"market-aggregator/constants"
 	"market-aggregator/proto/generated"
+	"market-aggregator/utils"
 	"market-aggregator/worker"
 	"shared/logger"
 	"shared/metrics"
@@ -82,14 +83,14 @@ func CreateWorkerChannels(workerCount int, chanSize int) []chan *constants.Dispa
 	return workerChannels
 }
 
-func StartWorkerChannels(ctx context.Context, workerChannels []chan *constants.DispatchRecord, cfg []*constants.WindowConfig) {
+func StartWorkerChannels(ctx context.Context, workerChannels []chan *constants.DispatchRecord, cfg []*constants.WindowConfig, client utils.KafkaClient) {
 	for idx, ch := range workerChannels {
-		go startWorker(ctx, idx, ch, cfg)
+		go startWorker(ctx, idx, ch, cfg, client)
 	}
 }
 
-func startWorker(ctx context.Context, idx int, ch chan *constants.DispatchRecord, cfg []*constants.WindowConfig) {
+func startWorker(ctx context.Context, idx int, ch chan *constants.DispatchRecord, cfg []*constants.WindowConfig, client utils.KafkaClient) {
 	logger.Log.Info("Starting worker.", "workerIdx", idx)
 	worker := worker.NewWorker(idx, ch, cfg)
-	worker.Run(ctx)
+	worker.Run(ctx, client)
 }
