@@ -260,3 +260,48 @@ func TestWorkerFlush(t *testing.T) {
 		}
 	}
 }
+
+func TestCB(t *testing.T) {
+
+	kafka.KafkaBreaker = gobreaker.NewCircuitBreaker(gobreaker.Settings{
+		Name: "test-trigger-breaker",
+		ReadyToTrip: func(counts gobreaker.Counts) bool {
+			if counts.ConsecutiveFailures > 2 {
+				return true
+			}
+			return false
+		},
+		OnStateChange: func(name string, from, to gobreaker.State) {
+			logger.Log.Info("State change occurred", "from", from, "to", to)
+		},
+	})
+	kafka.DownstreamTopic = "some-topic"
+	kafka.ProducerErrors = make(chan error, 10)
+	go kafka.MonitorKafkaBreaker(context.Background())
+
+	agg := &generated.AggregatedTick{
+		Exchange: "exchange_x",
+		Channel:  "channel_y",
+		Symbol:   "symbol_z",
+	}
+	client := &utils.BreakerTestClient{
+		Promise: func(r *kgo.Record, err error) {
+			kafka.ProducerErrors <- err
+		},
+	}
+
+	wg := &sync.WaitGroup{}
+
+	kafka.KafkaBreakerTestingHook = func() {
+		wg.Done()
+	}
+
+	for i := 0; i < 3; i++ {
+		wg.Add(1)
+		kafka.PublishAggregate(agg, client)
+	}
+
+	wg.Wait()
+
+	require.Equal(t, gobreaker.StateOpen, kafka.KafkaBreaker.State(), "Breaker should be open after consecutive failures")
+}

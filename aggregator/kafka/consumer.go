@@ -14,12 +14,13 @@ import (
 )
 
 var (
-	Client          *kgo.Client
-	once            sync.Once
-	UpstreamTopic   string
-	DownstreamTopic string
-	ProducerErrors  chan error
-	KafkaBreaker    *gobreaker.CircuitBreaker
+	Client                  *kgo.Client
+	once                    sync.Once
+	UpstreamTopic           string
+	DownstreamTopic         string
+	ProducerErrors          chan error
+	KafkaBreaker            *gobreaker.CircuitBreaker
+	KafkaBreakerTestingHook func()
 )
 
 func Init(ctx context.Context, cfg *constants.KafkaConfig) {

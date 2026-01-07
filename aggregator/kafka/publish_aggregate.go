@@ -48,9 +48,13 @@ func MonitorKafkaBreaker(ctx context.Context) {
 			logger.Log.Info("Received ctx done.. exiting monitor kafka breaker loop")
 			return
 		case err := <-ProducerErrors:
+			logger.Log.Info("Reading err from producer err channel", "error", err)
 			KafkaBreaker.Execute(func() (interface{}, error) {
 				return nil, err
 			})
+			if KafkaBreakerTestingHook != nil {
+				KafkaBreakerTestingHook()
+			}
 		}
 	}
 }
