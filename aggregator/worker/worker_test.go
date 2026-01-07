@@ -143,7 +143,6 @@ func TestWorkerFlush(t *testing.T) {
 	metrics.InitAggregatorMetrics()
 
 	cfg := []*constants.WindowConfig{
-		{Id: "1s", DurationMs: 1000, FlushCadencyMs: 1000, BucketSizeMs: 500},
 		{Id: "5s", DurationMs: 5000, FlushCadencyMs: 1000, BucketSizeMs: 1000},
 	}
 
@@ -247,4 +246,17 @@ func TestWorkerFlush(t *testing.T) {
 	}
 
 	w.FlushWindow(context.Background(), flushRec, client)
+
+	st := w.SymbolState[bufferKey]
+
+	for id, win := range st.Windows {
+		if id == "5s" {
+			for _, m := range win.Metrics {
+				if _, ok := m.(*aggmetrics.OHLC); ok {
+					// validate that the tumbling metric got reset
+					require.Zero(t, m.GetValue())
+				}
+			}
+		}
+	}
 }

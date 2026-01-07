@@ -9,7 +9,7 @@ import (
 
 type RollingVolume struct {
 	VolumeBuckets    []float64
-	idx              int64
+	Idx              int64
 	RunningTotal     float64
 	PrevRunningTotal float64
 	BucketSizeMs     int64
@@ -20,7 +20,7 @@ type RollingVolume struct {
 func NewRollingVolume(cfg *constants.WindowConfig) *RollingVolume {
 	bucketsLength := cfg.DurationMs / cfg.BucketSizeMs
 	return &RollingVolume{
-		idx:            0,
+		Idx:            0,
 		VolumeBuckets:  make([]float64, bucketsLength),
 		BucketSizeMs:   cfg.BucketSizeMs,
 		FlushCadencyMs: cfg.FlushCadencyMs,
@@ -32,18 +32,23 @@ func NewRollingVolume(cfg *constants.WindowConfig) *RollingVolume {
 func (r *RollingVolume) Update(t *generated.NormalizedTick) {
 	now := t.EventTsMillis
 
+	// first tick
+	if r.LastBucketTsMs == 0 {
+		r.LastBucketTsMs = now
+	}
+
 	elapsed := now - r.LastBucketTsMs
 	steps := elapsed / r.BucketSizeMs
 
 	for i := int64(0); i < steps; i++ {
 		// move to next bucket
-		r.idx = (r.idx + 1) % int64(len(r.VolumeBuckets))
-		r.RunningTotal -= r.VolumeBuckets[r.idx]
-		r.VolumeBuckets[r.idx] = 0.0
+		r.Idx = (r.Idx + 1) % int64(len(r.VolumeBuckets))
+		r.RunningTotal -= r.VolumeBuckets[r.Idx]
+		r.VolumeBuckets[r.Idx] = 0.0
 	}
 
 	r.LastBucketTsMs += steps * r.BucketSizeMs
-	r.VolumeBuckets[r.idx] += t.Volume
+	r.VolumeBuckets[r.Idx] += t.Volume
 	r.RunningTotal += t.Volume
 }
 
