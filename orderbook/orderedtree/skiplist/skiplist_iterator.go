@@ -1,15 +1,7 @@
-package orderedtree
-
-// iterate N nodes in the strcture find the best N prices per side for snapshot
-type Iterator interface {
-	Valid() bool
-	Key() float64
-	Value() float64
-	Next()
-}
+package skiplist
 
 type SkipListIterator struct {
-	curr *node
+	curr *Node
 }
 
 func (it *SkipListIterator) Valid() bool {
@@ -22,6 +14,10 @@ func (it *SkipListIterator) Key() float64 {
 
 func (it *SkipListIterator) Value() float64 {
 	return it.curr.value
+}
+
+func (it *SkipListIterator) Iterate() {
+	it.Next()
 }
 
 func (it *SkipListIterator) Next() {
