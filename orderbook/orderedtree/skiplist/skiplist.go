@@ -1,6 +1,9 @@
-package orderedtree
+package skiplist
 
-import "math/rand"
+import (
+	"market-orderbook/orderedtree"
+	"math/rand"
+)
 
 // this file will contain the skip list implementation
 const (
@@ -8,21 +11,28 @@ const (
 	p        float64 = 0.5
 )
 
-type node struct {
+type Node struct {
 	key     float64
 	value   float64
-	forward []*node
+	forward []*Node
+	// for prev pointer - for fast topN for bid side - i will have this != nil only at level 0
+	prev *Node
 }
 
 type SkipList struct {
-	head  *node
+	// dummy node of the skip list containing pointers to all levels
+	head *Node
+	// tail points to current maximum value node
+	tail *Node
+	// current level of the list
 	level int
-	size  int
+	// total number of nodes in the list
+	size int
 }
 
-func newSkipList() *SkipList {
-	head := &node{
-		forward: make([]*node, maxLevel),
+func NewSkipList() *SkipList {
+	head := &Node{
+		forward: make([]*Node, maxLevel),
 	}
 
 	return &SkipList{
@@ -40,7 +50,7 @@ func randomLevel() int {
 	return lvl
 }
 
-func (s *SkipList) find(key float64, update []*node) *node {
+func (s *SkipList) find(key float64, update []*Node) *Node {
 	curr := s.head
 	for i := s.level - 1; i >= 0; i-- {
 		for curr.forward[i] != nil && curr.forward[i].key < key {
@@ -55,17 +65,21 @@ func (s *SkipList) find(key float64, update []*node) *node {
 	return curr.forward[0]
 }
 
+func (s *SkipList) Size() int {
+	return s.size
+}
+
 func (s *SkipList) Get(key float64) (float64, bool) {
 	node := s.find(key, nil)
 	if node != nil && node.key == key {
-		return key, true
+		return node.value, true
 	}
 	return 0, false
 }
 
 // upsert. first search for key. if it already exists, then update its value
 func (s *SkipList) Insert(key float64, value float64) bool {
-	update := make([]*node, maxLevel)
+	update := make([]*Node, maxLevel)
 	findRes := s.find(key, update)
 
 	if findRes != nil && findRes.key == key {
@@ -83,23 +97,42 @@ func (s *SkipList) Insert(key float64, value float64) bool {
 		s.level = lvl
 	}
 
-	newNode := &node{
+	newNode := &Node{
 		key:     key,
 		value:   value,
-		forward: make([]*node, lvl),
+		forward: make([]*Node, lvl),
 	}
+
+	if s.size == 0 {
+		s.head.forward[0] = newNode
+		newNode.prev = s.head
+		s.tail = newNode
+		s.size++
+		return true
+	}
+
+	// prev pointer only at 0th level
+	nextNode := update[0].forward[0]
 
 	for i := 0; i < lvl; i++ {
 		newNode.forward[i] = update[i].forward[i]
 		update[i].forward[i] = newNode
 	}
 
+	if nextNode != nil {
+		nextNode.prev = newNode
+	} else {
+		s.tail = newNode
+	}
+
+	newNode.prev = update[0]
+
 	s.size++
 	return true
 }
 
 func (s *SkipList) Delete(key float64) bool {
-	update := make([]*node, maxLevel)
+	update := make([]*Node, maxLevel)
 	findRes := s.find(key, update)
 
 	// cannot delete a node which doesnt exist
@@ -114,6 +147,13 @@ func (s *SkipList) Delete(key float64) bool {
 			break
 		}
 		update[i].forward[i] = findRes.forward[i]
+	}
+
+	// reset prev at level 0 for next node
+	if findRes.forward[0] != nil {
+		findRes.forward[0].prev = update[0]
+	} else {
+		s.tail = update[0]
 	}
 
 	for s.level > 1 && s.head.forward[s.level-1] == nil {
@@ -148,8 +188,14 @@ func (s *SkipList) Max() (float64, float64, bool) {
 	return curr.key, curr.value, true
 }
 
-func (s *SkipList) Iterator() Iterator {
+func (s *SkipList) Iterator() orderedtree.Iterator {
 	return &SkipListIterator{
 		curr: s.head.forward[0],
+	}
+}
+
+func (s *SkipList) ReverseIterator() orderedtree.Iterator {
+	return &SkipListReverseIterator{
+		curr: s.tail,
 	}
 }
