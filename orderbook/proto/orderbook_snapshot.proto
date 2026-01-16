@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package orderbook;
+option go_package = "proto/generated";
+
+message OrderBookSnapshot {
+    string exchange = 1;
+    string symbol = 2;
+    int64 offset = 3;
+    int64 snapshot_ts_ms = 4;
+    repeated PriceLevel bids = 5;
+    repeated PriceLevel asks = 6;
+}
+
+message PriceLevel {
+    double price = 1;
+    double quantity = 2;
+}

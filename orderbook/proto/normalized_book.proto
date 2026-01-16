@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package orderbook;
+option go_package = "proto/generated";
+import "google/protobuf/timestamp.proto";
+
+message NormalizedBook {
+    string exchange = 1;
+    string channel = 2;
+    string symbol = 3;
+
+    message BookLevel {
+        double price = 1;
+        double volume = 2;
+    }
+
+    repeated BookLevel bids = 4;
+    repeated BookLevel asks = 5;
+
+    int64 event_time_millis = 6;
+    string event_type = 7;
+    google.protobuf.Timestamp timestamp = 8;
+}

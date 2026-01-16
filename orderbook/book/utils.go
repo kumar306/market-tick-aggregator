@@ -17,14 +17,14 @@ type OrderBook struct {
 	Exchange        string
 	Symbol          string
 	TimestampMillis int64
-	Bids            *OrderBookSide
-	Asks            *OrderBookSide
+	Bids            OrderBookSide
+	Asks            OrderBookSide
 }
 
-// show top N price levels
 type OrderBookSnapshot struct {
 	Exchange        string
 	Symbol          string
+	Offset          int64
 	TimestampMillis int64
 	Bids            []*PriceLevel
 	Asks            []*PriceLevel
