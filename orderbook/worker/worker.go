@@ -24,7 +24,7 @@ type Worker struct {
 	UpdateChannel chan *constants.DispatchRecord
 
 	// snapshot fields
-	SnapshotChannel chan int
+	SnapshotChannel chan struct{}
 	SnapshotDepth   int
 
 	// on snapshot, for every symbol managed by worker, we will do snapshot
@@ -50,19 +50,24 @@ type SymbolState struct {
 	SnapshotPending bool
 }
 
-func NewWorker(id int, channel chan *constants.DispatchRecord) *Worker {
+func NewWorker(id int, ctx context.Context, channel chan *constants.DispatchRecord) *Worker {
 	return &Worker{
 		ID:                id,
+		Ctx:               ctx,
 		UpdateChannel:     channel,
-		SnapshotChannel:   make(chan int),
+		SnapshotChannel:   make(chan struct{}),
 		OrderbookStateMap: make(map[string]*SymbolState),
+		SnapshotStateMap:  make(map[string]*book.OrderBookSnapshot),
 	}
 }
 
-func (w *Worker) Run(ctx context.Context) {
+func (w *Worker) Run() {
+
+	go w.SnapshotExecuteLoop()
+
 	for {
 		select {
-		case <-ctx.Done():
+		case <-w.Ctx.Done():
 			logger.Log.Info("Received ctx done. Returning from orderbook worker loop")
 			return
 
@@ -117,16 +122,15 @@ func (w *Worker) ProcessBookUpdate(rec *constants.DispatchRecord) {
 
 func (w *Worker) FlushBook() {
 	// this will persist the book to kafka
-	// commit the offsets to kafka as tracked
-	// will update the latest committed offset
+	// send the last committed partition offset map to an ack channel read by coordinated committer
+
+	// will update the latest committed offset post commit at the kafka level
 	// enqueues a snapshot event to worker channel post committing
 }
 
 func (w *Worker) HandleSnapshotRequest() {
 	// this will clone the current orderbook state into another variable with snapshotOffset metadata
 	// will post it to its snapshotchannel which is read by a goroutine
-
-	w.SnapshotStateMap = map[string]*book.OrderBookSnapshot{}
 
 	for key, st := range w.OrderbookStateMap {
 		// if the current symbol already has a snapshot pending, skip the symbol
@@ -142,72 +146,80 @@ func (w *Worker) HandleSnapshotRequest() {
 }
 
 func (w *Worker) SnapshotExecuteLoop() {
-	for range w.SnapshotChannel {
+	for {
+		select {
+		case <-w.Ctx.Done():
+			logger.Log.Info("Received ctx done event.. returning worker snapshot execute loop")
+			return
+		case _ = <-w.SnapshotChannel:
+			{
 
-		// check condition that snapshotOffset[partition] <= lastCommittedOffsetMap[partition]
-		// so we know that the snapshot object is committed and safe to snapshot
-		// we dont want to snapshot orderbook with uncommitted updates to it
+				// check condition that snapshotOffset[partition] <= lastCommittedOffsetMap[partition]
+				// so we know that the snapshot object is committed and safe to snapshot
+				// we dont want to snapshot orderbook with uncommitted updates to it
 
-		for key, snapshot := range w.SnapshotStateMap {
-			if !w.OrderbookStateMap[key].SnapshotPending {
-				// no snapshot is pending for this symbol
-				continue
-			}
+				for key, snapshot := range w.SnapshotStateMap {
+					if !w.OrderbookStateMap[key].SnapshotPending {
+						// no snapshot is pending for this symbol
+						continue
+					}
 
-			snapshotOffsetMap := snapshot.PartitionOffsets
-			lastCommittedOffsetMap := w.OrderbookStateMap[key].LastCommittedOffset
-			var canSnapshot bool = true
-			for partition := range snapshotOffsetMap {
-				if snapshotOffsetMap[partition] > lastCommittedOffsetMap[partition] {
-					canSnapshot = false
-					break
+					snapshotOffsetMap := snapshot.PartitionOffsets
+					lastCommittedOffsetMap := w.OrderbookStateMap[key].LastCommittedOffset
+					var canSnapshot bool = true
+					for partition := range snapshotOffsetMap {
+						if snapshotOffsetMap[partition] > lastCommittedOffsetMap[partition] {
+							canSnapshot = false
+							break
+						}
+					}
+
+					if !canSnapshot {
+						// condition not satisfied yet. it will try later and succeed
+						continue
+					}
+
+					protoBids := make([]*generated.PriceLevel, 0)
+					for _, bid := range snapshot.Bids {
+						protoBids = append(protoBids, &generated.PriceLevel{
+							Price:    bid.Price,
+							Quantity: bid.Quantity,
+						})
+					}
+
+					protoAsks := make([]*generated.PriceLevel, 0)
+					for _, ask := range snapshot.Asks {
+						protoAsks = append(protoAsks, &generated.PriceLevel{
+							Price:    ask.Price,
+							Quantity: ask.Quantity,
+						})
+					}
+
+					snapshotProto := &generated.OrderBookSnapshot{
+						Exchange:         snapshot.Exchange,
+						Symbol:           snapshot.Symbol,
+						PartitionOffsets: snapshot.PartitionOffsets,
+						SnapshotTsMs:     snapshot.TimestampMillis,
+						Bids:             protoBids,
+						Asks:             protoAsks,
+					}
+
+					snapshotBytestream, marshalErr := proto.Marshal(snapshotProto)
+					if marshalErr != nil {
+						logger.Log.Error("Error in marshalling snapshot to protobuf", "key", key, "error", marshalErr)
+						continue
+					}
+
+					redisErr := redis.LoadSnapshot(w.Ctx, key, snapshotBytestream)
+					if redisErr != nil {
+						logger.Log.Error("Error in loading snapshot to redis", "key", key, "error", redisErr)
+						continue
+					}
+
+					w.OrderbookStateMap[key].SnapshotPending = false
+					logger.Log.Info("Backed up snapshot to redis", "workerIdx", w.ID, "key", key)
 				}
 			}
-
-			if !canSnapshot {
-				// condition not satisfied yet. it will try later and succeed
-				continue
-			}
-
-			protoBids := make([]*generated.PriceLevel, 0)
-			for _, bid := range snapshot.Bids {
-				protoBids = append(protoBids, &generated.PriceLevel{
-					Price:    bid.Price,
-					Quantity: bid.Quantity,
-				})
-			}
-
-			protoAsks := make([]*generated.PriceLevel, 0)
-			for _, ask := range snapshot.Asks {
-				protoAsks = append(protoAsks, &generated.PriceLevel{
-					Price:    ask.Price,
-					Quantity: ask.Quantity,
-				})
-			}
-
-			snapshotProto := &generated.OrderBookSnapshot{
-				Exchange:         snapshot.Exchange,
-				Symbol:           snapshot.Symbol,
-				PartitionOffsets: snapshot.PartitionOffsets,
-				SnapshotTsMs:     snapshot.TimestampMillis,
-				Bids:             protoBids,
-				Asks:             protoAsks,
-			}
-
-			snapshotBytestream, marshalErr := proto.Marshal(snapshotProto)
-			if marshalErr != nil {
-				logger.Log.Error("Error in marshalling snapshot to protobuf", "key", key, "error", marshalErr)
-				continue
-			}
-
-			redisErr := redis.LoadSnapshot(w.Ctx, key, snapshotBytestream)
-			if redisErr != nil {
-				logger.Log.Error("Error in loading snapshot to redis", "key", key, "error", redisErr)
-				continue
-			}
-
-			w.OrderbookStateMap[key].SnapshotPending = false
-			logger.Log.Info("Backed up snapshot to redis", "workerIdx", w.ID, "key", key)
 		}
 	}
 }
