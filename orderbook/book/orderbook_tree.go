@@ -11,6 +11,17 @@ type TreeBookSide struct {
 	orderedTree orderedtree.OrderedTree
 }
 
+func NewOrderBook() *OrderBook {
+
+	bids := NewTreeBookSide(Bid)
+	asks := NewTreeBookSide(Ask)
+
+	return &OrderBook{
+		Bids: bids,
+		Asks: asks,
+	}
+}
+
 func NewTreeBookSide(side Side) *TreeBookSide {
 	return &TreeBookSide{
 		side:        side,
@@ -76,5 +87,12 @@ func (t *TreeBookSide) Depth() int {
 }
 
 func (t *TreeBookSide) Iterate(fn func(price float64, quantity float64) bool) {
-
+	// apply this function for each node
+	it := t.orderedTree.Iterator()
+	for it.Valid() {
+		if !fn(it.Key(), it.Value()) {
+			return
+		}
+		it.Iterate()
+	}
 }

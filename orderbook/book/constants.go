@@ -1,5 +1,17 @@
 package book
 
+type Side int
+
+const (
+	Bid Side = iota
+	Ask
+)
+
+type PriceLevel struct {
+	Price    float64
+	Quantity float64
+}
+
 type OrderBookSide interface {
 	// insert new price in my book side or update size for an existing price
 	Upsert(price float64, quantity float64)
@@ -11,4 +23,19 @@ type OrderBookSide interface {
 	TopN(n int) []*PriceLevel
 	// i will use this to stream through the order book and do stuff like dumping order book for persistence
 	Iterate(fn func(price float64, quantity float64) bool)
+}
+
+// order book internally stores full depth but display top N to UI for friendly interface
+type OrderBook struct {
+	Bids OrderBookSide
+	Asks OrderBookSide
+}
+
+type OrderBookSnapshot struct {
+	Exchange         string
+	Symbol           string
+	PartitionOffsets map[int32]int64
+	TimestampMillis  int64
+	Bids             []*PriceLevel
+	Asks             []*PriceLevel
 }

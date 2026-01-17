@@ -14,17 +14,24 @@ type EventType int
 const (
 	ProcessEvent EventType = iota
 	FlushEvent
-	SnapshotEvent
+	SnapshotRequestEvent
 )
 
+type RedisConfig struct {
+	TtlMinutes   int `yaml:"ttl_minutes"`
+	PoolSize     int `yaml:"pool_size"`
+	MinIdleConns int `yaml:"min_idle_conns"`
+}
+
 type DispatchRecord struct {
-	Event    EventType
-	Offset   int64
-	Record   *kgo.Record
-	Update   *generated.NormalizedBook
-	Exchange string
-	Symbol   string
-	TsMs     int64
+	Event     EventType
+	Partition int32
+	Offset    int64
+	Record    *kgo.Record
+	Update    *generated.NormalizedBook
+	Exchange  string
+	Symbol    string
+	TsMs      int64
 }
 
 type SnapshotRecord struct {

@@ -6,7 +6,7 @@ option go_package = "proto/generated";
 message OrderBookSnapshot {
     string exchange = 1;
     string symbol = 2;
-    int64 offset = 3;
+    map<int32, int64> partitionOffsets = 3;
     int64 snapshot_ts_ms = 4;
     repeated PriceLevel bids = 5;
     repeated PriceLevel asks = 6;
