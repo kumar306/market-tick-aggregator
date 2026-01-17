@@ -7,6 +7,7 @@ import (
 	"market-orderbook/proto/generated"
 	"market-orderbook/redis"
 	"shared/logger"
+	"time"
 
 	"google.golang.org/protobuf/proto"
 )
@@ -14,23 +15,39 @@ import (
 // maintain a snapshot channel, flush channel, update channel per worker?
 // push into worker channel - SnapshotRequest event
 // this will take care of copying the orderbook, offsets into snapshot goroutine per worker at intervals
-//
 
 type Worker struct {
-	ID                  int
-	Ctx                 context.Context
-	UpdateChannel       chan *constants.DispatchRecord
-	SnapshotChannel     chan int
-	OrderbookStateMap   map[string]*SymbolState
-	LastCommittedOffset int64
-	LastProcessedOffset int64
+	ID  int
+	Ctx context.Context
+
+	// channel thru which book updates enter
+	UpdateChannel chan *constants.DispatchRecord
+
+	// snapshot fields
+	SnapshotChannel chan int
+	SnapshotDepth   int
+
+	// on snapshot, for every symbol managed by worker, we will do snapshot
+	SnapshotStateMap map[string]*book.OrderBookSnapshot
+
+	// orderbook state for symbol
+	OrderbookStateMap map[string]*SymbolState
 }
 
 type SymbolState struct {
-	Orderbook           *book.OrderBook
-	lastCommittedOffset int64
-	lastProcessedOffset int64
-	restored            bool
+	Exchange        string
+	Symbol          string
+	TimestampMillis int64
+
+	// orderbook
+	Orderbook *book.OrderBook
+
+	// map of partition to offset for coordinated commit post flush
+	LastCommittedOffset map[int32]int64
+	LastProcessedOffset map[int32]int64
+
+	Restored        bool
+	SnapshotPending bool
 }
 
 func NewWorker(id int, channel chan *constants.DispatchRecord) *Worker {
@@ -58,13 +75,15 @@ func (w *Worker) Run(ctx context.Context) {
 			case constants.ProcessEvent:
 				// process record coming from dispatcher and update worker's last processed offset variable
 				w.ProcessBookUpdate(rec)
-			case constants.SnapshotEvent:
+			case constants.SnapshotRequestEvent:
 				// this is a empty record carrying a request to copy the current orderbook state into a OrderbookSnapshot struct
 				// this struct is passed into a snapshot channel (each worker has its snapshot goroutine to isolate snapshots among the workers as it is time consuming and dont want blocking channels and lag)
 				// snapshot goroutine reads from its snapshot channel and persists the snapshot with already committed offset to redis
+				w.HandleSnapshotRequest()
 			case constants.FlushEvent:
 				// this guy will persist to downstream - a bunch of orderbook states with top N prices level - to be consumed by time series db
 				// upon updating the last committed offset and committing the records post flush, it sends a snapshot event to the worker channel asking it to snapshot the committed state to redis
+				w.FlushBook()
 			}
 		}
 	}
@@ -93,7 +112,7 @@ func (w *Worker) ProcessBookUpdate(rec *constants.DispatchRecord) {
 
 	// maintain the last processed offset. on flush the last committed offset = last processed offset
 	// trigger an event to snapshot channel after flush
-	state.lastProcessedOffset = rec.Offset
+	state.LastProcessedOffset[rec.Partition] = rec.Offset
 }
 
 func (w *Worker) FlushBook() {
@@ -103,10 +122,94 @@ func (w *Worker) FlushBook() {
 	// enqueues a snapshot event to worker channel post committing
 }
 
-func (w *Worker) SnapshotBook() {
+func (w *Worker) HandleSnapshotRequest() {
 	// this will clone the current orderbook state into another variable with snapshotOffset metadata
 	// will post it to its snapshotchannel which is read by a goroutine
-	// async update to redis
+
+	w.SnapshotStateMap = map[string]*book.OrderBookSnapshot{}
+
+	for key, st := range w.OrderbookStateMap {
+		// if the current symbol already has a snapshot pending, skip the symbol
+		if st.SnapshotPending {
+			continue
+		}
+
+		// clone the orderbook into a snapshot along with current snapshot offset
+		clonedBook := w.CloneLightWeight(st.Exchange, st.Symbol, st.LastProcessedOffset)
+		w.SnapshotStateMap[key] = clonedBook
+		st.SnapshotPending = true
+	}
+}
+
+func (w *Worker) SnapshotExecuteLoop() {
+	for range w.SnapshotChannel {
+
+		// check condition that snapshotOffset[partition] <= lastCommittedOffsetMap[partition]
+		// so we know that the snapshot object is committed and safe to snapshot
+		// we dont want to snapshot orderbook with uncommitted updates to it
+
+		for key, snapshot := range w.SnapshotStateMap {
+			if !w.OrderbookStateMap[key].SnapshotPending {
+				// no snapshot is pending for this symbol
+				continue
+			}
+
+			snapshotOffsetMap := snapshot.PartitionOffsets
+			lastCommittedOffsetMap := w.OrderbookStateMap[key].LastCommittedOffset
+			var canSnapshot bool = true
+			for partition := range snapshotOffsetMap {
+				if snapshotOffsetMap[partition] > lastCommittedOffsetMap[partition] {
+					canSnapshot = false
+					break
+				}
+			}
+
+			if !canSnapshot {
+				// condition not satisfied yet. it will try later and succeed
+				continue
+			}
+
+			protoBids := make([]*generated.PriceLevel, 0)
+			for _, bid := range snapshot.Bids {
+				protoBids = append(protoBids, &generated.PriceLevel{
+					Price:    bid.Price,
+					Quantity: bid.Quantity,
+				})
+			}
+
+			protoAsks := make([]*generated.PriceLevel, 0)
+			for _, ask := range snapshot.Asks {
+				protoAsks = append(protoAsks, &generated.PriceLevel{
+					Price:    ask.Price,
+					Quantity: ask.Quantity,
+				})
+			}
+
+			snapshotProto := &generated.OrderBookSnapshot{
+				Exchange:         snapshot.Exchange,
+				Symbol:           snapshot.Symbol,
+				PartitionOffsets: snapshot.PartitionOffsets,
+				SnapshotTsMs:     snapshot.TimestampMillis,
+				Bids:             protoBids,
+				Asks:             protoAsks,
+			}
+
+			snapshotBytestream, marshalErr := proto.Marshal(snapshotProto)
+			if marshalErr != nil {
+				logger.Log.Error("Error in marshalling snapshot to protobuf", "key", key, "error", marshalErr)
+				continue
+			}
+
+			redisErr := redis.LoadSnapshot(w.Ctx, key, snapshotBytestream)
+			if redisErr != nil {
+				logger.Log.Error("Error in loading snapshot to redis", "key", key, "error", redisErr)
+				continue
+			}
+
+			w.OrderbookStateMap[key].SnapshotPending = false
+			logger.Log.Info("Backed up snapshot to redis", "workerIdx", w.ID, "key", key)
+		}
+	}
 }
 
 func (w *Worker) RestoreOrCreateState(exchange string, symbol string) *SymbolState {
@@ -123,10 +226,12 @@ func (w *Worker) RestoreOrCreateState(exchange string, symbol string) *SymbolSta
 	// snapshot not present
 	if snapshotBytes == nil {
 		return &SymbolState{
-			lastCommittedOffset: -1,
-			lastProcessedOffset: -1,
-			restored:            false,
-			Orderbook:           book.NewOrderBook(exchange, symbol),
+			Exchange:            exchange,
+			Symbol:              symbol,
+			LastCommittedOffset: map[int32]int64{},
+			LastProcessedOffset: map[int32]int64{},
+			Restored:            false,
+			Orderbook:           book.NewOrderBook(),
 		}
 	}
 
@@ -136,7 +241,7 @@ func (w *Worker) RestoreOrCreateState(exchange string, symbol string) *SymbolSta
 		logger.Log.Error("Error in unmarshalling snapshot for key", "key", bufferKey, "error", marshalErr)
 	}
 
-	book := book.NewOrderBook(exchange, symbol)
+	book := book.NewOrderBook()
 
 	// reapply updates
 	for _, lvl := range orderbookSnapshot.Bids {
@@ -147,10 +252,59 @@ func (w *Worker) RestoreOrCreateState(exchange string, symbol string) *SymbolSta
 		book.Asks.Upsert(lvl.Price, lvl.Quantity)
 	}
 
+	// reapply partition offset maps from snapshot
 	return &SymbolState{
-		lastCommittedOffset: orderbookSnapshot.Offset,
-		lastProcessedOffset: orderbookSnapshot.Offset,
-		restored:            true,
+		Exchange:            exchange,
+		Symbol:              symbol,
+		TimestampMillis:     orderbookSnapshot.SnapshotTsMs,
+		SnapshotPending:     false,
+		LastCommittedOffset: orderbookSnapshot.PartitionOffsets,
+		LastProcessedOffset: orderbookSnapshot.PartitionOffsets,
+		Restored:            true,
 		Orderbook:           book,
+	}
+}
+
+func (w *Worker) CloneLightWeight(exchange string,
+	symbol string,
+	partitionOffsets map[int32]int64) *book.OrderBookSnapshot {
+
+	key := exchange + ":" + symbol
+	b := w.OrderbookStateMap[key].Orderbook
+
+	// copy partition offsets
+	copiedOffsets := make(map[int32]int64)
+	for partition, offset := range partitionOffsets {
+		copiedOffsets[partition] = offset
+	}
+
+	bids := make([]*book.PriceLevel, 0)
+	asks := make([]*book.PriceLevel, 0)
+
+	b.Bids.Iterate(func(price, quantity float64) bool {
+		bids = append(bids, &book.PriceLevel{
+			Price:    price,
+			Quantity: quantity,
+		})
+
+		return true
+	})
+
+	b.Asks.Iterate(func(price, quantity float64) bool {
+		asks = append(asks, &book.PriceLevel{
+			Price:    price,
+			Quantity: quantity,
+		})
+
+		return true
+	})
+
+	return &book.OrderBookSnapshot{
+		Exchange:         exchange,
+		Symbol:           symbol,
+		PartitionOffsets: copiedOffsets,
+		TimestampMillis:  time.Now().UnixMilli(),
+		Bids:             bids,
+		Asks:             asks,
 	}
 }
