@@ -1,0 +1,26 @@
+# config validation
+
+kafka:
+  bootstrap_servers:
+    - localhost:9092
+  topics:
+    upstream: normalized_book
+    downstream: aggregated_book
+  consumer_group: orderbook-group-1
+  max_buffer_records: 5000
+  backpressure:
+    queue_usage_high_threshold: 0.8
+    queue_usage_low_threshold: 0.4
+    threshold_active_millis: 5000
+    cooldown_time_millis: 5000
+  cb_req_count: 1
+  cb_failure_ratio: 0.8
+  produce_error_buffer_size: 1000
+  flush_interval_seconds: 10
+
+redis:
+  ttl_minutes: 2
+  pool_size: 1000
+  min_idle_conns: 100
+
+worker_count: 16
