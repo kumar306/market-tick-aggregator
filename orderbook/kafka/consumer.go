@@ -18,6 +18,7 @@ var (
 	once                    sync.Once
 	UpstreamTopic           string
 	DownstreamTopic         string
+	ConsumerGroup           string
 	ProducerErrors          chan error
 	KafkaBreaker            *gobreaker.CircuitBreaker
 	KafkaBreakerTestingHook func()
@@ -30,8 +31,11 @@ func Init(ctx context.Context, cfg *constants.KafkaConfig) {
 			kgo.ConsumeTopics(cfg.TopicConfig.Upstream),
 			kgo.ConsumerGroup(cfg.ConsumerGroup),
 			kgo.MaxBufferedRecords(cfg.MaxBufferRecords),
+			kgo.DisableAutoCommit(),
 		)
 		Client = client
+		DownstreamTopic = cfg.TopicConfig.Downstream
+		ConsumerGroup = cfg.ConsumerGroup
 		if err != nil || client == nil {
 			logger.Log.Error("Error in creating kafka consumer. Returning", "error", err)
 			os.Exit(1)

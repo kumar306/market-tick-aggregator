@@ -4,6 +4,7 @@ import (
 	"context"
 	"market-orderbook/book"
 	"market-orderbook/constants"
+	"market-orderbook/kafka"
 	"market-orderbook/proto/generated"
 	"market-orderbook/redis"
 	"shared/logger"
@@ -23,15 +24,18 @@ type Worker struct {
 	// channel thru which book updates enter
 	UpdateChannel chan *constants.DispatchRecord
 
+	FlushDepth int
+
 	// snapshot fields
 	SnapshotChannel chan struct{}
-	SnapshotDepth   int
-
 	// on snapshot, for every symbol managed by worker, we will do snapshot
 	SnapshotStateMap map[string]*book.OrderBookSnapshot
 
 	// orderbook state for symbol
 	OrderbookStateMap map[string]*SymbolState
+
+	// ack channel for distributed commit coordinator
+	AckChannel chan *constants.FlushAck
 }
 
 type SymbolState struct {
@@ -88,7 +92,7 @@ func (w *Worker) Run() {
 			case constants.FlushEvent:
 				// this guy will persist to downstream - a bunch of orderbook states with top N prices level - to be consumed by time series db
 				// upon updating the last committed offset and committing the records post flush, it sends a snapshot event to the worker channel asking it to snapshot the committed state to redis
-				w.FlushBook()
+				w.FlushBook(rec.FlushEpoch)
 			}
 		}
 	}
@@ -120,10 +124,90 @@ func (w *Worker) ProcessBookUpdate(rec *constants.DispatchRecord) {
 	state.LastProcessedOffset[rec.Partition] = rec.Offset
 }
 
-func (w *Worker) FlushBook() {
+func (w *Worker) FlushBook(flushEpoch int32) {
 	// this will persist the book to kafka
 	// send the last committed partition offset map to an ack channel read by coordinated committer
 
+	// for each symbol managed by the worker,
+	// create OrderbookSnapshot with N prices, spread, best bid, best ask
+	// make into proto
+	// publish to kafka
+	// send the lastProcessedOffset to ack channel
+
+	for key, st := range w.OrderbookStateMap {
+
+		protoBids := make([]*generated.OrderbookFlush_BookLevel, 0)
+		protoAsks := make([]*generated.OrderbookFlush_BookLevel, 0)
+
+		bids := st.Orderbook.Bids.TopN(w.FlushDepth)
+		asks := st.Orderbook.Asks.TopN(w.FlushDepth)
+
+		for _, bid := range bids {
+			protoBids = append(protoBids, &generated.OrderbookFlush_BookLevel{
+				Price:  bid.Price,
+				Volume: bid.Quantity,
+			})
+		}
+
+		for _, ask := range asks {
+			protoAsks = append(protoAsks, &generated.OrderbookFlush_BookLevel{
+				Price:  ask.Price,
+				Volume: ask.Quantity,
+			})
+		}
+
+		bestBid := bids[len(bids)-1]
+		bestAsk := asks[0]
+		spread := bestAsk.Price - bestBid.Price
+
+		flushedBook := &generated.OrderbookFlush{
+			Exchange:        st.Exchange,
+			Symbol:          st.Symbol,
+			EventTimeMillis: st.TimestampMillis,
+			Bids:            protoBids,
+			Asks:            protoAsks,
+			BestBid: &generated.OrderbookFlush_BookLevel{
+				Price:  bestBid.Price,
+				Volume: bestBid.Quantity,
+			},
+			BestAsk: &generated.OrderbookFlush_BookLevel{
+				Price:  bestAsk.Price,
+				Volume: bestAsk.Quantity,
+			},
+			Spread: spread,
+		}
+
+		keyBytes := []byte(key)
+		valBytes, protoErr := proto.Marshal(flushedBook)
+		if protoErr != nil {
+			logger.Log.Info("Error when marshalling orderbook to flushed book", "exchange", st.Exchange, "symbol", st.Symbol, "worker", w.ID, "error", protoErr)
+			continue
+		}
+
+		// flush to downstream
+		kafka.ProduceAsync(w.Ctx, kafka.Client, keyBytes, valBytes)
+	}
+
+	ackOffsetMap := make(map[int32]int64)
+
+	// track the max offset which the worker has processed in all its tracked partitions
+	// it will track x symbols in k partitions and a combination of them interleaved in multiple partitions
+	// provide the max offset map to coordinator to show how far the worker has processed for his partitions
+
+	for _, st := range w.OrderbookStateMap {
+		for partition, offset := range st.LastProcessedOffset {
+			ackOffsetMap[partition] = max(ackOffsetMap[partition], offset)
+		}
+	}
+
+	// send the flush ack with epoch for distributed commit
+	w.AckChannel <- &constants.FlushAck{
+		Epoch:            flushEpoch,
+		WorkerID:         w.ID,
+		PartitionOffsets: ackOffsetMap,
+	}
+
+	// distributed committer commits least offset for a symbol
 	// will update the latest committed offset post commit at the kafka level
 	// enqueues a snapshot event to worker channel post committing
 }
