@@ -67,14 +67,30 @@ func CreateWorkerChannels(workerCount int, chanSize int) []chan *constants.Dispa
 	return workerChannels
 }
 
-func StartWorkerChannels(ctx context.Context, workerChannels []chan *constants.DispatchRecord) {
+func CreateWorkerAckChannels(workerCount int, chanSize int) []chan *constants.Ack {
+	var workerAckChannels []chan *constants.Ack
+
+	for i := 0; i < workerCount; i++ {
+		ch := make(chan *constants.Ack, chanSize)
+		workerAckChannels = append(workerAckChannels, ch)
+	}
+
+	logger.Log.Info("Created worker ack channels", "count", workerCount)
+	return workerAckChannels
+}
+
+func StartWorkerChannels(ctx context.Context, workerChannels []chan *constants.DispatchRecord,
+	AckCh chan *constants.Ack,
+	workerAckChannels []chan *constants.Ack) {
 	for idx, ch := range workerChannels {
-		go startWorker(ctx, idx, ch)
+		go startWorker(ctx, idx, ch, AckCh, workerAckChannels[idx])
 	}
 }
 
-func startWorker(ctx context.Context, idx int, ch chan *constants.DispatchRecord) {
+func startWorker(ctx context.Context, idx int,
+	ch chan *constants.DispatchRecord,
+	AckCh, updateAckCh chan *constants.Ack) {
 	logger.Log.Info("Starting worker.", "workerIdx", idx)
-	worker := worker.NewWorker(idx, ctx, ch)
+	worker := worker.NewWorker(idx, ctx, ch, AckCh, updateAckCh)
 	worker.Run()
 }

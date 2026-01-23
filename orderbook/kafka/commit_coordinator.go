@@ -6,6 +6,7 @@ import (
 	"shared/logger"
 	"time"
 
+	"github.com/twmb/franz-go/pkg/kerr"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/kmsg"
 )
@@ -25,20 +26,24 @@ type EpochState struct {
 type CommitCoordinator struct {
 	EpochMap           map[int32]*EpochState
 	LastCommittedEpoch int32
+	FlushAckChannel    chan *constants.Ack
+	UpdateAckChannels  []chan *constants.Ack
 }
 
 var Coordinator *CommitCoordinator
 
-func InitCoordinator() {
-	Coordinator = &CommitCoordinator{
+func NewCoordinator(workerCount int, updateAckChannels []chan *constants.Ack) *CommitCoordinator {
+	return &CommitCoordinator{
 		EpochMap:           make(map[int32]*EpochState),
 		LastCommittedEpoch: 0,
+		FlushAckChannel:    make(chan *constants.Ack, workerCount),
+		UpdateAckChannels:  updateAckChannels,
 	}
 }
 
-func StartEpoch(epoch int32, participants map[int]struct{}) {
+func (c *CommitCoordinator) StartEpoch(epoch int32, participants map[int]struct{}) {
 	logger.Log.Info("Starting epoch in coordinator", "epoch", epoch)
-	Coordinator.EpochMap[epoch] = &EpochState{
+	c.EpochMap[epoch] = &EpochState{
 		Epoch:        epoch,
 		CreatedAt:    time.Now(),
 		Participants: participants,
@@ -46,13 +51,13 @@ func StartEpoch(epoch int32, participants map[int]struct{}) {
 	}
 }
 
-func RunWorkerAckCommitter(ctx context.Context, client *kgo.Client, ackChannel chan *constants.FlushAck) {
+func (c *CommitCoordinator) RunWorkerAckCommitter(ctx context.Context, client *kgo.Client) {
 	for {
 		select {
 		case <-ctx.Done():
 			logger.Log.Info("Received ctx done in coordinated committer loop.. returning")
 			return
-		case flushAck := <-ackChannel:
+		case Ack := <-c.FlushAckChannel:
 			{
 				// flush ack is from some worker
 				// delete the participant from the remaining participants yet to ack
@@ -60,33 +65,34 @@ func RunWorkerAckCommitter(ctx context.Context, client *kgo.Client, ackChannel c
 				// if coordinator's epoch map's epoch's acks is of len(participants)
 				// then calc the min
 
-				if _, ok := Coordinator.EpochMap[flushAck.Epoch].Participants[flushAck.WorkerID]; !ok {
+				if _, ok := c.EpochMap[Ack.Epoch].Participants[Ack.WorkerID]; !ok {
 					continue
 				}
 
-				delete(Coordinator.EpochMap[flushAck.Epoch].Participants, flushAck.WorkerID)
-				Coordinator.EpochMap[flushAck.Epoch].Acks[flushAck.WorkerID] = flushAck.PartitionOffsets
+				delete(c.EpochMap[Ack.Epoch].Participants, Ack.WorkerID)
+				c.EpochMap[Ack.Epoch].Acks[Ack.WorkerID] = Ack.PartitionOffsets
 
 				// if no participants left to ack for the epoch
-				if len(Coordinator.EpochMap[flushAck.Epoch].Participants) == 0 {
+				if len(c.EpochMap[Ack.Epoch].Participants) == 0 {
 					// assemble the last committed map
 					// for each worker, the least offset value for each partition
-					newCommittedPartitionOffsets := make(map[int32]int64)
+					minOffsetPerPartition := make(map[int32]int64)
 
-					for _, val := range Coordinator.EpochMap[flushAck.Epoch].Acks {
+					for _, val := range c.EpochMap[Ack.Epoch].Acks {
 						for partition, offset := range val {
-							if _, ok := newCommittedPartitionOffsets[partition]; !ok {
-								newCommittedPartitionOffsets[partition] = offset
+							if _, ok := minOffsetPerPartition[partition]; !ok {
+								minOffsetPerPartition[partition] = offset
 							} else {
-								newCommittedPartitionOffsets[partition] = min(newCommittedPartitionOffsets[partition], offset)
+								minOffsetPerPartition[partition] = min(minOffsetPerPartition[partition], offset)
 							}
 						}
 					}
 
 					uncommitted := make(map[string]map[int32]kgo.EpochOffset)
+					uncommitted[UpstreamTopic] = make(map[int32]kgo.EpochOffset)
 
-					for partition, offset := range newCommittedPartitionOffsets {
-						uncommitted[ConsumerGroup][partition] = kgo.EpochOffset{
+					for partition, offset := range minOffsetPerPartition {
+						uncommitted[UpstreamTopic][partition] = kgo.EpochOffset{
 							// written in doc to do Offset: the offset to read next from. so inc 1
 							Offset: offset + 1,
 							Epoch:  -1,
@@ -94,14 +100,42 @@ func RunWorkerAckCommitter(ctx context.Context, client *kgo.Client, ackChannel c
 					}
 
 					// commit the offsets
-					client.CommitOffsetsSync(ctx, uncommitted, func(c *kgo.Client,
+					client.CommitOffsets(ctx, uncommitted, func(client *kgo.Client,
 						req *kmsg.OffsetCommitRequest, resp *kmsg.OffsetCommitResponse, err error) {
+						if err != nil {
+							logger.Log.Error("Offset commit failed", "error", err)
+							return
+						}
 
+						for _, topic := range resp.Topics {
+							for _, partition := range topic.Partitions {
+								if partition.ErrorCode != 0 {
+									logger.Log.Error("Partition commit failed",
+										"partition", partition.Partition,
+										"error", kerr.ErrorForCode(partition.ErrorCode))
+									return
+								}
+							}
+						}
+
+						// broadcast it back to the workers via ack channel
+						for _, ch := range c.UpdateAckChannels {
+							select {
+							case ch <- &constants.Ack{
+								Epoch:            Ack.Epoch,
+								PartitionOffsets: minOffsetPerPartition,
+							}:
+							default:
+								logger.Log.Info("Update ack dropped as channel blocked or overloaded", "epoch", Ack.Epoch)
+							}
+						}
+
+						// trigger a snapshot execute event from worker as now offsets are committed and cloned book can be backed up
+
+						// cleanup epoch state
+						c.LastCommittedEpoch = Ack.Epoch
+						delete(c.EpochMap, Ack.Epoch)
 					})
-
-					// broadcast it back to the workers via ack channel
-
-					// cleanup epoch state
 				}
 			}
 		}

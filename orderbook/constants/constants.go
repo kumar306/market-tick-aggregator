@@ -67,7 +67,7 @@ type DispatchRecord struct {
 	FlushEpoch int32
 }
 
-type FlushAck struct {
+type Ack struct {
 	Epoch            int32
 	WorkerID         int
 	PartitionOffsets map[int32]int64

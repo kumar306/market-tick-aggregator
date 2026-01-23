@@ -10,7 +10,10 @@ import (
 
 var Epoch int32 = 0
 
-func RunEpochFlushScheduler(ctx context.Context, flushInterval int, workerChannels []chan *constants.DispatchRecord) {
+func RunEpochFlushScheduler(ctx context.Context, flushInterval int,
+	workerChannels []chan *constants.DispatchRecord,
+	coordinator *kafka.CommitCoordinator) {
+
 	// every X seconds, i will call the next epoch for flush
 	// it should inc the epoch
 	// broadcast this epoch to each worker channel
@@ -39,7 +42,7 @@ func RunEpochFlushScheduler(ctx context.Context, flushInterval int, workerChanne
 				}
 
 				// call coordinator to start epoch
-				kafka.StartEpoch(Epoch, participants)
+				coordinator.StartEpoch(Epoch, participants)
 			}
 		}
 	}

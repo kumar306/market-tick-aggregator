@@ -29,13 +29,15 @@ type Worker struct {
 	// snapshot fields
 	SnapshotChannel chan struct{}
 	// on snapshot, for every symbol managed by worker, we will do snapshot
-	SnapshotStateMap map[string]*book.OrderBookSnapshot
+	SnapshotStateMap               map[string]*book.OrderBookSnapshot
+	SnapshotPrepareIntervalSeconds int
 
 	// orderbook state for symbol
 	OrderbookStateMap map[string]*SymbolState
 
 	// ack channel for distributed commit coordinator
-	AckChannel chan *constants.FlushAck
+	AckChannel       chan *constants.Ack
+	UpdateAckChannel chan *constants.Ack
 }
 
 type SymbolState struct {
@@ -54,7 +56,7 @@ type SymbolState struct {
 	SnapshotPending bool
 }
 
-func NewWorker(id int, ctx context.Context, channel chan *constants.DispatchRecord) *Worker {
+func NewWorker(id int, ctx context.Context, channel chan *constants.DispatchRecord, AckChannel, updateAckChannel chan *constants.Ack) *Worker {
 	return &Worker{
 		ID:                id,
 		Ctx:               ctx,
@@ -62,12 +64,16 @@ func NewWorker(id int, ctx context.Context, channel chan *constants.DispatchReco
 		SnapshotChannel:   make(chan struct{}),
 		OrderbookStateMap: make(map[string]*SymbolState),
 		SnapshotStateMap:  make(map[string]*book.OrderBookSnapshot),
+		AckChannel:        AckChannel,
+		UpdateAckChannel:  updateAckChannel,
 	}
 }
 
 func (w *Worker) Run() {
 
 	go w.SnapshotExecuteLoop()
+	go w.ProcessUpdateAck()
+	go w.RunSnapshotPrepareScheduler()
 
 	for {
 		select {
@@ -201,7 +207,7 @@ func (w *Worker) FlushBook(flushEpoch int32) {
 	}
 
 	// send the flush ack with epoch for distributed commit
-	w.AckChannel <- &constants.FlushAck{
+	w.AckChannel <- &constants.Ack{
 		Epoch:            flushEpoch,
 		WorkerID:         w.ID,
 		PartitionOffsets: ackOffsetMap,
@@ -402,5 +408,39 @@ func (w *Worker) CloneLightWeight(exchange string,
 		TimestampMillis:  time.Now().UnixMilli(),
 		Bids:             bids,
 		Asks:             asks,
+	}
+}
+
+// process the update ack from commit coordinator post offset commit and trigger snapshot execute
+func (w *Worker) ProcessUpdateAck() {
+	for {
+		select {
+		case <-w.Ctx.Done():
+			logger.Log.Info("Received ctx done in process update ack. Returning", "worker", w.ID)
+			return
+		case updateAck := <-w.UpdateAckChannel:
+
+			for _, st := range w.OrderbookStateMap {
+				st.LastCommittedOffset = updateAck.PartitionOffsets
+			}
+
+			// trigger snapshot execute post commit
+			w.SnapshotChannel <- struct{}{}
+		}
+	}
+}
+
+func (w *Worker) RunSnapshotPrepareScheduler() {
+	ticker := time.NewTicker(time.Duration(w.SnapshotPrepareIntervalSeconds) * time.Second)
+	for {
+		select {
+		case <-w.Ctx.Done():
+			logger.Log.Info("Received ctx done in process update ack. Returning", "worker", w.ID)
+			return
+		case <-ticker.C:
+			w.UpdateChannel <- &constants.DispatchRecord{
+				Event: constants.SnapshotRequestEvent,
+			}
+		}
 	}
 }

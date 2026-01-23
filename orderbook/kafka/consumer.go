@@ -35,6 +35,7 @@ func Init(ctx context.Context, cfg *constants.KafkaConfig) {
 		)
 		Client = client
 		DownstreamTopic = cfg.TopicConfig.Downstream
+		UpstreamTopic = cfg.TopicConfig.Upstream
 		ConsumerGroup = cfg.ConsumerGroup
 		if err != nil || client == nil {
 			logger.Log.Error("Error in creating kafka consumer. Returning", "error", err)
