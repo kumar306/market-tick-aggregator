@@ -27,7 +27,7 @@ type Worker struct {
 	FlushDepth int
 
 	// snapshot fields
-	SnapshotChannel chan struct{}
+	SnapshotChannel chan *constants.SnapshotMsg
 	// on snapshot, for every symbol managed by worker, we will do snapshot
 	SnapshotStateMap               map[string]*book.OrderBookSnapshot
 	SnapshotPrepareIntervalSeconds int
@@ -61,7 +61,7 @@ func NewWorker(id int, ctx context.Context, channel chan *constants.DispatchReco
 		ID:                id,
 		Ctx:               ctx,
 		UpdateChannel:     channel,
-		SnapshotChannel:   make(chan struct{}),
+		SnapshotChannel:   make(chan *constants.SnapshotMsg, 10),
 		OrderbookStateMap: make(map[string]*SymbolState),
 		SnapshotStateMap:  make(map[string]*book.OrderBookSnapshot),
 		AckChannel:        AckChannel,
@@ -71,7 +71,7 @@ func NewWorker(id int, ctx context.Context, channel chan *constants.DispatchReco
 
 func (w *Worker) Run() {
 
-	go w.SnapshotExecuteLoop()
+	go w.SnapshotPersistLoop()
 	go w.ProcessUpdateAck()
 	go w.RunSnapshotPrepareScheduler()
 
@@ -99,6 +99,13 @@ func (w *Worker) Run() {
 				// this guy will persist to downstream - a bunch of orderbook states with top N prices level - to be consumed by time series db
 				// upon updating the last committed offset and committing the records post flush, it sends a snapshot event to the worker channel asking it to snapshot the committed state to redis
 				w.FlushBook(rec.FlushEpoch)
+			case constants.SnapshotExecuteEvent:
+				// segregated snapshot execute logic into worker so that only worker updates mutable snapshot state
+				// to fix data race issues
+				w.EvaluateAndDispatchSnapshot()
+			case constants.SnapshotPersistedEvent:
+				// cleanup of snapshot state in memory post redis backup
+				w.HandleSnapshotPersisted(rec.BufferKey)
 			}
 		}
 	}
@@ -125,6 +132,8 @@ func (w *Worker) ProcessBookUpdate(rec *constants.DispatchRecord) {
 		state.Orderbook.Asks.Upsert(priceLevel.Price, priceLevel.Volume)
 	}
 
+	state.TimestampMillis = rec.TsMs
+
 	// maintain the last processed offset. on flush the last committed offset = last processed offset
 	// trigger an event to snapshot channel after flush
 	state.LastProcessedOffset[rec.Partition] = rec.Offset
@@ -147,6 +156,11 @@ func (w *Worker) FlushBook(flushEpoch int32) {
 
 		bids := st.Orderbook.Bids.TopN(w.FlushDepth)
 		asks := st.Orderbook.Asks.TopN(w.FlushDepth)
+
+		// if empty then skip
+		if len(bids) == 0 || len(asks) == 0 {
+			continue
+		}
 
 		for _, bid := range bids {
 			protoBids = append(protoBids, &generated.OrderbookFlush_BookLevel{
@@ -235,82 +249,106 @@ func (w *Worker) HandleSnapshotRequest() {
 	}
 }
 
-func (w *Worker) SnapshotExecuteLoop() {
+func (w *Worker) EvaluateAndDispatchSnapshot() {
+
+	// check condition that snapshotOffset[partition] <= lastCommittedOffsetMap[partition]
+	// so we know that the snapshot object is committed and safe to snapshot
+	// we dont want to snapshot orderbook with uncommitted updates to it
+
+	for key, snapshot := range w.SnapshotStateMap {
+		if !w.OrderbookStateMap[key].SnapshotPending {
+			// no snapshot is pending for this symbol
+			continue
+		}
+
+		snapshotOffsetMap := snapshot.PartitionOffsets
+		lastCommittedOffsetMap := w.OrderbookStateMap[key].LastCommittedOffset
+		var canSnapshot bool = true
+		for partition := range snapshotOffsetMap {
+			if snapshotOffsetMap[partition] > lastCommittedOffsetMap[partition] {
+				canSnapshot = false
+				break
+			}
+		}
+
+		if !canSnapshot {
+			// condition not satisfied yet. it will try later and succeed
+			continue
+		}
+
+		w.SnapshotChannel <- &constants.SnapshotMsg{
+			Snapshot: snapshot,
+			Key:      key,
+		}
+	}
+}
+
+// to change the state only after successful redis write. once we know snapshot is persisted
+func (w *Worker) HandleSnapshotPersisted(key string) {
+	w.OrderbookStateMap[key].SnapshotPending = false
+	delete(w.SnapshotStateMap, key)
+}
+
+func (w *Worker) SnapshotPersistLoop() {
 	for {
 		select {
 		case <-w.Ctx.Done():
 			logger.Log.Info("Received ctx done event.. returning worker snapshot execute loop")
 			return
-		case _ = <-w.SnapshotChannel:
-			{
+		case msg := <-w.SnapshotChannel:
 
-				// check condition that snapshotOffset[partition] <= lastCommittedOffsetMap[partition]
-				// so we know that the snapshot object is committed and safe to snapshot
-				// we dont want to snapshot orderbook with uncommitted updates to it
+			key := msg.Key
+			snapshot := msg.Snapshot
 
-				for key, snapshot := range w.SnapshotStateMap {
-					if !w.OrderbookStateMap[key].SnapshotPending {
-						// no snapshot is pending for this symbol
-						continue
-					}
-
-					snapshotOffsetMap := snapshot.PartitionOffsets
-					lastCommittedOffsetMap := w.OrderbookStateMap[key].LastCommittedOffset
-					var canSnapshot bool = true
-					for partition := range snapshotOffsetMap {
-						if snapshotOffsetMap[partition] > lastCommittedOffsetMap[partition] {
-							canSnapshot = false
-							break
-						}
-					}
-
-					if !canSnapshot {
-						// condition not satisfied yet. it will try later and succeed
-						continue
-					}
-
-					protoBids := make([]*generated.PriceLevel, 0)
-					for _, bid := range snapshot.Bids {
-						protoBids = append(protoBids, &generated.PriceLevel{
-							Price:    bid.Price,
-							Quantity: bid.Quantity,
-						})
-					}
-
-					protoAsks := make([]*generated.PriceLevel, 0)
-					for _, ask := range snapshot.Asks {
-						protoAsks = append(protoAsks, &generated.PriceLevel{
-							Price:    ask.Price,
-							Quantity: ask.Quantity,
-						})
-					}
-
-					snapshotProto := &generated.OrderBookSnapshot{
-						Exchange:         snapshot.Exchange,
-						Symbol:           snapshot.Symbol,
-						PartitionOffsets: snapshot.PartitionOffsets,
-						SnapshotTsMs:     snapshot.TimestampMillis,
-						Bids:             protoBids,
-						Asks:             protoAsks,
-					}
-
-					snapshotBytestream, marshalErr := proto.Marshal(snapshotProto)
-					if marshalErr != nil {
-						logger.Log.Error("Error in marshalling snapshot to protobuf", "key", key, "error", marshalErr)
-						continue
-					}
-
-					redisErr := redis.LoadSnapshot(w.Ctx, key, snapshotBytestream)
-					if redisErr != nil {
-						logger.Log.Error("Error in loading snapshot to redis", "key", key, "error", redisErr)
-						continue
-					}
-
-					w.OrderbookStateMap[key].SnapshotPending = false
-					logger.Log.Info("Backed up snapshot to redis", "workerIdx", w.ID, "key", key)
-				}
+			if len(snapshot.Bids) == 0 || len(snapshot.Asks) == 0 {
+				continue
 			}
+
+			protoBids := make([]*generated.PriceLevel, 0)
+			for _, bid := range snapshot.Bids {
+				protoBids = append(protoBids, &generated.PriceLevel{
+					Price:    bid.Price,
+					Quantity: bid.Quantity,
+				})
+			}
+
+			protoAsks := make([]*generated.PriceLevel, 0)
+			for _, ask := range snapshot.Asks {
+				protoAsks = append(protoAsks, &generated.PriceLevel{
+					Price:    ask.Price,
+					Quantity: ask.Quantity,
+				})
+			}
+
+			snapshotProto := &generated.OrderBookSnapshot{
+				Exchange:         snapshot.Exchange,
+				Symbol:           snapshot.Symbol,
+				PartitionOffsets: snapshot.PartitionOffsets,
+				SnapshotTsMs:     snapshot.TimestampMillis,
+				Bids:             protoBids,
+				Asks:             protoAsks,
+			}
+
+			snapshotBytestream, marshalErr := proto.Marshal(snapshotProto)
+			if marshalErr != nil {
+				logger.Log.Error("Error in marshalling snapshot to protobuf", "key", key, "error", marshalErr)
+				continue
+			}
+
+			redisErr := redis.LoadSnapshot(w.Ctx, key, snapshotBytestream)
+			if redisErr != nil {
+				logger.Log.Error("Error in loading snapshot to redis", "key", key, "error", redisErr)
+				continue
+			}
+
+			w.UpdateChannel <- &constants.DispatchRecord{
+				Event:     constants.SnapshotPersistedEvent,
+				BufferKey: key,
+			}
+
+			logger.Log.Info("Backed up snapshot to redis", "workerIdx", w.ID, "key", key)
 		}
+
 	}
 }
 
@@ -421,11 +459,17 @@ func (w *Worker) ProcessUpdateAck() {
 		case updateAck := <-w.UpdateAckChannel:
 
 			for _, st := range w.OrderbookStateMap {
-				st.LastCommittedOffset = updateAck.PartitionOffsets
+				copiedMap := make(map[int32]int64)
+				for partition, offset := range updateAck.PartitionOffsets {
+					copiedMap[partition] = offset
+				}
+				st.LastCommittedOffset = copiedMap
 			}
 
 			// trigger snapshot execute post commit
-			w.SnapshotChannel <- struct{}{}
+			w.UpdateChannel <- &constants.DispatchRecord{
+				Event: constants.SnapshotExecuteEvent,
+			}
 		}
 	}
 }
@@ -438,8 +482,12 @@ func (w *Worker) RunSnapshotPrepareScheduler() {
 			logger.Log.Info("Received ctx done in process update ack. Returning", "worker", w.ID)
 			return
 		case <-ticker.C:
-			w.UpdateChannel <- &constants.DispatchRecord{
+			select {
+			case w.UpdateChannel <- &constants.DispatchRecord{
 				Event: constants.SnapshotRequestEvent,
+			}:
+			default:
+				logger.Log.Info("Dropped handle snapshot request event as channel full", "worker", w.ID)
 			}
 		}
 	}

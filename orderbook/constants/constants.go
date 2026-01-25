@@ -1,6 +1,7 @@
 package constants
 
 import (
+	"market-orderbook/book"
 	"market-orderbook/proto/generated"
 
 	"github.com/twmb/franz-go/pkg/kgo"
@@ -15,6 +16,8 @@ const (
 	ProcessEvent EventType = iota
 	FlushEvent
 	SnapshotRequestEvent
+	SnapshotExecuteEvent
+	SnapshotPersistedEvent
 )
 
 const ConfigFile string = "./config/config.yaml"
@@ -65,10 +68,16 @@ type DispatchRecord struct {
 	Symbol     string
 	TsMs       int64
 	FlushEpoch int32
+	BufferKey  string
 }
 
 type Ack struct {
 	Epoch            int32
 	WorkerID         int
 	PartitionOffsets map[int32]int64
+}
+
+type SnapshotMsg struct {
+	Snapshot *book.OrderBookSnapshot
+	Key      string
 }
