@@ -4,6 +4,8 @@ import (
 	"context"
 	"market-orderbook/constants"
 	"shared/logger"
+	"shared/metrics"
+	"strconv"
 	"time"
 
 	"github.com/twmb/franz-go/pkg/kerr"
@@ -42,6 +44,17 @@ const (
 	CheckEpochTimeoutsEvent
 )
 
+func (c CoordinatorEventType) String() string {
+	switch c {
+	case FlushAckEvent:
+		return "Normal"
+	case CheckEpochTimeoutsEvent:
+		return "Timed out"
+	default:
+		return ""
+	}
+}
+
 type CoordinatorEvent struct {
 	EventType    CoordinatorEventType
 	Ack          *constants.Ack
@@ -79,6 +92,9 @@ func (c *CommitCoordinator) StartEpoch(epoch int32, participants map[int]struct{
 		Participants: participants,
 		Acks:         make(map[int]map[int32]int64),
 	}
+
+	metrics.Orderbook_ActiveEpochPendingParticipants.Set(float64(len(participants)))
+	metrics.Orderbook_CommitActiveEpochs.Inc()
 }
 
 func (c *CommitCoordinator) PostCommitProcess(res *CommitResult) {
@@ -96,12 +112,19 @@ func (c *CommitCoordinator) PostCommitProcess(res *CommitResult) {
 				logger.Log.Info("Update ack dropped as channel blocked or overloaded", "epoch", res.Epoch)
 			}
 		}
+
+		// update the metric only for epochs which have not timed out
+		for p, o := range res.Offsets {
+			metrics.Orderbook_CommitPartitionOffsets.WithLabelValues(strconv.Itoa(int(p))).Set(float64(o))
+		}
 	}
 
 	// cleanup epoch state
 	c.LastCommittedEpoch = max(res.Epoch, c.LastCommittedEpoch)
 	delete(c.EpochMap, res.Epoch)
 
+	metrics.Orderbook_FlushEpochsTotal.WithLabelValues(res.EventType.String()).Add(1)
+	metrics.Orderbook_CommitActiveEpochs.Dec()
 }
 
 // multi event handling single threaded coordinator loops
@@ -193,6 +216,7 @@ func (c *CommitCoordinator) commitEpochOffsets(ev CoordinatorEventType, epoch in
 	}
 
 	// commit the offsets
+	start := time.Now()
 	client.CommitOffsets(ctx, uncommitted, func(client *kgo.Client,
 		req *kmsg.OffsetCommitRequest, resp *kmsg.OffsetCommitResponse, err error) {
 		if err != nil {
@@ -224,6 +248,8 @@ func (c *CommitCoordinator) commitEpochOffsets(ev CoordinatorEventType, epoch in
 				}
 			}
 		}
+
+		metrics.Orderbook_CommitLatencyMs.Observe(float64(time.Since(start).Milliseconds()))
 
 		// shifted post commit state broadcast and state cleanup back to coordinator
 		// for single ownership of mutable state
@@ -265,9 +291,11 @@ func (c *CommitCoordinator) HandleFlushAck(ev CoordinatorEventType, Ack *constan
 
 	delete(c.EpochMap[Ack.Epoch].Participants, Ack.WorkerID)
 	c.EpochMap[Ack.Epoch].Acks[Ack.WorkerID] = Ack.PartitionOffsets
+	metrics.Orderbook_ActiveEpochPendingParticipants.Dec()
 
 	// if no participants left to ack for the epoch
 	if len(c.EpochMap[Ack.Epoch].Participants) == 0 {
 		c.commitEpochOffsets(ev, Ack.Epoch, ctx, client)
+		metrics.Orderbook_ActiveEpochPendingParticipants.Set(0)
 	}
 }

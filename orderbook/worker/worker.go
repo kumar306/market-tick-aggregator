@@ -8,6 +8,8 @@ import (
 	"market-orderbook/proto/generated"
 	"market-orderbook/redis"
 	"shared/logger"
+	"shared/metrics"
+	"strconv"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -86,6 +88,9 @@ func (w *Worker) Run() {
 				logger.Log.Error("The worker channel is closed", "workerIdx", w.ID)
 				return
 			}
+
+			metrics.Orderbook_WorkerQueueDepth.WithLabelValues(strconv.Itoa(w.ID)).Set(float64(len(w.UpdateChannel) / cap(w.UpdateChannel)))
+
 			switch rec.Event {
 			case constants.ProcessEvent:
 				// process record coming from dispatcher and update worker's last processed offset variable
@@ -137,6 +142,7 @@ func (w *Worker) ProcessBookUpdate(rec *constants.DispatchRecord) {
 	// maintain the last processed offset. on flush the last committed offset = last processed offset
 	// trigger an event to snapshot channel after flush
 	state.LastProcessedOffset[rec.Partition] = rec.Offset
+	metrics.Orderbook_UpdatesTotal.WithLabelValues(strconv.Itoa(w.ID), state.Exchange, state.Symbol).Add(1)
 }
 
 func (w *Worker) FlushBook(flushEpoch int32) {
@@ -205,7 +211,7 @@ func (w *Worker) FlushBook(flushEpoch int32) {
 		}
 
 		// flush to downstream
-		kafka.ProduceAsync(w.Ctx, kafka.Client, keyBytes, valBytes)
+		kafka.ProduceAsync(w.ID, w.Ctx, kafka.Client, keyBytes, valBytes)
 	}
 
 	ackOffsetMap := make(map[int32]int64)
@@ -297,10 +303,13 @@ func (w *Worker) SnapshotPersistLoop() {
 			return
 		case msg := <-w.SnapshotChannel:
 
+			metrics.Orderbook_SnapshotRequestsTotal.WithLabelValues(strconv.Itoa(w.ID)).Inc()
+
 			key := msg.Key
 			snapshot := msg.Snapshot
 
-			if len(snapshot.Bids) == 0 || len(snapshot.Asks) == 0 {
+			if len(snapshot.Bids) == 0 && len(snapshot.Asks) == 0 {
+				metrics.Orderbook_EmptySnapshotsTotal.WithLabelValues(strconv.Itoa(w.ID)).Inc()
 				continue
 			}
 
@@ -332,12 +341,16 @@ func (w *Worker) SnapshotPersistLoop() {
 			snapshotBytestream, marshalErr := proto.Marshal(snapshotProto)
 			if marshalErr != nil {
 				logger.Log.Error("Error in marshalling snapshot to protobuf", "key", key, "error", marshalErr)
+				metrics.Orderbook_SnapshotFailuresTotal.WithLabelValues(strconv.Itoa(w.ID)).Inc()
 				continue
 			}
+
+			metrics.Orderbook_SnapshotSizeBytes.WithLabelValues(strconv.Itoa(w.ID)).Observe(float64(len(snapshotBytestream)))
 
 			redisErr := redis.LoadSnapshot(w.Ctx, key, snapshotBytestream)
 			if redisErr != nil {
 				logger.Log.Error("Error in loading snapshot to redis", "key", key, "error", redisErr)
+				metrics.Orderbook_SnapshotFailuresTotal.WithLabelValues(strconv.Itoa(w.ID)).Inc()
 				continue
 			}
 
@@ -346,6 +359,7 @@ func (w *Worker) SnapshotPersistLoop() {
 				BufferKey: key,
 			}
 
+			metrics.Orderbook_SnapshotSuccessesTotal.WithLabelValues(strconv.Itoa(w.ID)).Inc()
 			logger.Log.Info("Backed up snapshot to redis", "workerIdx", w.ID, "key", key)
 		}
 
