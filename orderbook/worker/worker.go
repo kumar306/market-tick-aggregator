@@ -89,8 +89,6 @@ func (w *Worker) Run() {
 				return
 			}
 
-			metrics.Orderbook_WorkerQueueDepth.WithLabelValues(strconv.Itoa(w.ID)).Set(float64(len(w.UpdateChannel) / cap(w.UpdateChannel)))
-
 			switch rec.Event {
 			case constants.ProcessEvent:
 				// process record coming from dispatcher and update worker's last processed offset variable

@@ -18,8 +18,11 @@ var (
 	Orderbook_SnapshotSuccessesTotal         *prometheus.CounterVec
 	Orderbook_EmptySnapshotsTotal            *prometheus.CounterVec
 	Orderbook_SnapshotSizeBytes              *prometheus.HistogramVec
-	Orderbook_BackpressureActive             prometheus.Gauge
-	Orderbook_BackpressureEventsTotal        prometheus.Counter
+	Orderbook_BackpressureState              prometheus.Gauge
+	Orderbook_BackpressureTransitionsTotal   prometheus.Counter
+	Orderbook_KafkaFetchPaused               prometheus.Gauge
+	Orderbook_MaxWorkerQueueUsage            prometheus.Histogram
+	Orderbook_ConsumerSuccessesTotal         *prometheus.CounterVec
 )
 
 func InitOrderbookMetrics() {
@@ -40,6 +43,9 @@ func InitOrderbookMetrics() {
 	Orderbook_SnapshotSuccessesTotal = NewCounterVec("snapshot_success_total", "Total number of successful persisted snapshots", []string{"worker"})
 	Orderbook_EmptySnapshotsTotal = NewCounterVec("empty_snapshots_total", "Total number of empty snapshots", []string{"worker"})
 	Orderbook_SnapshotSizeBytes = NewHistogramVec("snapshot_size_bytes", "Varying snapshot byte size per persistence", prometheus.DefBuckets, []string{"worker"})
-	Orderbook_BackpressureActive = NewGauge("backpressure_active", "Flag which is set when backpressure active")
-	Orderbook_BackpressureEventsTotal = NewCounter("backpressure_events_total", "Total number of backpressure events")
+	Orderbook_BackpressureState = NewGauge("backpressure_state", "Flag which is set when backpressure healthy/suspect/throttling")
+	Orderbook_BackpressureTransitionsTotal = NewCounter("backpressure_transitions_total", "Total number of backpressure events")
+	Orderbook_ConsumerSuccessesTotal = NewCounterVec("consumer_successes_total", "Total number of successful consumptions", []string{"partition"})
+	Orderbook_KafkaFetchPaused = NewGauge("kafka_fetch_paused", "0 -> kafka not paused, 1 -> kafka paused")
+	Orderbook_MaxWorkerQueueUsage = NewHistogram("max_worker_queue_usage", "Track max worker queue usage over time", prometheus.DefBuckets)
 }

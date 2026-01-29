@@ -7,12 +7,21 @@ import (
 	"market-orderbook/proto/generated"
 	"market-orderbook/worker"
 	"shared/logger"
+	"shared/metrics"
+	"strconv"
 
 	"github.com/twmb/franz-go/pkg/kgo"
 	"google.golang.org/protobuf/proto"
 )
 
-func RunDispatcher(ctx context.Context, dispatchCh chan *kgo.Record, workerChannels []chan *constants.DispatchRecord) {
+func RunDispatcher(ctx context.Context, dispatchCh chan *kgo.Record,
+	workerChannels []chan *constants.DispatchRecord,
+	cfg *constants.BackpressureConfig,
+	bpCh chan *constants.BackpressureEvent) {
+
+	// cache for queue usage of workers
+	var workerQueueUsageHandles []float64 = make([]float64, len(workerChannels))
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -39,6 +48,28 @@ func RunDispatcher(ctx context.Context, dispatchCh chan *kgo.Record, workerChann
 
 				workerId := int(hashSum) % len(workerChannels)
 
+				// let dispatcher monitor worker queue metrics
+				usage := float64(len(workerChannels[workerId])) / float64(cap(workerChannels[workerId]))
+				workerQueueUsageHandles[workerId] = usage
+				metrics.Orderbook_WorkerQueueDepth.WithLabelValues(strconv.Itoa(workerId)).Set(usage)
+
+				// compute max queue usage across all currently and send that to backpressure controller. let it report facts to controller and not dictate backpressure logic
+				// going with global backpressure rather than per worker as per worker backpressure affects orderbook correctness
+				maxQueueUsage := 0.0
+				for _, usage := range workerQueueUsageHandles {
+					maxQueueUsage = max(maxQueueUsage, usage)
+				}
+
+				select {
+				case bpCh <- &constants.BackpressureEvent{
+					MaxQueueUsage: maxQueueUsage,
+				}:
+				default:
+					// drop the report, it will see the next one
+				}
+
+				metrics.Orderbook_MaxWorkerQueueUsage.Observe(maxQueueUsage)
+
 				dispatchRec := &constants.DispatchRecord{
 					Event:    constants.ProcessEvent,
 					Offset:   rec.Offset,
@@ -49,7 +80,11 @@ func RunDispatcher(ctx context.Context, dispatchCh chan *kgo.Record, workerChann
 					TsMs:     bookUpdate.EventTimeMillis,
 				}
 
-				workerChannels[workerId] <- dispatchRec
+				select {
+				case workerChannels[workerId] <- dispatchRec:
+				default:
+					// backpressure logic
+				}
 			}
 		}
 	}

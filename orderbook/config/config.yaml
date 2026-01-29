@@ -9,10 +9,10 @@ kafka:
   consumer_group: orderbook-group-1
   max_buffer_records: 5000
   backpressure:
-    queue_usage_high_threshold: 0.8
-    queue_usage_low_threshold: 0.4
-    threshold_active_millis: 5000
-    cooldown_time_millis: 5000
+    queue_usage_high_threshold: 0.85
+    confirm_seconds: 7
+    poll_interval_ms: 1000
+    queue_usage_low_threshold: 0.40
   cb_req_count: 1
   cb_failure_ratio: 0.8
   produce_error_buffer_size: 1000

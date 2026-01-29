@@ -76,15 +76,15 @@ func Validate(cfg *constants.Config) error {
 		return logger.LogAndWrap("Backpressure queue low threshold should be in correct limit", nil)
 	}
 
-	if backpressureCfg.CooldownTimeMillis < 0 {
-		return logger.LogAndWrap("Backpressure cooldown time millis should be >=0", nil)
+	if backpressureCfg.ConfirmSeconds <= 0 {
+		return logger.LogAndWrap("Backpressure confirm seconds should be >0", nil)
 	}
 
-	if backpressureCfg.ThresholdActiveMillis <= 0 {
-		return logger.LogAndWrap("Backpressure threshold active millis should be >=0", nil)
+	if backpressureCfg.PollIntervalMs <= 0 {
+		return logger.LogAndWrap("Backpressure poll interval millis should be >0", nil)
 	}
 
-	logger.Log.Info("Aggregator config validated successfully",
+	logger.Log.Info("Orderbook config validated successfully",
 		"workers", cfg.WorkerCount)
 
 	return nil

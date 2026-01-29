@@ -43,8 +43,8 @@ type KafkaConfig struct {
 type BackpressureConfig struct {
 	QueueUsageHighThreshold float64 `yaml:"queue_usage_high_threshold"`
 	QueueUsageLowThreshold  float64 `yaml:"queue_usage_low_threshold"`
-	ThresholdActiveMillis   int64   `yaml:"threshold_active_millis"`
-	CooldownTimeMillis      int64   `yaml:"cooldown_time_millis"`
+	ConfirmSeconds          int64   `yaml:"confirm_seconds"`
+	PollIntervalMs          int64   `yaml:"poll_interval_ms"`
 }
 
 type TopicConfig struct {
@@ -80,4 +80,16 @@ type Ack struct {
 type SnapshotMsg struct {
 	Snapshot *book.OrderBookSnapshot
 	Key      string
+}
+
+type BackpressureState int
+
+const (
+	Healthy BackpressureState = iota
+	Suspect
+	Throttling
+)
+
+type BackpressureEvent struct {
+	MaxQueueUsage float64
 }
