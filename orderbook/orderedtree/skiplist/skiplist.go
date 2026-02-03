@@ -153,7 +153,12 @@ func (s *SkipList) Delete(key float64) bool {
 	if findRes.forward[0] != nil {
 		findRes.forward[0].prev = update[0]
 	} else {
-		s.tail = update[0]
+		// deleted the tail; if list is now empty, clear tail
+		if update[0] == s.head {
+			s.tail = nil
+		} else {
+			s.tail = update[0]
+		}
 	}
 
 	for s.level > 1 && s.head.forward[s.level-1] == nil {
@@ -175,7 +180,7 @@ func (s *SkipList) Min() (float64, float64, bool) {
 
 func (s *SkipList) Max() (float64, float64, bool) {
 	if s.tail != nil {
-		return s.tail.key, s.head.value, true
+		return s.tail.key, s.tail.value, true
 	}
 
 	return 0, 0, false
