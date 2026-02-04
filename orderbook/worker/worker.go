@@ -224,6 +224,8 @@ func (w *Worker) FlushBook(flushEpoch int32) {
 		}
 	}
 
+	logger.Log.Info("Sending ack to coordinator for worker, epoch", "epoch", flushEpoch, "worker", w.ID)
+
 	// send the flush ack with epoch for distributed commit
 	w.AckChannel <- &constants.Ack{
 		Epoch:            flushEpoch,
@@ -277,9 +279,11 @@ func (w *Worker) EvaluateAndDispatchSnapshot() {
 
 		if !canSnapshot {
 			// condition not satisfied yet. it will try later and succeed
+			logger.Log.Warn("Snapshot offset > last committed offset. Cannot execute snapshot in this attempt", "worker", w.ID, "key", key)
 			continue
 		}
 
+		logger.Log.Info("Snapshot execute condition success. Triggering snapshot execution for worker", "worker", w.ID, "key", key)
 		w.SnapshotChannel <- &constants.SnapshotMsg{
 			Snapshot: snapshot,
 			Key:      key,
@@ -305,6 +309,8 @@ func (w *Worker) SnapshotPersistLoop() {
 
 			key := msg.Key
 			snapshot := msg.Snapshot
+
+			logger.Log.Info("Received message in snapshot channel", "worker", w.ID, "key", key)
 
 			if len(snapshot.Bids) == 0 && len(snapshot.Asks) == 0 {
 				metrics.Orderbook_EmptySnapshotsTotal.WithLabelValues(strconv.Itoa(w.ID)).Inc()
@@ -352,6 +358,8 @@ func (w *Worker) SnapshotPersistLoop() {
 				continue
 			}
 
+			logger.Log.Info("Successfully loaded snapshot in redis for key", "worker", w.ID, "key", key)
+
 			w.UpdateChannel <- &constants.DispatchRecord{
 				Event:     constants.SnapshotPersistedEvent,
 				BufferKey: key,
@@ -376,7 +384,7 @@ func (w *Worker) RestoreOrCreateState(exchange string, symbol string) *SymbolSta
 	}
 
 	// snapshot not present
-	if snapshotBytes == nil {
+	if len(snapshotBytes) == 0 {
 		return &SymbolState{
 			Exchange:            exchange,
 			Symbol:              symbol,
@@ -469,7 +477,7 @@ func (w *Worker) ProcessUpdateAck() {
 			logger.Log.Info("Received ctx done in process update ack. Returning", "worker", w.ID)
 			return
 		case updateAck := <-w.UpdateAckChannel:
-
+			logger.Log.Info("Received ack from update ack channel post commit", "worker", w.ID, "epoch", updateAck.Epoch)
 			for _, st := range w.OrderbookStateMap {
 				copiedMap := make(map[int32]int64)
 				for partition, offset := range updateAck.PartitionOffsets {
@@ -477,6 +485,8 @@ func (w *Worker) ProcessUpdateAck() {
 				}
 				st.LastCommittedOffset = copiedMap
 			}
+
+			logger.Log.Info("Updated the last committed offsets for worker. Triggering snapshot execute", "worker", w.ID)
 
 			// trigger snapshot execute post commit
 			w.UpdateChannel <- &constants.DispatchRecord{

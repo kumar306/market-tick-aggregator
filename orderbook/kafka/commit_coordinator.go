@@ -289,12 +289,14 @@ func (c *CommitCoordinator) HandleFlushAck(ev CoordinatorEventType, Ack *constan
 		return
 	}
 
+	logger.Log.Info("Received ack from worker for epoch", "epoch", Ack.Epoch, "worker", Ack.WorkerID)
 	delete(c.EpochMap[Ack.Epoch].Participants, Ack.WorkerID)
 	c.EpochMap[Ack.Epoch].Acks[Ack.WorkerID] = Ack.PartitionOffsets
 	metrics.Orderbook_ActiveEpochPendingParticipants.Dec()
 
 	// if no participants left to ack for the epoch
 	if len(c.EpochMap[Ack.Epoch].Participants) == 0 {
+		logger.Log.Info("Received acks from all participants. Starting offset commit", "epoch", Ack.Epoch)
 		c.commitEpochOffsets(ev, Ack.Epoch, ctx, client)
 		metrics.Orderbook_ActiveEpochPendingParticipants.Set(0)
 	}

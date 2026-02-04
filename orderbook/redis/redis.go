@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"github.com/redis/go-redis/v9/maintnotifications"
 )
 
 var Rdb *redis.Client
@@ -25,15 +26,30 @@ func InitRedis(cfg *constants.RedisConfig) {
 		DB:           0,
 		PoolSize:     cfg.PoolSize,
 		MinIdleConns: cfg.MinIdleConns,
+		// Redis in testcontainers (and many self-hosted setups) does not support
+		// CLIENT MAINT_NOTIFICATIONS; disable to avoid handshake warnings.
+		MaintNotificationsConfig: &maintnotifications.Config{
+			Mode: maintnotifications.ModeDisabled,
+		},
 	})
 
 	Ttl = time.Duration(cfg.TtlMinutes) * time.Minute
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
+	var lastErr error
+	for i := 0; i < 5; i++ {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		err := Rdb.Ping(ctx).Err()
+		cancel()
+		if err == nil {
+			lastErr = nil
+			break
+		}
+		lastErr = err
+		time.Sleep(200 * time.Millisecond)
+	}
 
-	if err := Rdb.Ping(ctx); err != nil {
-		logger.Log.Info("Error in Redis Client ping")
+	if lastErr != nil {
+		logger.Log.Info("Error in Redis Client ping", "error", lastErr)
 	}
 
 	logger.Log.Info("Initialised Redis Client")
