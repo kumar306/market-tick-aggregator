@@ -109,7 +109,7 @@ func StartConsumer(ctx context.Context, dispatchChannel chan *kgo.Record) {
 
 		fetches.EachError(func(topic string, partition int32, err error) {
 			logger.Log.Info("Error occurred in fetch", "topic", topic, "partition", partition, "err", err)
-			metrics.Aggregator_ConsumerErrorsTotal.WithLabelValues(string(partition)).Inc()
+			metrics.Orderbook_ConsumerErrorsTotal.WithLabelValues(string(partition)).Inc()
 		})
 	}
 }

@@ -80,7 +80,7 @@ func NewCoordinator(workerCount int, updateAckChannels []chan *constants.Ack) *C
 }
 
 func (c *CommitCoordinator) StartEpoch(epoch int32, participants map[int]struct{}) {
-	logger.Log.Info("Starting epoch in coordinator", "epoch", epoch)
+	logger.Log.Info("Starting epoch in coordinator", "epoch", epoch, "participant_count", len(participants))
 	if _, exists := c.EpochMap[epoch]; exists {
 		logger.Log.Error("Epoch already exists", "epoch", epoch)
 		return
@@ -113,6 +113,7 @@ func (c *CommitCoordinator) PostCommitProcess(res *CommitResult) {
 			}
 		}
 
+		logger.Log.Info("Completed broadcasting acks back to workers", "epoch", res.Epoch)
 		// update the metric only for epochs which have not timed out
 		for p, o := range res.Offsets {
 			metrics.Orderbook_CommitPartitionOffsets.WithLabelValues(strconv.Itoa(int(p))).Set(float64(o))
@@ -122,6 +123,7 @@ func (c *CommitCoordinator) PostCommitProcess(res *CommitResult) {
 	// cleanup epoch state
 	c.LastCommittedEpoch = max(res.Epoch, c.LastCommittedEpoch)
 	delete(c.EpochMap, res.Epoch)
+	logger.Log.Info("Deleted epoch from coordinator. Updated last committed epoch", "epoch", res.Epoch, "last_committed_epoch", c.LastCommittedEpoch)
 
 	metrics.Orderbook_FlushEpochsTotal.WithLabelValues(res.EventType.String()).Add(1)
 	metrics.Orderbook_CommitActiveEpochs.Dec()
@@ -249,6 +251,7 @@ func (c *CommitCoordinator) commitEpochOffsets(ev CoordinatorEventType, epoch in
 			}
 		}
 
+		logger.Log.Info("Committed offsets for epoch", "epoch", epoch, "event", ev.String())
 		metrics.Orderbook_CommitLatencyMs.Observe(float64(time.Since(start).Milliseconds()))
 
 		// shifted post commit state broadcast and state cleanup back to coordinator

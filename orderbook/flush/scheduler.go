@@ -27,6 +27,7 @@ func RunEpochFlushScheduler(ctx context.Context, flushInterval int,
 			return
 		case <-ticker.C:
 			{
+				logger.Log.Info("Received ticker event in epoch flush scheduler. Moving to next epoch", "nextEpoch", Epoch+1)
 				Epoch++
 				participants := make(map[int]struct{})
 				for id, ch := range workerChannels {

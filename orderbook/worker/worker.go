@@ -115,13 +115,14 @@ func (w *Worker) Run() {
 }
 
 func (w *Worker) ProcessBookUpdate(rec *constants.DispatchRecord) {
-
 	bufferKey := rec.Exchange + ":" + rec.Symbol
 
+	logger.Log.Info("Received process book update for key", "key", bufferKey)
 	state, exists := w.OrderbookStateMap[bufferKey]
 	if !exists {
 		// if the worker doesnt have an order book for the incoming symbol in memory,
 		// create a empty order book
+		logger.Log.Info("State doesnt exist for key in worker. Restoring or creating state", "worker", w.ID, "key", bufferKey)
 		state = w.RestoreOrCreateState(rec.Exchange, rec.Symbol)
 		w.OrderbookStateMap[bufferKey] = state
 	}
@@ -152,6 +153,8 @@ func (w *Worker) FlushBook(flushEpoch int32) {
 	// make into proto
 	// publish to kafka
 	// send the lastProcessedOffset to ack channel
+
+	logger.Log.Info("Received flush event for worker, epoch", "worker", w.ID, "epoch", flushEpoch)
 
 	for key, st := range w.OrderbookStateMap {
 
@@ -227,10 +230,14 @@ func (w *Worker) FlushBook(flushEpoch int32) {
 	logger.Log.Info("Sending ack to coordinator for worker, epoch", "epoch", flushEpoch, "worker", w.ID)
 
 	// send the flush ack with epoch for distributed commit
-	w.AckChannel <- &constants.Ack{
+	select {
+	case w.AckChannel <- &constants.Ack{
 		Epoch:            flushEpoch,
 		WorkerID:         w.ID,
 		PartitionOffsets: ackOffsetMap,
+	}:
+	default:
+		logger.Log.Info("Dropping ack for worker to coordinator since ack channel is overloaded/blocked")
 	}
 
 	// distributed committer commits least offset for a symbol
@@ -283,7 +290,7 @@ func (w *Worker) EvaluateAndDispatchSnapshot() {
 			continue
 		}
 
-		logger.Log.Info("Snapshot execute condition success. Triggering snapshot execution for worker", "worker", w.ID, "key", key)
+		logger.Log.Info("Snapshot execute condition success. Posting into snapshot channel for worker", "worker", w.ID, "key", key)
 		w.SnapshotChannel <- &constants.SnapshotMsg{
 			Snapshot: snapshot,
 			Key:      key,
@@ -385,6 +392,7 @@ func (w *Worker) RestoreOrCreateState(exchange string, symbol string) *SymbolSta
 
 	// snapshot not present
 	if len(snapshotBytes) == 0 {
+		logger.Log.Info("Stored snapshot not present. Creating new state", "worker", w.ID, "key", bufferKey)
 		return &SymbolState{
 			Exchange:            exchange,
 			Symbol:              symbol,
@@ -394,6 +402,8 @@ func (w *Worker) RestoreOrCreateState(exchange string, symbol string) *SymbolSta
 			Orderbook:           book.NewOrderBook(),
 		}
 	}
+
+	logger.Log.Info("Retrieving stored snapshot and restoring state for key", "key", bufferKey)
 
 	orderbookSnapshot := &generated.OrderBookSnapshot{}
 	marshalErr := proto.Unmarshal(snapshotBytes, orderbookSnapshot)
