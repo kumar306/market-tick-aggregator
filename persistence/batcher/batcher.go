@@ -2,11 +2,8 @@ package batcher
 
 import (
 	"context"
-	"market-persistence/db"
 	"shared/logger"
 	"time"
-
-	"github.com/jackc/pgx/v5"
 )
 
 // batching logic is shared across both consumers. only flush fn differs
@@ -18,14 +15,16 @@ type Batcher[T any] struct {
 	lastFlush  time.Time
 	batchSize  int
 	wasFlushed bool
-	flushFn    func(context.Context, pgx.Tx, []T) error
+	flushFn    func(context.Context, Tx, []T) error
+	sink       Sink
 }
 
 func NewBatcher[T any](
 	ctx context.Context,
 	batchSize int,
 	intervalMs time.Duration,
-	flushFn func(context.Context, pgx.Tx, []T) error) Batcher[T] {
+	flushFn func(context.Context, Tx, []T) error,
+	sink Sink) Batcher[T] {
 	return Batcher[T]{
 		batchSize:  batchSize,
 		intervalMs: intervalMs,
@@ -33,6 +32,7 @@ func NewBatcher[T any](
 		items:      make([]T, 0, batchSize),
 		lastFlush:  time.Now(),
 		ctx:        ctx,
+		sink:       sink,
 	}
 }
 
@@ -66,15 +66,10 @@ func (b *Batcher[T]) FlushIfNeeded() error {
 }
 
 // delegate the flush fn to callbacks which we will write for tick and book
+// batcher opens db agnostic transaction. its not aware about postgres. can change the DB anytime by wiring up new Sink
 func (b *Batcher[T]) Flush() error {
-	if len(b.items) == 0 {
-		return nil
-	}
 
-	tx, err := db.Pool.BeginTx(b.ctx, pgx.TxOptions{
-		IsoLevel:   pgx.ReadCommitted,
-		AccessMode: pgx.ReadWrite,
-	})
+	tx, err := b.sink.InitTx(b.ctx)
 	defer tx.Rollback(b.ctx)
 	if err != nil {
 		logger.Log.Error("Error in beginning transaction", "error", err)
