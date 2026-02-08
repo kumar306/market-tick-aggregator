@@ -15,6 +15,26 @@ type PostgresConfig struct {
 	MaxConns int
 }
 
+type KafkaConfig struct {
+	BootstrapServers   []string            `yaml:"bootstrap_servers"`
+	TopicConfig        *TopicConfig        `yaml:"topics"`
+	ConsumerGroup      string              `yaml:"consumer_group"`
+	BackpressureConfig *BackpressureConfig `yaml:"backpressure"`
+	MaxBufferRecords   int                 `yaml:"max_buffer_records"`
+}
+
+type TopicConfig struct {
+	Tick string `yaml:"tick"`
+	Book string `yaml:"book"`
+}
+
+type BackpressureConfig struct {
+	QueueUsageHighThreshold float64 `yaml:"queue_usage_high_threshold"`
+	QueueUsageLowThreshold  float64 `yaml:"queue_usage_low_threshold"`
+	ConfirmSeconds          int64   `yaml:"confirm_seconds"`
+	PollIntervalMs          int64   `yaml:"poll_interval_ms"`
+}
+
 func LoadPostgresConfig() (*PostgresConfig, error) {
 	u, err := mustEnv("POSTGRES_USER")
 	if err != nil {
