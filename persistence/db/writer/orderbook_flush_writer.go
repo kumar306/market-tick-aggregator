@@ -2,12 +2,12 @@ package writer
 
 import (
 	"context"
-	"market-persistence/batcher"
+	"market-persistence/batcher/util"
 	"market-persistence/db/model"
 	"shared/logger"
 )
 
-func FlushOrderbook(ctx context.Context, tx batcher.Tx, rows []*model.OrderbookFlush) error {
+func FlushOrderbook(ctx context.Context, tx util.Tx, rows []*model.OrderbookFlush) error {
 	const flushSql = `
 		INSERT INTO orderbook_flushes(
 		exchange, symbol, 

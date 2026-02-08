@@ -2,12 +2,12 @@ package writer
 
 import (
 	"context"
-	"market-persistence/batcher"
+	"market-persistence/batcher/util"
 	"market-persistence/db/model"
 	"shared/logger"
 )
 
-func FlushAggregateTicks(ctx context.Context, tx batcher.Tx, rows []*model.AggregatedTick) error {
+func FlushAggregateTicks(ctx context.Context, tx util.Tx, rows []*model.AggregatedTick) error {
 	const sql = `
 	INSERT INTO aggregated_ticks(
 	exchange, symbol, window_id, 
