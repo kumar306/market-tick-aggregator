@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	Db     *pgxpool.Pool
+	Pool   *pgxpool.Pool
 	DbOnce sync.Once
 )
 
@@ -48,7 +48,7 @@ func InitDB(ctx context.Context) error {
 			return
 		}
 
-		Db = db
+		Pool = db
 
 		deadline := time.Now().Add(10 * time.Second)
 		var started bool = false
@@ -70,6 +70,7 @@ func InitDB(ctx context.Context) error {
 
 		logger.Log.Info("Initialized postgres successfully", "user", cfg.User,
 			"host", cfg.Host, "port", cfg.Port, "database", cfg.Database, "max_conns", cfg.MaxConns)
+
 	})
 
 	return initErr
