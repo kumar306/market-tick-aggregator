@@ -35,7 +35,7 @@ func FlushOrderbook(ctx context.Context, tx util.Tx, rows []*model.OrderbookFlus
 			$1, $2, $3,
 			$4, $5,
 			$6, $7 
-		) ON CONFLICT (exchange, symbol, event_time) DO NOTHING;
+		) ON CONFLICT (exchange, symbol, event_time, side, level_index) DO NOTHING;
 	`
 	parentRowsAffected := 0
 	levelRowsAffected := 0

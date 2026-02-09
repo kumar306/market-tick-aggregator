@@ -28,39 +28,59 @@ func NewBookConverter() Converter[*model.OrderbookFlush] {
 
 func (t *TickConverter) Convert(input []byte) (*model.AggregatedTick, error) {
 
-	generated := &generated.AggregatedTick{}
+	output := &generated.AggregatedTick{}
 	// unmarshal and convert
 
-	if err := proto.Unmarshal(input, generated); err != nil {
+	if err := proto.Unmarshal(input, output); err != nil {
 		logger.Log.Error("Error in unmarshalling bytestream to proto", "error", err)
 		return nil, err
 	}
 
+	if output.PriceMetrics == nil {
+		output.PriceMetrics = &generated.PriceMetrics{}
+	}
+
+	if output.PriceMetrics.Ohlc == nil {
+		output.PriceMetrics.Ohlc = &generated.OHLC{}
+	}
+
+	if output.VolumeMetrics == nil {
+		output.VolumeMetrics = &generated.VolumeMetrics{}
+	}
+
+	if output.VolatilityMetrics == nil {
+		output.VolatilityMetrics = &generated.VolatilityMetrics{}
+	}
+
+	if output.TrendMetrics == nil {
+		output.TrendMetrics = &generated.TrendMetrics{}
+	}
+
 	return &model.AggregatedTick{
-		Exchange:           generated.Exchange,
-		Symbol:             generated.Symbol,
-		WindowId:           generated.WindowId,
-		StartTsMs:          generated.StartTsMs,
-		EndTsMs:            generated.EndTsMs,
-		StartTs:            time.UnixMilli(generated.StartTsMs),
-		EndTs:              time.UnixMilli(generated.EndTsMs),
-		Open:               generated.PriceMetrics.Ohlc.Open,
-		Close:              generated.PriceMetrics.Ohlc.Close,
-		Low:                generated.PriceMetrics.Ohlc.Low,
-		High:               generated.PriceMetrics.Ohlc.High,
-		VWAP:               generated.PriceMetrics.Vwap,
-		RollingVWAP:        generated.PriceMetrics.RollingVwap,
-		TWAP:               generated.PriceMetrics.Twap,
-		Microprice:         generated.PriceMetrics.Microprice,
-		Volume:             generated.VolumeMetrics.Volume,
-		RollingVolume:      generated.VolumeMetrics.RollingVolume,
-		VolumeAcceleration: generated.VolumeMetrics.VolumeAcceleration,
-		Volatility:         generated.VolatilityMetrics.Volatility,
-		Atr:                generated.VolatilityMetrics.Atr,
-		Ema:                generated.TrendMetrics.Ema,
-		Sma:                generated.TrendMetrics.Sma,
-		LogReturn:          generated.TrendMetrics.LogReturn,
-		SimpleReturn:       generated.TrendMetrics.SimpleReturn,
+		Exchange:           output.Exchange,
+		Symbol:             output.Symbol,
+		WindowId:           output.WindowId,
+		StartTsMs:          output.StartTsMs,
+		EndTsMs:            output.EndTsMs,
+		StartTs:            time.UnixMilli(output.StartTsMs),
+		EndTs:              time.UnixMilli(output.EndTsMs),
+		Open:               output.PriceMetrics.Ohlc.Open,
+		Close:              output.PriceMetrics.Ohlc.Close,
+		Low:                output.PriceMetrics.Ohlc.Low,
+		High:               output.PriceMetrics.Ohlc.High,
+		VWAP:               output.PriceMetrics.Vwap,
+		RollingVWAP:        output.PriceMetrics.RollingVwap,
+		TWAP:               output.PriceMetrics.Twap,
+		Microprice:         output.PriceMetrics.Microprice,
+		Volume:             output.VolumeMetrics.Volume,
+		RollingVolume:      output.VolumeMetrics.RollingVolume,
+		VolumeAcceleration: output.VolumeMetrics.VolumeAcceleration,
+		Volatility:         output.VolatilityMetrics.Volatility,
+		Atr:                output.VolatilityMetrics.Atr,
+		Ema:                output.TrendMetrics.Ema,
+		Sma:                output.TrendMetrics.Sma,
+		LogReturn:          output.TrendMetrics.LogReturn,
+		SimpleReturn:       output.TrendMetrics.SimpleReturn,
 	}, nil
 
 }
@@ -68,15 +88,15 @@ func (t *TickConverter) Convert(input []byte) (*model.AggregatedTick, error) {
 func (b *BookConverter) Convert(input []byte) (*model.OrderbookFlush, error) {
 
 	// unmarshal and convert
-	generated := &generated.OrderbookFlush{}
+	output := &generated.OrderbookFlush{}
 
-	if err := proto.Unmarshal(input, generated); err != nil {
+	if err := proto.Unmarshal(input, output); err != nil {
 		logger.Log.Error("Error in unmarshalling orderbook snapshot bytestream to proto", "error", err)
 		return nil, err
 	}
 
 	var levelRows []*model.OrderbookFlushLevelRow = make([]*model.OrderbookFlushLevelRow, 0)
-	for idx, bid := range generated.Bids {
+	for idx, bid := range output.Bids {
 		levelRows = append(levelRows, &model.OrderbookFlushLevelRow{
 			LevelIndex: idx,
 			Side:       "B",
@@ -85,7 +105,7 @@ func (b *BookConverter) Convert(input []byte) (*model.OrderbookFlush, error) {
 		})
 	}
 
-	for idx, ask := range generated.Asks {
+	for idx, ask := range output.Asks {
 		levelRows = append(levelRows, &model.OrderbookFlushLevelRow{
 			LevelIndex: idx,
 			Side:       "A",
@@ -94,17 +114,25 @@ func (b *BookConverter) Convert(input []byte) (*model.OrderbookFlush, error) {
 		})
 	}
 
+	if output.BestBid == nil {
+		output.BestBid = &generated.OrderbookFlush_BookLevel{}
+	}
+
+	if output.BestAsk == nil {
+		output.BestAsk = &generated.OrderbookFlush_BookLevel{}
+	}
+
 	book := &model.OrderbookFlush{
 		FlushRow: &model.OrderbookFlushRow{
-			Exchange:        generated.Exchange,
-			Symbol:          generated.Symbol,
-			EventTimeMillis: generated.EventTimeMillis,
-			EventTime:       time.UnixMilli(generated.EventTimeMillis),
-			BestBidPrice:    generated.BestBid.Price,
-			BestBidVolume:   generated.BestBid.Volume,
-			BestAskPrice:    generated.BestAsk.Price,
-			BestAskVolume:   generated.BestAsk.Volume,
-			Spread:          generated.Spread,
+			Exchange:        output.Exchange,
+			Symbol:          output.Symbol,
+			EventTimeMillis: output.EventTimeMillis,
+			EventTime:       time.UnixMilli(output.EventTimeMillis),
+			BestBidPrice:    output.BestBid.Price,
+			BestBidVolume:   output.BestBid.Volume,
+			BestAskPrice:    output.BestAsk.Price,
+			BestAskVolume:   output.BestAsk.Volume,
+			Spread:          output.Spread,
 		},
 		LevelRows: levelRows,
 	}

@@ -44,7 +44,6 @@ func Init(ctx context.Context, cfg *config.KafkaConfig) {
 		TickTopic = cfg.TopicConfig.Tick
 		BookTopic = cfg.TopicConfig.Book
 		ConsumerGroup = cfg.ConsumerGroup
-		adm = kadm.NewClient(Client)
 		if err != nil || client == nil {
 			logger.Log.Error("Error in creating kafka consumer. Returning", "error", err)
 			os.Exit(1)
@@ -55,6 +54,7 @@ func Init(ctx context.Context, cfg *config.KafkaConfig) {
 			logger.Log.Error("Error in pinging from kafka consumer. Returning", "error", err)
 		}
 
+		adm = kadm.NewClient(Client)
 	})
 }
 
@@ -62,6 +62,11 @@ func Close() {
 	// flush all buffered records before i call client.close
 	flushCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+
+	if Client == nil {
+		logger.Log.Info("Kafka client close given when client already nil")
+		return
+	}
 
 	err := Client.Flush(flushCtx)
 	if err != nil {
@@ -75,6 +80,12 @@ func Close() {
 func StartConsumer(ctx context.Context,
 	tickPipeline Processor,
 	bookPipeline Processor) {
+
+	if Client == nil {
+		logger.Log.Error("Cannot start consumer as Client not initalised")
+		return
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -96,7 +107,7 @@ func StartConsumer(ctx context.Context,
 			default:
 			}
 
-			metrics.Persistence_KafkaRecordsConsumed.WithLabelValues(string(rec.Partition)).Inc()
+			metrics.Persistence_KafkaRecordsConsumed.WithLabelValues(rec.Topic, strconv.Itoa(int(rec.Partition))).Inc()
 			switch rec.Topic {
 			case config.AggregatedTicksTopic:
 				tickPipeline.Process(rec)
@@ -107,7 +118,7 @@ func StartConsumer(ctx context.Context,
 
 		fetches.EachError(func(topic string, partition int32, err error) {
 			logger.Log.Info("Error occurred in fetch", "topic", topic, "partition", partition, "err", err)
-			metrics.Persistence_KafkaErrorsTotal.WithLabelValues(string(partition)).Inc()
+			metrics.Persistence_KafkaErrorsTotal.WithLabelValues(topic, strconv.Itoa(int(partition))).Inc()
 		})
 	}
 }
@@ -116,16 +127,7 @@ func CommitOffsetsPostWrite(ctx context.Context, topic string, partitionOffsetMa
 
 	metrics.Persistence_OffsetCommitAttempts.WithLabelValues(topic).Inc()
 
-	uncommitted := make(map[string]map[int32]kgo.EpochOffset)
-	uncommitted[topic] = make(map[int32]kgo.EpochOffset)
-
-	for p, o := range partitionOffsetMap {
-		uncommitted[topic][p] = kgo.EpochOffset{
-			// written in doc to do Offset: the offset to read next from. so inc 1
-			Offset: o + 1,
-			Epoch:  -1,
-		}
-	}
+	uncommitted := buildOffsetCommitMap(topic, partitionOffsetMap)
 
 	// if kafka offset fails, it will read same offset from kafka again later
 	// db write is idempotent so on retry it will commit
@@ -146,7 +148,7 @@ func CommitOffsetsPostWrite(ctx context.Context, topic string, partitionOffsetMa
 					return
 				}
 
-				committedOffset := req.Topics[0].Partitions[partition.Partition].Offset - 1
+				committedOffset := getCommittedOffset(req, partition.Partition)
 				metrics.Persistence_OffsetCommitted.WithLabelValues(topic.Topic, strconv.Itoa(int(partition.Partition))).Set(float64(committedOffset))
 			}
 		}
@@ -188,13 +190,46 @@ func RecordConsumerLag(ctx context.Context, topics []string) {
 				val, exists := committedOffsets.Lookup(lo.Topic, lo.Partition)
 				lastCommittedOffset = val.Offset
 
-				if !exists || lastCommittedOffset < 0 {
-					lastCommittedOffset = 0
-				}
-
-				lag := latest - lastCommittedOffset
+				lag := calculateLag(latest, lastCommittedOffset, exists)
 				metrics.Persistence_ConsumerLag.WithLabelValues(lo.Topic, strconv.Itoa(int(lo.Partition))).Set(float64(lag))
 			})
 		}
 	}
+}
+
+func buildOffsetCommitMap(topic string, partitionOffsetMap map[int32]int64) map[string]map[int32]kgo.EpochOffset {
+	uncommitted := make(map[string]map[int32]kgo.EpochOffset)
+	uncommitted[topic] = make(map[int32]kgo.EpochOffset)
+
+	for p, o := range partitionOffsetMap {
+		uncommitted[topic][p] = kgo.EpochOffset{
+			// offset commit API expects next to read, so +1 from last processed offset
+			Offset: o + 1,
+			Epoch:  -1,
+		}
+	}
+
+	return uncommitted
+}
+
+func getCommittedOffset(req *kmsg.OffsetCommitRequest, partition int32) int64 {
+	if req == nil || len(req.Topics) == 0 {
+		return 0
+	}
+	for _, p := range req.Topics[0].Partitions {
+		if p.Partition == partition {
+			return p.Offset - 1
+		}
+	}
+	return 0
+}
+
+func calculateLag(latest int64, committedOffset int64, exists bool) int64 {
+	if latest == -1 {
+		latest = 0
+	}
+	if !exists || committedOffset < 0 {
+		committedOffset = 0
+	}
+	return latest - committedOffset
 }
