@@ -5,6 +5,7 @@ import (
 	"market-persistence/batcher/util"
 	"market-persistence/db/model"
 	"shared/logger"
+	"shared/metrics"
 )
 
 func FlushAggregateTicks(ctx context.Context, tx util.Tx, rows []*model.AggregatedTick) error {
@@ -52,5 +53,6 @@ func FlushAggregateTicks(ctx context.Context, tx util.Tx, rows []*model.Aggregat
 	}
 
 	logger.Log.Info("Rows affected", "count", totalRowsAffected)
+	metrics.Persistence_DbRowsWritten.WithLabelValues("aggregated_ticks").Add(float64(totalRowsAffected))
 	return nil
 }

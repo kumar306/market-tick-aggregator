@@ -5,6 +5,7 @@ import (
 	"market-persistence/batcher/util"
 	"market-persistence/db/model"
 	"shared/logger"
+	"shared/metrics"
 )
 
 func FlushOrderbook(ctx context.Context, tx util.Tx, rows []*model.OrderbookFlush) error {
@@ -73,5 +74,8 @@ func FlushOrderbook(ctx context.Context, tx util.Tx, rows []*model.OrderbookFlus
 	}
 
 	logger.Log.Info("Total rows affected: ", "totalRows", parentRowsAffected+levelRowsAffected, "orderbook_flushes", parentRowsAffected, "orderbook_flush_levels", levelRowsAffected)
+	metrics.Persistence_DbRowsWritten.WithLabelValues("orderbook_flushes").Add(float64(parentRowsAffected))
+	metrics.Persistence_DbRowsWritten.WithLabelValues("orderbook_flush_levels").Add(float64(levelRowsAffected))
+
 	return nil
 }

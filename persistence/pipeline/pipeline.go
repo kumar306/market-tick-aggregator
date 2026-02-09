@@ -15,6 +15,7 @@ import (
 // batcher calls flush but doesnt know anything about postgres, let it know about generic sinks
 // flushFn is referred by batcher - input fn which is tied to a generic sink
 type Pipeline[U any] struct {
+	Name      string
 	Converter converter.Converter[U]
 	Batcher   batcher.Batcher[U]
 }
@@ -22,12 +23,14 @@ type Pipeline[U any] struct {
 type FlushFn[T any] func(context.Context, util.Tx, []T) error
 
 func InitTickPipeline(ctx context.Context,
+	name string,
 	topic string,
 	batchSize int,
 	intervalMs time.Duration,
 	flushFn FlushFn[*model.AggregatedTick]) *Pipeline[*model.AggregatedTick] {
 
 	batcher := batcher.NewBatcher(ctx,
+		name,
 		batchSize,
 		intervalMs,
 		(func(context.Context, util.Tx, []*model.AggregatedTick) error)(flushFn),
@@ -39,16 +42,19 @@ func InitTickPipeline(ctx context.Context,
 	return &Pipeline[*model.AggregatedTick]{
 		Converter: converter.NewTickConverter(),
 		Batcher:   batcher,
+		Name:      name,
 	}
 }
 
 func InitBookPipeline(ctx context.Context,
+	name, string,
 	topic string,
 	batchSize int,
 	intervalMs time.Duration,
 	flushFn FlushFn[*model.OrderbookFlush]) *Pipeline[*model.OrderbookFlush] {
 
 	batcher := batcher.NewBatcher(ctx,
+		name,
 		batchSize,
 		intervalMs,
 		(func(context.Context, util.Tx, []*model.OrderbookFlush) error)(flushFn),
@@ -60,6 +66,7 @@ func InitBookPipeline(ctx context.Context,
 	return &Pipeline[*model.OrderbookFlush]{
 		Converter: converter.NewBookConverter(),
 		Batcher:   batcher,
+		Name:      name,
 	}
 }
 

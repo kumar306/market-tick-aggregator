@@ -5,9 +5,12 @@ import (
 	"market-persistence/config"
 	"os"
 	"shared/logger"
+	"shared/metrics"
+	"strconv"
 	"sync"
 	"time"
 
+	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kerr"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/kmsg"
@@ -15,6 +18,7 @@ import (
 
 var (
 	Client        *kgo.Client
+	adm           *kadm.Client
 	once          sync.Once
 	TickTopic     string
 	BookTopic     string
@@ -35,6 +39,7 @@ func Init(ctx context.Context, cfg *config.KafkaConfig) {
 		TickTopic = cfg.TopicConfig.Tick
 		BookTopic = cfg.TopicConfig.Book
 		ConsumerGroup = cfg.ConsumerGroup
+		adm = kadm.NewClient(Client)
 		if err != nil || client == nil {
 			logger.Log.Error("Error in creating kafka consumer. Returning", "error", err)
 			os.Exit(1)
@@ -80,7 +85,7 @@ func StartConsumer(ctx context.Context, dispatchChannel chan *kgo.Record) {
 		fetches.EachRecord(func(rec *kgo.Record) {
 			select {
 			case dispatchChannel <- rec:
-				// metrics.Orderbook_ConsumerSuccessesTotal.WithLabelValues(string(rec.Partition)).Inc()
+				metrics.Persistence_KafkaRecordsConsumed.WithLabelValues(string(rec.Partition)).Inc()
 			case <-ctx.Done():
 				return
 			}
@@ -88,12 +93,15 @@ func StartConsumer(ctx context.Context, dispatchChannel chan *kgo.Record) {
 
 		fetches.EachError(func(topic string, partition int32, err error) {
 			logger.Log.Info("Error occurred in fetch", "topic", topic, "partition", partition, "err", err)
-			// metrics.Orderbook_ConsumerErrorsTotal.WithLabelValues(string(partition)).Inc()
+			metrics.Persistence_KafkaErrorsTotal.WithLabelValues(string(partition)).Inc()
 		})
 	}
 }
 
 func CommitOffsetsPostWrite(ctx context.Context, topic string, partitionOffsetMap map[int32]int64) {
+
+	metrics.Persistence_OffsetCommitAttempts.WithLabelValues(topic).Inc()
+
 	uncommitted := make(map[string]map[int32]kgo.EpochOffset)
 	uncommitted[topic] = make(map[int32]kgo.EpochOffset)
 
@@ -110,6 +118,7 @@ func CommitOffsetsPostWrite(ctx context.Context, topic string, partitionOffsetMa
 	Client.CommitOffsets(ctx, uncommitted, func(c *kgo.Client, req *kmsg.OffsetCommitRequest, resp *kmsg.OffsetCommitResponse, err error) {
 		if err != nil {
 			logger.Log.Error("Kafka offset commit failed. Will replay the log and try to commit again")
+			metrics.Persistence_OffsetCommitFailures.WithLabelValues(topic).Inc()
 			return
 		}
 
@@ -119,12 +128,59 @@ func CommitOffsetsPostWrite(ctx context.Context, topic string, partitionOffsetMa
 					logger.Log.Error("Partition commit failed",
 						"partition", partition.Partition,
 						"error", kerr.ErrorForCode(partition.ErrorCode))
+					metrics.Persistence_OffsetCommitFailures.WithLabelValues(topic.Topic).Inc()
 					return
 				}
+
+				committedOffset := req.Topics[0].Partitions[partition.Partition].Offset - 1
+				metrics.Persistence_OffsetCommitted.WithLabelValues(topic.Topic, strconv.Itoa(int(partition.Partition))).Set(float64(committedOffset))
 			}
 		}
 
 		logger.Log.Info("Committed offsets successfully")
-		// add prom metric later
+		metrics.Persistence_OffsetCommitSuccess.WithLabelValues(topic).Inc()
 	})
+}
+
+func RecordConsumerLag(ctx context.Context, topics []string) {
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			logger.Log.Info("Received ctx done event. Returning from record consumer lag loop")
+			return
+		case <-ticker.C:
+			latestOffsets, err := adm.ListEndOffsets(ctx, topics...)
+			if err != nil {
+				logger.Log.Error("Error fetching latest offsets", "err", err)
+				continue
+			}
+			committedOffsets, err := adm.ListCommittedOffsets(ctx, topics...)
+			if err != nil {
+				logger.Log.Error("Error fetching committed offsets", "err", err)
+				continue
+			}
+
+			latestOffsets.Each(func(lo kadm.ListedOffset) {
+				latest := lo.Offset
+				var lastCommittedOffset int64
+				// coudn't find offset
+				if latest == -1 {
+					latest = 0
+				}
+
+				val, exists := committedOffsets.Lookup(lo.Topic, lo.Partition)
+				lastCommittedOffset = val.Offset
+
+				if !exists || lastCommittedOffset < 0 {
+					lastCommittedOffset = 0
+				}
+
+				lag := latest - lastCommittedOffset
+				metrics.Persistence_ConsumerLag.WithLabelValues(lo.Topic, strconv.Itoa(int(lo.Partition))).Set(float64(lag))
+			})
+		}
+	}
 }

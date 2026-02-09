@@ -4,6 +4,7 @@ import (
 	"context"
 	"market-persistence/batcher/util"
 	"shared/logger"
+	"shared/metrics"
 	"time"
 )
 
@@ -29,6 +30,7 @@ type BatchMessage[T any] struct {
 // batching logic is shared across both consumers. only flush fn differs
 // better to have 2 instantiations of the batcher rather than batcher interface
 type Batcher[T any] struct {
+	pipeline        string
 	ctx             context.Context
 	batchCh         chan *BatchMessage[T]
 	items           []*BatchItem[T]
@@ -42,6 +44,7 @@ type Batcher[T any] struct {
 
 func NewBatcher[T any](
 	ctx context.Context,
+	pipeline string,
 	batchSize int,
 	intervalMs time.Duration,
 	flushFn func(context.Context, util.Tx, []T) error,
@@ -49,6 +52,7 @@ func NewBatcher[T any](
 	offsetCommitter util.OffsetCommitter) Batcher[T] {
 	return Batcher[T]{
 		batchSize:       batchSize,
+		pipeline:        pipeline,
 		batchCh:         make(chan *BatchMessage[T], batchSize*3),
 		intervalMs:      intervalMs,
 		flushFn:         flushFn,
@@ -118,6 +122,7 @@ func (b *Batcher[T]) Add(item BatchItem[T]) {
 // flush on items size exceeds limit
 func (b *Batcher[T]) HandleBatchAndFlush(item *BatchItem[T]) error {
 	b.items = append(b.items, item)
+	metrics.Persistence_BatchSize.WithLabelValues(b.pipeline).Observe(float64(len(b.items)))
 
 	if len(b.items) >= b.batchSize {
 		if err := b.Flush(); err != nil {
@@ -147,6 +152,7 @@ func (b *Batcher[T]) FlushIfNeeded() error {
 // delegate the flush fn to callbacks which we will write for tick and book
 // batcher opens db agnostic transaction. its not aware about postgres. can change the DB anytime by wiring up new Sink
 func (b *Batcher[T]) Flush() error {
+	start := time.Now()
 	tx, err := b.sink.InitTx(b.ctx)
 	if err != nil {
 		logger.Log.Error("Error in beginning transaction", "error", err)
@@ -159,13 +165,17 @@ func (b *Batcher[T]) Flush() error {
 		items = append(items, item.Item)
 	}
 
+	flushStart := time.Now()
 	if err := b.flushFn(b.ctx, tx, items); err != nil {
 		logger.Log.Error("Error in flushing aggregated tick rows", "error", err)
+		metrics.Persistence_TxnFailures.WithLabelValues(b.pipeline).Inc()
 		return err
 	}
+	metrics.Persistence_BatchFlushDuration.WithLabelValues("orderbook").Observe(float64(time.Since(flushStart)))
 
 	if err := tx.Commit(b.ctx); err != nil {
 		logger.Log.Error("Error in commit", "error", err)
+		metrics.Persistence_TxnFailures.WithLabelValues(b.pipeline).Inc()
 		return err
 	}
 
@@ -180,6 +190,10 @@ func (b *Batcher[T]) Flush() error {
 
 	// clear the batch
 	b.items = b.items[:0]
+
+	metrics.Persistence_TxnDuration.WithLabelValues(b.pipeline).Observe(float64(time.Since(start).Seconds()))
+	metrics.Persistence_BatchSize.WithLabelValues(b.pipeline).Observe(0)
+	metrics.Persistence_FlushCount.WithLabelValues(b.pipeline).Inc()
 
 	return nil
 }
