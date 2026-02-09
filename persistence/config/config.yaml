@@ -2,7 +2,7 @@ batcher:
   aggregated_ticks:
     batch_size: 100
     interval_ms: 30000
-  orderbook_snapshots:
+  orderbook_flushes:
     batch_size: 200
     interval_ms: 50000
 
@@ -19,7 +19,3 @@ kafka:
     confirm_seconds: 7
     poll_interval_ms: 1000
     queue_usage_low_threshold: 0.40
-  cb_req_count: 1
-  cb_failure_ratio: 0.8
-  produce_error_buffer_size: 1000
-  flush_interval_seconds: 10

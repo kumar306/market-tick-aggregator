@@ -47,7 +47,7 @@ func InitTickPipeline(ctx context.Context,
 }
 
 func InitBookPipeline(ctx context.Context,
-	name, string,
+	name string,
 	topic string,
 	batchSize int,
 	intervalMs time.Duration,

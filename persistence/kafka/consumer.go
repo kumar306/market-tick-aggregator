@@ -16,6 +16,11 @@ import (
 	"github.com/twmb/franz-go/pkg/kmsg"
 )
 
+// Processor defines the interface for processing Kafka records. cannot import pipeline as import cycle
+type Processor interface {
+	Process(rec *kgo.Record)
+}
+
 var (
 	Client        *kgo.Client
 	adm           *kadm.Client
@@ -67,7 +72,9 @@ func Close() {
 	logger.Log.Info("Kafka client closed.")
 }
 
-func StartConsumer(ctx context.Context, dispatchChannel chan *kgo.Record) {
+func StartConsumer(ctx context.Context,
+	tickPipeline Processor,
+	bookPipeline Processor) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -84,10 +91,17 @@ func StartConsumer(ctx context.Context, dispatchChannel chan *kgo.Record) {
 
 		fetches.EachRecord(func(rec *kgo.Record) {
 			select {
-			case dispatchChannel <- rec:
-				metrics.Persistence_KafkaRecordsConsumed.WithLabelValues(string(rec.Partition)).Inc()
 			case <-ctx.Done():
 				return
+			default:
+			}
+
+			metrics.Persistence_KafkaRecordsConsumed.WithLabelValues(string(rec.Partition)).Inc()
+			switch rec.Topic {
+			case config.AggregatedTicksTopic:
+				tickPipeline.Process(rec)
+			case config.OrderbookFlushesTopic:
+				bookPipeline.Process(rec)
 			}
 		})
 

@@ -22,7 +22,7 @@ func main() {
 	// load the config
 	cfg, err := config.GetConfig(constants.ConfigFile)
 	if err != nil {
-		logger.Log.Error("Failed to load aggregator config. Stopping main()", "err", err)
+		logger.Log.Error("Failed to load orderbook config. Stopping main()", "err", err)
 		os.Exit(1)
 	}
 
