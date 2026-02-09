@@ -27,6 +27,10 @@ type BatchMessage[T any] struct {
 	Item       BatchItem[T]
 }
 
+type BatcherAdder[U any] interface {
+	Add(item BatchItem[U])
+}
+
 // batching logic is shared across both consumers. only flush fn differs
 // better to have 2 instantiations of the batcher rather than batcher interface
 type Batcher[T any] struct {
@@ -68,7 +72,7 @@ func NewBatcher[T any](
 // Add() - posts into batch channel
 // ticker - posts into same batch channel
 func (b *Batcher[T]) Run() {
-	ticker := time.NewTicker(b.intervalMs * time.Millisecond)
+	ticker := time.NewTicker(b.intervalMs)
 	for {
 		select {
 		case <-b.ctx.Done():
@@ -86,6 +90,7 @@ func (b *Batcher[T]) Run() {
 			}:
 			default:
 				logger.Log.Info("Dropping timer event because internal channel full.")
+				metrics.Persistence_BatchDroppedTimers.WithLabelValues(b.pipeline).Inc()
 			}
 		case msg := <-b.batchCh:
 			switch msg.BatchEvent {
@@ -116,6 +121,7 @@ func (b *Batcher[T]) Add(item BatchItem[T]) {
 	}:
 	default:
 		logger.Log.Warn("Dropping message from batch channel as its overloaded")
+		metrics.Persistence_BatchDroppedItems.WithLabelValues(b.pipeline).Inc()
 	}
 }
 
@@ -171,7 +177,7 @@ func (b *Batcher[T]) Flush() error {
 		metrics.Persistence_TxnFailures.WithLabelValues(b.pipeline).Inc()
 		return err
 	}
-	metrics.Persistence_BatchFlushDuration.WithLabelValues("orderbook").Observe(float64(time.Since(flushStart)))
+	metrics.Persistence_BatchFlushDuration.WithLabelValues(b.pipeline).Observe(float64(time.Since(flushStart)))
 
 	if err := tx.Commit(b.ctx); err != nil {
 		logger.Log.Error("Error in commit", "error", err)
@@ -190,6 +196,7 @@ func (b *Batcher[T]) Flush() error {
 
 	// clear the batch
 	b.items = b.items[:0]
+	b.lastFlush = time.Now()
 
 	metrics.Persistence_TxnDuration.WithLabelValues(b.pipeline).Observe(float64(time.Since(start).Seconds()))
 	metrics.Persistence_BatchSize.WithLabelValues(b.pipeline).Observe(0)

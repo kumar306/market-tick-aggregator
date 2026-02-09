@@ -25,7 +25,9 @@ var (
 	Persistence_OffsetCommitted      *prometheus.GaugeVec
 
 	// backpressure metrics
-	Persistence_BatchQueueDepth *prometheus.GaugeVec
+	Persistence_BatchQueueDepth    *prometheus.GaugeVec
+	Persistence_BatchDroppedItems  *prometheus.CounterVec
+	Persistence_BatchDroppedTimers *prometheus.CounterVec
 )
 
 func InitPersistenceMetrics() {
@@ -43,4 +45,6 @@ func InitPersistenceMetrics() {
 	Persistence_OffsetCommitSuccess = NewCounterVec("offset_commit_successes", "Number of offset commit attempt successes", []string{"pipeline"})
 	Persistence_OffsetCommitted = NewGaugeVec("offset_committed_per_topic_partition", "Offset committed per topic and partition", []string{"topic", "partition"})
 	Persistence_BatchQueueDepth = NewGaugeVec("batch_queue_depth", "Queue depth per pipeline", []string{"pipeline"})
+	Persistence_BatchDroppedItems = NewCounterVec("batch_dropped_items", "Number of dropped items for batcher add", []string{"pipeline"})
+	Persistence_BatchDroppedTimers = NewCounterVec("batch_dropped_timer_events", "Number of dropped timer events for batcher", []string{"pipeline"})
 }

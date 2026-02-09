@@ -6,6 +6,7 @@ import (
 	"market-persistence/batcher/util"
 	"market-persistence/converter"
 	"market-persistence/db/model"
+	"shared/logger"
 	"time"
 
 	"github.com/twmb/franz-go/pkg/kgo"
@@ -17,7 +18,8 @@ import (
 type Pipeline[U any] struct {
 	Name      string
 	Converter converter.Converter[U]
-	Batcher   batcher.Batcher[U]
+	// let pipeline only be able to invoke add of batcher and nothing else
+	Batcher batcher.BatcherAdder[U]
 }
 
 type FlushFn[T any] func(context.Context, util.Tx, []T) error
@@ -41,7 +43,7 @@ func InitTickPipeline(ctx context.Context,
 
 	return &Pipeline[*model.AggregatedTick]{
 		Converter: converter.NewTickConverter(),
-		Batcher:   batcher,
+		Batcher:   &batcher,
 		Name:      name,
 	}
 }
@@ -65,7 +67,7 @@ func InitBookPipeline(ctx context.Context,
 
 	return &Pipeline[*model.OrderbookFlush]{
 		Converter: converter.NewBookConverter(),
-		Batcher:   batcher,
+		Batcher:   &batcher,
 		Name:      name,
 	}
 }
@@ -75,8 +77,8 @@ func InitBookPipeline(ctx context.Context,
 func (p *Pipeline[U]) Process(rec *kgo.Record) {
 	u, err := p.Converter.Convert(rec.Value)
 	if err != nil {
-		// stop service if the unmarshalling fails?
-		panic(err)
+		logger.Log.Error("Error in pipeline processing for record", "error", err)
+		return
 	}
 	p.Batcher.Add(batcher.BatchItem[U]{
 		Item:      u,
