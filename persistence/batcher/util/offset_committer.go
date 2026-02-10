@@ -14,6 +14,9 @@ type KafkaOffsetCommitter struct {
 	topic string
 }
 
+// for unit testing it, let fn be separate
+var commitOffsetsPostWrite = kafka.CommitOffsetsPostWrite
+
 func NewKafkaOffsetCommitter(topic string) OffsetCommitter {
 	return &KafkaOffsetCommitter{
 		topic: topic,
@@ -23,6 +26,6 @@ func NewKafkaOffsetCommitter(topic string) OffsetCommitter {
 // call kafka package fn
 func (kf *KafkaOffsetCommitter) CommitOffsets(ctx context.Context, maxOffsetPerPartitionMap map[int32]int64) error {
 	// error handled in callback
-	kafka.CommitOffsetsPostWrite(ctx, kf.topic, maxOffsetPerPartitionMap)
+	commitOffsetsPostWrite(ctx, kf.topic, maxOffsetPerPartitionMap)
 	return nil
 }
