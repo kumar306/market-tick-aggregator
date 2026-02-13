@@ -18,7 +18,13 @@ type RollingVolume struct {
 }
 
 func NewRollingVolume(cfg *constants.WindowConfig) *RollingVolume {
+	if cfg.BucketSizeMs <= 0 {
+		panic("Invalid bucket size configuration")
+	}
 	bucketsLength := cfg.DurationMs / cfg.BucketSizeMs
+	if bucketsLength <= 0 {
+		panic("Invalid buckets configuration")
+	}
 	return &RollingVolume{
 		Idx:            0,
 		VolumeBuckets:  make([]float64, bucketsLength),

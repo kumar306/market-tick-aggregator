@@ -20,9 +20,9 @@ type RollingVWAP struct {
 }
 
 func NewRollingVWAP(cfg *constants.WindowConfig) constants.Metric {
-	bucketSizeMs := cfg.DurationMs / 100
-	if bucketSizeMs <= 0 {
-		bucketSizeMs = 1000
+
+	if cfg.BucketSizeMs <= 0 {
+		panic("Invalid bucket size configuration")
 	}
 
 	bucketsSize := cfg.DurationMs / cfg.BucketSizeMs
@@ -34,7 +34,7 @@ func NewRollingVWAP(cfg *constants.WindowConfig) constants.Metric {
 	return &RollingVWAP{
 		buckets:        make([]VWAPBucket, bucketsSize),
 		idx:            0,
-		bucketSizeMs:   bucketSizeMs,
+		bucketSizeMs:   cfg.BucketSizeMs,
 		lastBucketTsMs: 0,
 	}
 }

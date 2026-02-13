@@ -28,8 +28,8 @@ func Test_WindowMetricsCreation(t *testing.T) {
 	metrics.InitAggregatorMetrics()
 
 	cfg := []*constants.WindowConfig{
-		{Id: "1s", DurationMs: 1000, FlushCadencyMs: 1000},
-		{Id: "5s", DurationMs: 5000, FlushCadencyMs: 1000},
+		{Id: "1s", DurationMs: 1000, FlushCadencyMs: 1000, BucketSizeMs: 500},
+		{Id: "5s", DurationMs: 5000, FlushCadencyMs: 1000, BucketSizeMs: 500},
 	}
 	client := &utils.MockClient{}
 
@@ -201,7 +201,7 @@ func TestWorkerFlush(t *testing.T) {
 		SeqId:         3566313,
 	}
 
-	val2, err := proto.Marshal(mockProto)
+	val2, err := proto.Marshal(mockProto2)
 	if err != nil {
 		t.Logf("Error in constructing mock proto: %v", err)
 	}

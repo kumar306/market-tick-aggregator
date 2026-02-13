@@ -101,15 +101,23 @@ func Validate(cfg *constants.Config) error {
 		}
 
 		if window.FlushCadencyMs <= 0 {
-			return logger.LogAndWrap("Window flush cadency ms should be >=0", nil)
+			return logger.LogAndWrap("Window flush cadency ms should be >0", nil)
 		}
 
 		if window.DurationMs <= 0 {
-			return logger.LogAndWrap("Window duration ms should be >=0", nil)
+			return logger.LogAndWrap("Window duration ms should be >0", nil)
 		}
 
 		if window.FlushCadencyMs > window.DurationMs {
 			return logger.LogAndWrap("Window flush cadency ms should be <= window duration ms", nil)
+		}
+
+		if window.BucketSizeMs <= 0 {
+			return logger.LogAndWrap("Bucket size ms should be > 0", nil)
+		}
+
+		if window.BucketSizeMs > window.DurationMs {
+			return logger.LogAndWrap("Bucket size ms should be <= window duration ms", nil)
 		}
 	}
 
