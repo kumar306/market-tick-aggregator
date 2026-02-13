@@ -9,12 +9,15 @@ import (
 	"market-persistence/db/writer"
 	"market-persistence/kafka"
 	"market-persistence/pipeline"
+	"net/http"
 	"os"
 	"os/signal"
 	"shared/logger"
 	"shared/metrics"
 	"syscall"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func main() {
@@ -28,6 +31,7 @@ func main() {
 
 	// init prom metrics
 	metrics.InitPersistenceMetrics()
+	go exposeMetrics()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -72,4 +76,13 @@ func main() {
 
 	<-ctx.Done()
 	logger.Log.Info("Persistence module shutting down...")
+}
+
+func exposeMetrics() {
+	http.Handle("/metrics", promhttp.Handler())
+	logger.Log.Info("Exposed persistence metrics endpoint at 2116", "url", ":2116/metrics")
+	err := http.ListenAndServe("0.0.0.0:2116", nil)
+	if err != nil {
+		logger.Log.Error("Persistence metrics have stopped", "err", err)
+	}
 }

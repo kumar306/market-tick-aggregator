@@ -21,53 +21,53 @@ var (
 )
 
 func InitAdapterMetrics() {
-	Adapter_BuildInfo = NewGaugeVec("build_info",
+	Adapter_BuildInfo = NewGaugeVec("adapter_build_info",
 		"Build Info with Version and Commit SHA",
 		[]string{"version", "commit"})
 
-	Adapter_AppShutdowns = NewCounter("app_shutdowns",
+	Adapter_AppShutdowns = NewCounter("adapter_app_shutdowns",
 		"Number of application shutdowns")
 
-	Adapter_AppStarts = NewCounter("app_starts",
+	Adapter_AppStarts = NewCounter("adapter_app_starts",
 		"Number of application starts")
 
-	Adapter_FeedConnections = NewCounterVec("feed_connections_total",
+	Adapter_FeedConnections = NewCounterVec("adapter_feed_connections_total",
 		"Total number of successful connections",
 		[]string{"feed_name"})
 
-	Adapter_FeedErrors = NewCounterVec("feed_errors_total",
+	Adapter_FeedErrors = NewCounterVec("adapter_feed_errors_total",
 		"Total number of connection errors",
 		[]string{"feed_name"})
 
-	Adapter_SupervisorCount = NewGauge("supervisor_count",
+	Adapter_SupervisorCount = NewGauge("adapter_supervisor_count",
 		"Total number of active supervisors")
 
-	Adapter_SupervisorGoroutines = NewGaugeVec("supervisor_goroutines",
+	Adapter_SupervisorGoroutines = NewGaugeVec("adapter_supervisor_goroutines",
 		"Total number of goroutines per supervisor",
 		[]string{"feed_name"})
 
-	Adapter_LastPongTimes = NewGaugeVec("last_pong_time",
+	Adapter_LastPongTimes = NewGaugeVec("adapter_last_pong_time",
 		"Last pong time per feed",
 		[]string{"feed_name"})
 
 	// ring buffer metrics
-	Adapter_BufferCapacity = NewGaugeVec("buffer_capacity",
+	Adapter_BufferCapacity = NewGaugeVec("adapter_buffer_capacity",
 		"Buffer capacity per feed",
 		[]string{"feed_name"})
 
-	Adapter_BufferLen = NewGaugeVec("buffer_len",
+	Adapter_BufferLen = NewGaugeVec("adapter_buffer_len",
 		"Buffer length per feed",
 		[]string{"feed_name"})
 
-	Adapter_BufferDrops = NewCounterVec("buffer_drops",
+	Adapter_BufferDrops = NewCounterVec("adapter_buffer_drops",
 		"Buffer drops per feed",
 		[]string{"feed_name"})
 
-	Adapter_KafkaPublishes = NewCounterVec("kafka_publishes",
+	Adapter_KafkaPublishes = NewCounterVec("adapter_kafka_publishes",
 		"Kafka Publishes per stream",
 		[]string{"stream"})
 
-	Adapter_NormalizerErrors = NewCounterVec("normalizer_errors",
+	Adapter_NormalizerErrors = NewCounterVec("adapter_normalizer_errors",
 		"Normalizer errors per stream",
 		[]string{"stream"})
 }

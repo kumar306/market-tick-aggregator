@@ -8,6 +8,7 @@ import (
 	"market-aggregator/flush"
 	"market-aggregator/internal"
 	"market-aggregator/kafka"
+	"net/http"
 	"os/signal"
 	"syscall"
 
@@ -15,6 +16,7 @@ import (
 	"shared/logger"
 	"shared/metrics"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/twmb/franz-go/pkg/kgo"
 )
 
@@ -29,6 +31,7 @@ func main() {
 
 	// init prom metrics
 	metrics.InitAggregatorMetrics()
+	go exposeMetrics()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -62,4 +65,13 @@ func main() {
 		"workers", cfg.WorkerCount,
 		"windows", len(cfg.WindowConfig),
 	)
+}
+
+func exposeMetrics() {
+	http.Handle("/metrics", promhttp.Handler())
+	logger.Log.Info("Exposed aggregator metrics endpoint at 2114", "url", ":2114/metrics")
+	err := http.ListenAndServe("0.0.0.0:2114", nil)
+	if err != nil {
+		logger.Log.Error("Aggregator metrics have stopped", "err", err)
+	}
 }

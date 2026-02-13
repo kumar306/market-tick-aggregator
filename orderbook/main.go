@@ -9,12 +9,14 @@ import (
 	"market-orderbook/flush"
 	"market-orderbook/kafka"
 	"market-orderbook/redis"
+	"net/http"
 	"os"
 	"os/signal"
 	"shared/logger"
 	"shared/metrics"
 	"syscall"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/twmb/franz-go/pkg/kgo"
 )
 
@@ -28,6 +30,7 @@ func main() {
 
 	// init prom metrics
 	metrics.InitOrderbookMetrics()
+	go exposeMetrics()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -54,7 +57,12 @@ func main() {
 		int64(cfg.WorkerQueueSize))
 
 	// start workers
-	dispatcher.StartWorkerChannels(ctx, workerChannels, coordinator.FlushAckChannel, workerAckChannels)
+	dispatcher.StartWorkerChannels(ctx,
+		cfg.SnapshotIntervalSeconds,
+		cfg.WorkerFlushDepth,
+		workerChannels,
+		coordinator.FlushAckChannel,
+		workerAckChannels)
 
 	// start dispatcher
 	go dispatcher.RunDispatcher(ctx,
@@ -74,4 +82,13 @@ func main() {
 
 	<-ctx.Done()
 	logger.Log.Info("Orderbook module shutting down.")
+}
+
+func exposeMetrics() {
+	http.Handle("/metrics", promhttp.Handler())
+	logger.Log.Info("Exposed orderbook metrics endpoint at 2115", "url", ":2115/metrics")
+	err := http.ListenAndServe("0.0.0.0:2115", nil)
+	if err != nil {
+		logger.Log.Error("Orderbook metrics have stopped", "err", err)
+	}
 }

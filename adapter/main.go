@@ -28,7 +28,7 @@ func main() {
 	metrics.InitAdapterMetrics()
 
 	// register the feed factories
-	go registerFeedFactories()
+	registerFeedFactories()
 
 	// inc app starts metric
 	metrics.Adapter_AppStarts.Inc()
