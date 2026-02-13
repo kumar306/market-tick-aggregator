@@ -12,3 +12,12 @@ Prefer a skip list over a balanced BST because i figure i am gonna have huge num
 
 unit test scenario for skip list:
 insert ascending, insert descending, update existing, delete, min/max check, iterator order check
+
+
+13/02/2026:
+changing the backpressure from global to per-worker to global
+
+why: symbol/exchange combinations of a partition are routed to worker X. a worker X reads many such combinations
+service should not rely on multiple partitions to be in sync. upstream should correctly order messages deterministically to partition
+this ensures message of a type are not scattered across a partition. so global backpressure would be a bottleneck.
+example if BTC-USD is a hot path, i dont want to stop ETH-USD as well. only the BTC-USD would be paused until system catches up.

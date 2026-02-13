@@ -23,9 +23,10 @@ const (
 const ConfigFile string = "./config/config.yaml"
 
 type Config struct {
-	KafkaConfig *KafkaConfig `yaml:"kafka"`
-	RedisConfig *RedisConfig `yaml:"redis"`
-	WorkerCount int          `yaml:"worker_count"`
+	KafkaConfig     *KafkaConfig `yaml:"kafka"`
+	RedisConfig     *RedisConfig `yaml:"redis"`
+	WorkerCount     int          `yaml:"worker_count"`
+	WorkerQueueSize int          `yaml:"worker_queue_size"`
 }
 
 type KafkaConfig struct {
@@ -80,16 +81,4 @@ type Ack struct {
 type SnapshotMsg struct {
 	Snapshot *book.OrderBookSnapshot
 	Key      string
-}
-
-type BackpressureState int
-
-const (
-	Healthy BackpressureState = iota
-	Suspect
-	Throttling
-)
-
-type BackpressureEvent struct {
-	MaxQueueUsage float64
 }

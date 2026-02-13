@@ -2,7 +2,6 @@ package kafka
 
 import (
 	"context"
-	"market-orderbook/backpressure"
 	"market-orderbook/constants"
 	"os"
 	"shared/logger"
@@ -61,7 +60,7 @@ func Init(ctx context.Context, cfg *constants.KafkaConfig) {
 				return failureRatio >= cfg.CBFailureRatio
 			},
 			OnStateChange: func(name string, from, to gobreaker.State) {
-				logger.Log.Info("Aggregator kafka cb changed states", "from", from, "to", to)
+				logger.Log.Info("Orderbook kafka cb changed states", "from", from, "to", to)
 			},
 		})
 
@@ -111,38 +110,5 @@ func StartConsumer(ctx context.Context, dispatchChannel chan *kgo.Record) {
 			logger.Log.Info("Error occurred in fetch", "topic", topic, "partition", partition, "err", err)
 			metrics.Orderbook_ConsumerErrorsTotal.WithLabelValues(string(partition)).Inc()
 		})
-	}
-}
-
-func RunConsumerBackpressure(ctx context.Context, client *kgo.Client) {
-	ticker := time.NewTicker(200 * time.Millisecond)
-	defer ticker.Stop()
-
-	var paused bool = false
-
-	for {
-		select {
-		case <-ctx.Done():
-			logger.Log.Info("Received ctx done event in consumer backpressure loop. Returning")
-			return
-		case <-ticker.C:
-			state := backpressure.GetBackpressureState()
-
-			// if state is throttling and paused is false
-			if state == constants.Throttling && !paused {
-				client.PauseFetchTopics(UpstreamTopic)
-				paused = true
-				logger.Log.Info("Current state - throttling. Paused fetch for upstream topic", "topic", UpstreamTopic)
-				metrics.Orderbook_KafkaFetchPaused.Set(1.0)
-			}
-
-			// if fetch was paused and now state is healthy
-			if state == constants.Healthy && paused {
-				client.ResumeFetchTopics(UpstreamTopic)
-				paused = false
-				logger.Log.Info("Current state - healthy. Resumed fetch for upstream topic", "topic", UpstreamTopic)
-				metrics.Orderbook_KafkaFetchPaused.Set(0.0)
-			}
-		}
 	}
 }

@@ -3,6 +3,7 @@ package dispatcher
 import (
 	"context"
 	"hash/fnv"
+	"market-orderbook/backpressure"
 	"market-orderbook/constants"
 	"market-orderbook/proto/generated"
 	"market-orderbook/worker"
@@ -15,12 +16,7 @@ import (
 )
 
 func RunDispatcher(ctx context.Context, dispatchCh chan *kgo.Record,
-	workerChannels []chan *constants.DispatchRecord,
-	cfg *constants.BackpressureConfig,
-	bpCh chan *constants.BackpressureEvent) {
-
-	// cache for queue usage of workers
-	var workerQueueUsageHandles []float64 = make([]float64, len(workerChannels))
+	workerChannels []chan *constants.DispatchRecord) {
 
 	for {
 		select {
@@ -50,25 +46,7 @@ func RunDispatcher(ctx context.Context, dispatchCh chan *kgo.Record,
 
 				// let dispatcher monitor worker queue metrics
 				usage := float64(len(workerChannels[workerId])) / float64(cap(workerChannels[workerId]))
-				workerQueueUsageHandles[workerId] = usage
 				metrics.Orderbook_WorkerQueueDepth.WithLabelValues(strconv.Itoa(workerId)).Set(usage)
-
-				// compute max queue usage across all currently and send that to backpressure controller. let it report facts to controller and not dictate backpressure logic
-				// going with global backpressure rather than per worker as per worker backpressure affects orderbook correctness
-				maxQueueUsage := 0.0
-				for _, usage := range workerQueueUsageHandles {
-					maxQueueUsage = max(maxQueueUsage, usage)
-				}
-
-				select {
-				case bpCh <- &constants.BackpressureEvent{
-					MaxQueueUsage: maxQueueUsage,
-				}:
-				default:
-					// drop the report, it will see the next one
-				}
-
-				metrics.Orderbook_MaxWorkerQueueUsage.Observe(maxQueueUsage)
 
 				dispatchRec := &constants.DispatchRecord{
 					Event:    constants.ProcessEvent,
@@ -82,8 +60,12 @@ func RunDispatcher(ctx context.Context, dispatchCh chan *kgo.Record,
 
 				select {
 				case workerChannels[workerId] <- dispatchRec:
+					backpressure.OnEnqueue(workerId, rec.Partition)
 				default:
-					// backpressure logic
+					logger.Log.Warn("Dropping dispatch record due to full worker channel",
+						"workerId", workerId,
+						"partition", rec.Partition,
+						"offset", rec.Offset)
 				}
 			}
 		}

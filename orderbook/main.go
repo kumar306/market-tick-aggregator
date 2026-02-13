@@ -40,16 +40,18 @@ func main() {
 	redis.InitRedis(cfg.RedisConfig)
 
 	// create channels
-	workerChannels := dispatcher.CreateWorkerChannels(cfg.WorkerCount, 1000)
+	workerChannels := dispatcher.CreateWorkerChannels(cfg.WorkerCount, cfg.WorkerQueueSize)
 	workerAckChannels := dispatcher.CreateWorkerAckChannels(cfg.WorkerCount, 1000)
-	backpressureChannel := make(chan *constants.BackpressureEvent, 1000)
 	dispatchChannel := make(chan *kgo.Record, 1000)
 
 	// create coordinator
 	coordinator := kafka.NewCoordinator(cfg.WorkerCount, workerAckChannels)
 
-	// start backpressure controller
-	go backpressure.RunBackpressureController(ctx, &cfg.KafkaConfig.BackpressureConfig, backpressureChannel)
+	// init backpressure controller config
+	backpressure.InitBP(&cfg.KafkaConfig.BackpressureConfig,
+		kafka.Client,
+		cfg.KafkaConfig.TopicConfig.Upstream,
+		int64(cfg.WorkerQueueSize))
 
 	// start workers
 	dispatcher.StartWorkerChannels(ctx, workerChannels, coordinator.FlushAckChannel, workerAckChannels)
@@ -57,9 +59,7 @@ func main() {
 	// start dispatcher
 	go dispatcher.RunDispatcher(ctx,
 		dispatchChannel,
-		workerChannels,
-		&cfg.KafkaConfig.BackpressureConfig,
-		backpressureChannel)
+		workerChannels)
 
 	// start coordinator
 	go coordinator.Run(ctx, kafka.Client)
@@ -67,9 +67,8 @@ func main() {
 	// start epoch flush scheduler to post flush events into worker
 	go flush.RunEpochFlushScheduler(ctx, cfg.KafkaConfig.FlushIntervalSeconds, workerChannels, coordinator)
 
-	// start consumer and its backpressure check goroutine
+	// start consumer
 	go kafka.StartConsumer(ctx, dispatchChannel)
-	go kafka.RunConsumerBackpressure(ctx, kafka.Client)
 
 	logger.Log.Info("Orderbook module running")
 

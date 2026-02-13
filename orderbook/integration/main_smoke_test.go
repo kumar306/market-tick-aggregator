@@ -102,20 +102,16 @@ func TestMainFlowSmoke(t *testing.T) {
 	workerCount := 2
 	workerChannels := dispatcher.CreateWorkerChannels(workerCount, 100)
 	workerAckChannels := dispatcher.CreateWorkerAckChannels(workerCount, 100)
-	backpressureChannel := make(chan *constants.BackpressureEvent, 100)
 	dispatchChannel := make(chan *kgo.Record, 100)
 
-	coordinator := kafka.NewCoordinator(workerCount, workerAckChannels)
+	backpressure.InitBP(&constants.BackpressureConfig{
+		QueueUsageHighThreshold: 0.9,
+		QueueUsageLowThreshold:  0.4,
+		ConfirmSeconds:          1,
+		PollIntervalMs:          100,
+	}, kafka.Client, upstreamTopic, 100)
 
-	g.Go(func() error {
-		backpressure.RunBackpressureController(ctx, &constants.BackpressureConfig{
-			QueueUsageHighThreshold: 0.9,
-			QueueUsageLowThreshold:  0.4,
-			ConfirmSeconds:          1,
-			PollIntervalMs:          100,
-		}, backpressureChannel)
-		return nil
-	})
+	coordinator := kafka.NewCoordinator(workerCount, workerAckChannels)
 
 	for idx, ch := range workerChannels {
 		w := worker.NewWorker(idx, ctx, ch, coordinator.FlushAckChannel, workerAckChannels[idx])
@@ -128,13 +124,7 @@ func TestMainFlowSmoke(t *testing.T) {
 	}
 
 	g.Go(func() error {
-		dispatcher.RunDispatcher(ctx, dispatchChannel, workerChannels,
-			&constants.BackpressureConfig{
-				QueueUsageHighThreshold: 0.9,
-				QueueUsageLowThreshold:  0.4,
-				ConfirmSeconds:          1,
-				PollIntervalMs:          100,
-			}, backpressureChannel)
+		dispatcher.RunDispatcher(ctx, dispatchChannel, workerChannels)
 		return nil
 	})
 
@@ -150,11 +140,6 @@ func TestMainFlowSmoke(t *testing.T) {
 
 	g.Go(func() error {
 		kafka.StartConsumer(ctx, dispatchChannel)
-		return nil
-	})
-
-	g.Go(func() error {
-		kafka.RunConsumerBackpressure(ctx, kafka.Client)
 		return nil
 	})
 

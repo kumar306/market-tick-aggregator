@@ -1,144 +1,147 @@
 package backpressure
 
 import (
-	"context"
 	"market-orderbook/constants"
-	"shared/logger"
-	"shared/metrics"
-	"sync/atomic"
-	"time"
+	"sync"
 )
 
-// healthy
-// throttling - usage is above threshold for K seconds
-
-// let state be atomic as may need to reference it from consumer to pause partition fetch globally
-type BPControllerState struct {
-	state        atomic.Uint32
-	suspectSince time.Time
+// per worker need to store whether its hot and its queue usage.
+// on enqueue, will assign partitions
+type WorkerBPState struct {
+	depth int64
+	hot   bool
 }
 
-var BPController *BPControllerState
-
-func InitBPController() {
-	BPController = &BPControllerState{}
-	BPController.state.Store(uint32(constants.Healthy))
+type PauseResumer interface {
+	PauseFetchPartitions(topicPartitions map[string][]int32) map[string][]int32
+	ResumeFetchPartitions(topicPartitions map[string][]int32)
 }
 
-func RunBackpressureController(ctx context.Context, cfg *constants.BackpressureConfig, bpCh chan *constants.BackpressureEvent) {
-	InitBPController()
-	ticker := time.NewTicker(time.Duration(cfg.PollIntervalMs) * time.Millisecond)
-	defer ticker.Stop()
+// worker bp map
+var workerBPMap map[int]*WorkerBPState
 
-	var lastMaxUsage float64
-	var minUsage float64
+// mapping of workers to partitions
+var workerPartitionMap map[int]map[int32]struct{}
 
-	for {
-		select {
-		case <-ctx.Done():
-			logger.Log.Info("Received ctx done event in backpressure controller. Returning")
-			return
+// count of number of times a partition is paused at the present
+var partitionHotCount map[int32]int
 
-		case ev := <-bpCh:
-			lastMaxUsage = ev.MaxQueueUsage
+var highThreshold, lowThreshold int64
+var pauseResumerImpl PauseResumer
+var bpTopic string
+var bpMu sync.Mutex
 
-		case <-ticker.C:
-			now := time.Now()
-			state := GetBackpressureState()
-			switch state {
-			case constants.Healthy:
+var bpOnce sync.Once
 
-				if lastMaxUsage >= cfg.QueueUsageHighThreshold {
-					BPController.suspectSince = now
-					BPController.state.Store(uint32(constants.Suspect))
-					minUsage = lastMaxUsage
-					logger.Log.Info("BP transition",
-						"from", state,
-						"to", constants.Suspect,
-						"usage", lastMaxUsage)
-					metrics.Orderbook_BackpressureState.Set(float64(constants.Suspect))
-					metrics.Orderbook_BackpressureTransitionsTotal.Inc()
-				}
+func InitBP(cfg *constants.BackpressureConfig, pauseResumer PauseResumer, topic string, queueCapacity int64) {
+	bpOnce.Do(func() {
+		bpMu.Lock()
+		defer bpMu.Unlock()
 
-			case constants.Suspect:
+		highThreshold = int64(cfg.QueueUsageHighThreshold * float64(queueCapacity))
+		lowThreshold = int64(cfg.QueueUsageLowThreshold * float64(queueCapacity))
+		pauseResumerImpl = pauseResumer
+		bpTopic = topic
 
-				// if maxQueueUsage dropped below low
-				if lastMaxUsage < cfg.QueueUsageLowThreshold {
-					BPController.suspectSince = time.Time{}
-					BPController.state.Store(uint32(constants.Healthy))
-					logger.Log.Info("BP transition",
-						"from", state,
-						"to", constants.Healthy,
-						"usage", lastMaxUsage)
-					metrics.Orderbook_BackpressureState.Set(float64(constants.Healthy))
-					metrics.Orderbook_BackpressureTransitionsTotal.Inc()
-					break
-				}
+		workerBPMap = map[int]*WorkerBPState{}
+		workerPartitionMap = map[int]map[int32]struct{}{}
+		partitionHotCount = map[int32]int{}
+	})
+}
 
-				// protect against random spikes
-				minUsage = min(minUsage, lastMaxUsage)
+// takes in workerId, partition - updates the depth by 1.
+// updates the partition map if its not present
+// if usage > high threshold, mark the worker as hot
+// for each of its partitions update map. if partition count was 0 before inc, call pauseFetchPartition(partition)
+func OnEnqueue(workerId int, partition int32) {
+	bpMu.Lock()
+	if workerBPMap == nil {
+		workerBPMap = map[int]*WorkerBPState{}
+	}
+	if workerPartitionMap == nil {
+		workerPartitionMap = map[int]map[int32]struct{}{}
+	}
 
-				if now.Sub(BPController.suspectSince) >= (time.Duration(cfg.ConfirmSeconds)*time.Second) &&
-					minUsage >= cfg.QueueUsageHighThreshold {
+	if _, ok := workerBPMap[workerId]; !ok {
+		workerBPMap[workerId] = &WorkerBPState{}
+	}
 
-					// switch to throttling
-					BPController.state.Store(uint32(constants.Throttling))
-					logger.Log.Info("BP transition",
-						"from", state,
-						"to", constants.Throttling,
-						"usage", lastMaxUsage)
-					logger.Log.Warn("Backpressure state made to throttling in orderbook")
-					metrics.Orderbook_BackpressureState.Set(float64(constants.Throttling))
-					metrics.Orderbook_BackpressureTransitionsTotal.Inc()
-				}
+	if _, ok := workerPartitionMap[workerId]; !ok {
+		workerPartitionMap[workerId] = map[int32]struct{}{}
+	}
 
-			case constants.Throttling:
+	workerBPMap[workerId].depth++
+	workerPartitionMap[workerId][partition] = struct{}{}
 
-				// if usage dips below low threshold, then update back to healthy
-				if lastMaxUsage < cfg.QueueUsageLowThreshold {
-					BPController.suspectSince = time.Time{}
-					BPController.state.Store(uint32(constants.Healthy))
-					logger.Log.Info("BP transition",
-						"from", state,
-						"to", constants.Healthy,
-						"usage", lastMaxUsage)
-					logger.Log.Info("Backpressure state back to healthy")
-					metrics.Orderbook_BackpressureState.Set(float64(constants.Healthy))
-					metrics.Orderbook_BackpressureTransitionsTotal.Inc()
-				}
+	partitionsToPause := make([]int32, 0)
+	if workerBPMap[workerId].depth > highThreshold && workerBPMap[workerId].hot == false {
+		workerBPMap[workerId].hot = true
+		for part := range workerPartitionMap[workerId] {
+			partitionHotCount[part]++
+			if partitionHotCount[part] == 1 {
+				partitionsToPause = append(partitionsToPause, part)
 			}
 		}
+	}
+	topic := bpTopic
+	pauseResumer := pauseResumerImpl
+	bpMu.Unlock()
 
+	if pauseResumer == nil {
+		return
+	}
+	for _, part := range partitionsToPause {
+		pausedMap := constructPauseResumeMap(topic, part)
+		pauseResumer.PauseFetchPartitions(pausedMap)
 	}
 }
 
-// get the state atomically
-func GetBackpressureState() constants.BackpressureState {
-	return constants.BackpressureState(int(BPController.state.Load()))
+// reduce the depth of worker. if gone under low threshold, then set it non hot
+func OnDequeue(workerId int) {
+	bpMu.Lock()
+	if workerBPMap == nil {
+		workerBPMap = map[int]*WorkerBPState{}
+	}
+
+	workerState, exists := workerBPMap[workerId]
+	if !exists {
+		bpMu.Unlock()
+		return
+	}
+
+	workerState.depth--
+	if workerState.depth < 0 {
+		workerState.depth = 0
+	}
+
+	partitionsToResume := make([]int32, 0)
+	if workerState.depth < lowThreshold && workerState.hot == true {
+		workerState.hot = false
+		for part := range workerPartitionMap[workerId] {
+
+			partitionHotCount[part]--
+			if partitionHotCount[part] <= 0 {
+				partitionHotCount[part] = 0
+				partitionsToResume = append(partitionsToResume, part)
+			}
+		}
+	}
+	topic := bpTopic
+	pauseResumer := pauseResumerImpl
+	bpMu.Unlock()
+
+	if pauseResumer == nil {
+		return
+	}
+	for _, part := range partitionsToResume {
+		resumedMap := constructPauseResumeMap(topic, part)
+		pauseResumer.ResumeFetchPartitions(resumedMap)
+	}
 }
 
-// k workers - k queue usages are monitored at the dispatcher level
-// array of floats
-// usage > threshold -> i will need to read that float t times on around >= x seconds
-// at any ticker, if value < lowthreshold, abandon the ticker immediately
-// else if value stays above high threshold, then change the state to throttling
-// if the value fluctuates between just above high and just below high, change it to healthy at the end
-// we dont want to immediately change to healthy at the moment it just goes below high threshold as this will lead to thrashing and consume CPU
-
-// worker 1, 2 .. n
-// each of these workers read from different/same partitions.. combination of them
-// if even 1 worker has slowness, the entire system flow is dictated by slowest consumer
-// worker 4 suddenly hit 0.61 usage. send an event to controller via channel. time elapsed since start = 0
-// now the ticker will send event to same channel with time elapsed since start
-// if time in the event > seconds, track the minValue of usage. init minValue = usage
-// state is throttling. same state is read from dispatcher so it needs to be atomic -> 0/1/2
-
-// if state is healthy, then only send the event to controller (this is only to start the event which changes it to throttling)
-// what if state is already suspect and worker hit high queue usage? if worker already present/new worker case
-
-// when controller receives event for a worker, he will receive the time, workerID, minUsage
-// he will check in his map to see if worker already exist.
-// if the time == 0, its a new event (assumed)
-// if worker already in map with time > current time, then discard this update (to handle suspect case another worker comes)
-
-// best to do global backpressure as above idea violates correctness in the system
+func constructPauseResumeMap(topic string, partition int32) map[string][]int32 {
+	m := make(map[string][]int32)
+	m[topic] = make([]int32, 0)
+	m[topic] = append(m[topic], partition)
+	return m
+}

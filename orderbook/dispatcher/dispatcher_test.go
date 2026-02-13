@@ -3,6 +3,7 @@ package dispatcher
 import (
 	"context"
 	"hash/fnv"
+	"market-orderbook/backpressure"
 	"market-orderbook/constants"
 	"market-orderbook/proto/generated"
 	"shared/metrics"
@@ -13,6 +14,14 @@ import (
 	"github.com/twmb/franz-go/pkg/kgo"
 	"google.golang.org/protobuf/proto"
 )
+
+type noopPauseResumer struct{}
+
+func (noopPauseResumer) PauseFetchPartitions(topicPartitions map[string][]int32) map[string][]int32 {
+	return topicPartitions
+}
+
+func (noopPauseResumer) ResumeFetchPartitions(topicPartitions map[string][]int32) {}
 
 var metricsOnce sync.Once
 
@@ -29,9 +38,14 @@ func TestRunDispatcherRoutesToWorker(t *testing.T) {
 
 	dispatchCh := make(chan *kgo.Record, 1)
 	workerChannels := CreateWorkerChannels(2, 10)
-	bpCh := make(chan *constants.BackpressureEvent, 1)
+	backpressure.InitBP(&constants.BackpressureConfig{
+		QueueUsageHighThreshold: 0.9,
+		QueueUsageLowThreshold:  0.4,
+		ConfirmSeconds:          1,
+		PollIntervalMs:          100,
+	}, noopPauseResumer{}, "orderbook.upstream", int64(cap(workerChannels[0])))
 
-	go RunDispatcher(ctx, dispatchCh, workerChannels, &constants.BackpressureConfig{}, bpCh)
+	go RunDispatcher(ctx, dispatchCh, workerChannels)
 
 	update := &generated.NormalizedBook{
 		Exchange:        "coinbase",
@@ -44,8 +58,9 @@ func TestRunDispatcherRoutesToWorker(t *testing.T) {
 	}
 
 	rec := &kgo.Record{
-		Value:  val,
-		Offset: 7,
+		Value:     val,
+		Offset:    7,
+		Partition: 0,
 	}
 
 	dispatchCh <- rec
@@ -67,11 +82,5 @@ func TestRunDispatcherRoutesToWorker(t *testing.T) {
 		}
 	case <-time.After(200 * time.Millisecond):
 		t.Fatalf("expected record to be routed to worker")
-	}
-
-	select {
-	case <-bpCh:
-	default:
-		t.Fatalf("expected backpressure event to be emitted")
 	}
 }

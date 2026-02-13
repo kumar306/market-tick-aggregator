@@ -1,59 +1,144 @@
 package backpressure
 
 import (
-	"context"
 	"market-orderbook/constants"
-	"shared/metrics"
 	"sync"
 	"testing"
-	"time"
 )
 
-var metricsOnce sync.Once
-
-func initMetrics() {
-	metricsOnce.Do(func() {
-		metrics.InitOrderbookMetrics()
-	})
+type mockPauseResumer struct {
+	mu           sync.Mutex
+	pauseCounts  map[int32]int
+	resumeCounts map[int32]int
 }
 
-func waitForState(t *testing.T, expected constants.BackpressureState, timeout time.Duration) {
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		if GetBackpressureState() == expected {
-			return
-		}
-		time.Sleep(10 * time.Millisecond)
+func resetBackpressureStateForTest() {
+	bpMu.Lock()
+	defer bpMu.Unlock()
+
+	bpOnce = sync.Once{}
+	workerBPMap = nil
+	workerPartitionMap = nil
+	partitionHotCount = nil
+	highThreshold = 0
+	lowThreshold = 0
+	pauseResumerImpl = nil
+	bpTopic = ""
+}
+
+func newMockPauseResumer() *mockPauseResumer {
+	return &mockPauseResumer{
+		pauseCounts:  make(map[int32]int),
+		resumeCounts: make(map[int32]int),
 	}
-	t.Fatalf("expected state %v within %v, got %v", expected, timeout, GetBackpressureState())
 }
 
-func TestBackpressureTransitions(t *testing.T) {
-	initMetrics()
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+func (m *mockPauseResumer) PauseFetchPartitions(topicPartitions map[string][]int32) map[string][]int32 {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, partitions := range topicPartitions {
+		for _, partition := range partitions {
+			m.pauseCounts[partition]++
+		}
+	}
+	return topicPartitions
+}
+
+func (m *mockPauseResumer) ResumeFetchPartitions(topicPartitions map[string][]int32) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, partitions := range topicPartitions {
+		for _, partition := range partitions {
+			m.resumeCounts[partition]++
+		}
+	}
+}
+
+func (m *mockPauseResumer) pauseCount(partition int32) int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.pauseCounts[partition]
+}
+
+func (m *mockPauseResumer) resumeCount(partition int32) int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.resumeCounts[partition]
+}
+
+func TestBackpressurePausesAndResumesSharedPartitionOnce(t *testing.T) {
+	resetBackpressureStateForTest()
+	mock := newMockPauseResumer()
 
 	cfg := &constants.BackpressureConfig{
 		QueueUsageHighThreshold: 0.8,
 		QueueUsageLowThreshold:  0.4,
-		ConfirmSeconds:          0,
-		PollIntervalMs:          10,
+		ConfirmSeconds:          1,
+		PollIntervalMs:          100,
+	}
+	InitBP(cfg, mock, "orderbook.upstream", 10)
+
+	for i := 0; i < 9; i++ {
+		OnEnqueue(0, 0)
+	}
+	if got := mock.pauseCount(0); got != 1 {
+		t.Fatalf("expected partition 0 to be paused once when first worker turns hot, got %d", got)
 	}
 
-	bpCh := make(chan *constants.BackpressureEvent, 10)
+	for i := 0; i < 9; i++ {
+		OnEnqueue(1, 0)
+	}
+	if got := mock.pauseCount(0); got != 1 {
+		t.Fatalf("expected partition 0 pause count to remain 1 while already paused, got %d", got)
+	}
 
-	// ensure controller state initialized before wait loops
-	InitBPController()
-	go RunBackpressureController(ctx, cfg, bpCh)
+	for i := 0; i < 9; i++ {
+		OnDequeue(0)
+	}
+	if got := mock.resumeCount(0); got != 0 {
+		t.Fatalf("expected no resume after only one worker cools down, got %d", got)
+	}
 
-	bpCh <- &constants.BackpressureEvent{MaxQueueUsage: 0.9}
-	waitForState(t, constants.Suspect, 200*time.Millisecond)
+	for i := 0; i < 9; i++ {
+		OnDequeue(1)
+	}
+	if got := mock.resumeCount(0); got != 1 {
+		t.Fatalf("expected one resume when final hot worker cools down, got %d", got)
+	}
+}
 
-	// keep usage high to confirm throttling
-	bpCh <- &constants.BackpressureEvent{MaxQueueUsage: 0.9}
-	waitForState(t, constants.Throttling, 200*time.Millisecond)
+func TestBackpressurePausesAllKnownWorkerPartitions(t *testing.T) {
+	resetBackpressureStateForTest()
+	mock := newMockPauseResumer()
+	cfg := &constants.BackpressureConfig{
+		QueueUsageHighThreshold: 0.8,
+		QueueUsageLowThreshold:  0.4,
+		ConfirmSeconds:          1,
+		PollIntervalMs:          100,
+	}
+	InitBP(cfg, mock, "orderbook.upstream", 10)
 
-	// drop usage below low threshold to return to healthy
-	bpCh <- &constants.BackpressureEvent{MaxQueueUsage: 0.3}
-	waitForState(t, constants.Healthy, 200*time.Millisecond)
+	OnEnqueue(2, 1)
+	OnEnqueue(2, 2)
+	for i := 0; i < 7; i++ {
+		OnEnqueue(2, 1)
+	}
+
+	if got := mock.pauseCount(1); got != 1 {
+		t.Fatalf("expected partition 1 to be paused once, got %d", got)
+	}
+	if got := mock.pauseCount(2); got != 1 {
+		t.Fatalf("expected partition 2 to be paused once, got %d", got)
+	}
+
+	for i := 0; i < 9; i++ {
+		OnDequeue(2)
+	}
+
+	if got := mock.resumeCount(1); got != 1 {
+		t.Fatalf("expected partition 1 to be resumed once, got %d", got)
+	}
+	if got := mock.resumeCount(2); got != 1 {
+		t.Fatalf("expected partition 2 to be resumed once, got %d", got)
+	}
 }

@@ -21,7 +21,7 @@ var (
 	Orderbook_BackpressureState              prometheus.Gauge
 	Orderbook_BackpressureTransitionsTotal   prometheus.Counter
 	Orderbook_KafkaFetchPaused               prometheus.Gauge
-	Orderbook_MaxWorkerQueueUsage            prometheus.Histogram
+	Orderbook_MaxWorkerQueueUsage            *prometheus.HistogramVec
 	Orderbook_ConsumerSuccessesTotal         *prometheus.CounterVec
 	Orderbook_ConsumerErrorsTotal            *prometheus.CounterVec
 )
@@ -49,5 +49,5 @@ func InitOrderbookMetrics() {
 	Orderbook_ConsumerSuccessesTotal = NewCounterVec("consumer_successes_total", "Total number of successful consumptions", []string{"partition"})
 	Orderbook_ConsumerErrorsTotal = NewCounterVec("consumer_errors_total", "Total number of consumption errors", []string{"partition"})
 	Orderbook_KafkaFetchPaused = NewGauge("kafka_fetch_paused", "0 -> kafka not paused, 1 -> kafka paused")
-	Orderbook_MaxWorkerQueueUsage = NewHistogram("max_worker_queue_usage", "Track max worker queue usage over time", prometheus.DefBuckets)
+	Orderbook_MaxWorkerQueueUsage = NewHistogramVec("max_worker_queue_usage", "Track max worker queue usage over time", prometheus.DefBuckets, []string{"worker"})
 }

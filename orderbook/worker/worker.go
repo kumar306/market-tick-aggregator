@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"market-orderbook/backpressure"
 	"market-orderbook/book"
 	"market-orderbook/constants"
 	"market-orderbook/kafka"
@@ -10,6 +11,7 @@ import (
 	"shared/logger"
 	"shared/metrics"
 	"strconv"
+	"sync/atomic"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -25,6 +27,7 @@ type Worker struct {
 
 	// channel thru which book updates enter
 	UpdateChannel chan *constants.DispatchRecord
+	Depth         *atomic.Int64
 
 	FlushDepth int
 
@@ -62,6 +65,7 @@ func NewWorker(id int, ctx context.Context, channel chan *constants.DispatchReco
 	return &Worker{
 		ID:                id,
 		Ctx:               ctx,
+		Depth:             &atomic.Int64{},
 		UpdateChannel:     channel,
 		SnapshotChannel:   make(chan *constants.SnapshotMsg, 10),
 		OrderbookStateMap: make(map[string]*SymbolState),
@@ -93,6 +97,10 @@ func (w *Worker) Run() {
 			case constants.ProcessEvent:
 				// process record coming from dispatcher and update worker's last processed offset variable
 				w.ProcessBookUpdate(rec)
+
+				// to resume paused partitions
+				backpressure.OnDequeue(w.ID)
+
 			case constants.SnapshotRequestEvent:
 				// this is a empty record carrying a request to copy the current orderbook state into a OrderbookSnapshot struct
 				// this struct is passed into a snapshot channel (each worker has its snapshot goroutine to isolate snapshots among the workers as it is time consuming and dont want blocking channels and lag)
