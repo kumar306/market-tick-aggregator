@@ -18,7 +18,7 @@ type KafkaConfig struct {
 	Topics                     []string            `yaml:"topics"`
 	ConsumerGroup              string              `yaml:"consumer_group"`
 	MaxBufferRecords           int                 `yaml:"max_buffer_records"`
-	CommitOffsetIntervalMillis int                 `yaml:"commit_offset_interval_ms"`
+	CommitOffsetIntervalMillis int                 `yaml:"commit_offset_interval_millis"`
 	CBReqCount                 int                 `yaml:"cb_req_count"`
 	CBTimeoutMillis            int                 `yaml:"cb_timeout_millis"`
 	CBConsecutiveFailures      int                 `yaml:"cb_consecutive_failures"`

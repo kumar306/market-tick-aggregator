@@ -10,8 +10,8 @@ kafka:
   bootstrap_servers:
     - localhost:9092
   topics:
-    tick: aggregated_ticks
-    book: aggregated_book
+    tick: aggregated.ticks
+    book: aggregated.book
   consumer_group: persistence-group-1
   max_buffer_records: 5000
   backpressure:

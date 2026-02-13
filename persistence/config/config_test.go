@@ -21,8 +21,8 @@ func validConfig() *Config {
 		KafkaConfig: &KafkaConfig{
 			BootstrapServers: []string{"localhost:9092"},
 			TopicConfig: &TopicConfig{
-				Tick: "aggregated_ticks",
-				Book: "aggregated_book",
+				Tick: "aggregated.ticks",
+				Book: "aggregated.book",
 			},
 			ConsumerGroup: "persistence-group",
 			BackpressureConfig: &BackpressureConfig{

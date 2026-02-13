@@ -12,8 +12,8 @@ import (
 
 const (
 	ConfigFile            string = "./config/config.yaml"
-	AggregatedTicksTopic  string = "aggregated_ticks"
-	OrderbookFlushesTopic string = "aggregated_book"
+	AggregatedTicksTopic  string = "aggregated.ticks"
+	OrderbookFlushesTopic string = "aggregated.book"
 	TickPipelineName      string = "tickPipeline"
 	BookPipelineName      string = "bookPipeline"
 )

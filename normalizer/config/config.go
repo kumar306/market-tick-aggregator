@@ -60,8 +60,8 @@ func Validate(c *constants.Config) error {
 	}
 
 	// under 5000 is too less for backpressure
-	if kafkaConfig.MaxBufferRecords <= 5000 {
-		logger.Log.Warn("Normalizer kafka max buffer records missing or <= 5000. Setting to default [5000]")
+	if kafkaConfig.MaxBufferRecords < 5000 {
+		logger.Log.Warn("Normalizer kafka max buffer records missing or < 5000. Setting to default [5000]")
 		kafkaConfig.MaxBufferRecords = 5000
 	}
 

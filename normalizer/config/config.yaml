@@ -20,6 +20,8 @@ kafka:
     queue_usage_low_threshold: 0.4
     threshold_active_millis: 5000
     cooldown_time_millis: 5000
+  wal_path: ./wal.log
+  wal_max_entries: 1000
 
 worker_count: 16
 redis:
