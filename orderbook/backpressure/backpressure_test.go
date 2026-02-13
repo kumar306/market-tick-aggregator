@@ -22,10 +22,12 @@ func resetBackpressureStateForTest() {
 	partitionHotCount = nil
 	highThreshold = 0
 	lowThreshold = 0
+	bpQueueCapacity = 0
 	pauseResumerImpl = nil
 	bpTopic = ""
 }
 
+// create fake wrapper over the pause resumer for testing
 func newMockPauseResumer() *mockPauseResumer {
 	return &mockPauseResumer{
 		pauseCounts:  make(map[int32]int),

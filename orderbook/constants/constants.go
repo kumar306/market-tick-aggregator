@@ -23,10 +23,12 @@ const (
 const ConfigFile string = "./config/config.yaml"
 
 type Config struct {
-	KafkaConfig     *KafkaConfig `yaml:"kafka"`
-	RedisConfig     *RedisConfig `yaml:"redis"`
-	WorkerCount     int          `yaml:"worker_count"`
-	WorkerQueueSize int          `yaml:"worker_queue_size"`
+	KafkaConfig             *KafkaConfig `yaml:"kafka"`
+	RedisConfig             *RedisConfig `yaml:"redis"`
+	WorkerCount             int          `yaml:"worker_count"`
+	WorkerQueueSize         int          `yaml:"worker_queue_size"`
+	SnapshotIntervalSeconds int          `yaml:"snapshot_interval_seconds"`
+	WorkerFlushDepth        int          `yaml:"worker_flush_depth"`
 }
 
 type KafkaConfig struct {

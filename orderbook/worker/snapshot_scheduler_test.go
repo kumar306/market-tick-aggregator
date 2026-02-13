@@ -15,7 +15,7 @@ func TestRunSnapshotPrepareSchedulerEnqueuesEvent(t *testing.T) {
 	ackCh := make(chan *constants.Ack, 1)
 	updateAckCh := make(chan *constants.Ack, 1)
 
-	w := NewWorker(1, ctx, updateCh, ackCh, updateAckCh)
+	w := NewWorker(1, ctx, 10, 15, updateCh, ackCh, updateAckCh)
 	w.SnapshotPrepareIntervalSeconds = 1
 
 	go w.RunSnapshotPrepareScheduler()

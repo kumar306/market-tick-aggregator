@@ -45,6 +45,18 @@ func Validate(cfg *constants.Config) error {
 		return logger.LogAndWrap("worker_count must be > 0", nil)
 	}
 
+	if cfg.WorkerFlushDepth <= 0 {
+		return logger.LogAndWrap("worker_flush_depth must be > 0", nil)
+	}
+
+	if cfg.SnapshotIntervalSeconds <= 0 {
+		return logger.LogAndWrap("snapshot_interval_seconds must be > 0", nil)
+	}
+
+	if cfg.WorkerQueueSize <= 0 {
+		return logger.LogAndWrap("worker_queue_size must be > 0", nil)
+	}
+
 	kafkaCfg := cfg.KafkaConfig
 
 	if len(kafkaCfg.BootstrapServers) == 0 {

@@ -4,8 +4,8 @@ kafka:
   bootstrap_servers:
     - localhost:9092
   topics:
-    upstream: normalized_book
-    downstream: aggregated_book
+    upstream: normalized.book
+    downstream: aggregated.book
   consumer_group: orderbook-group-1
   max_buffer_records: 5000
   backpressure:
@@ -24,3 +24,6 @@ redis:
   min_idle_conns: 100
 
 worker_count: 16
+worker_queue_size: 1000
+snapshot_interval_seconds: 20
+worker_flush_depth: 15

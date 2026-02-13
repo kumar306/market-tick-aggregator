@@ -61,17 +61,19 @@ type SymbolState struct {
 	SnapshotPending bool
 }
 
-func NewWorker(id int, ctx context.Context, channel chan *constants.DispatchRecord, AckChannel, updateAckChannel chan *constants.Ack) *Worker {
+func NewWorker(id int, ctx context.Context, snapshotIntervalSec int, flushDepth int, channel chan *constants.DispatchRecord, AckChannel, updateAckChannel chan *constants.Ack) *Worker {
 	return &Worker{
-		ID:                id,
-		Ctx:               ctx,
-		Depth:             &atomic.Int64{},
-		UpdateChannel:     channel,
-		SnapshotChannel:   make(chan *constants.SnapshotMsg, 10),
-		OrderbookStateMap: make(map[string]*SymbolState),
-		SnapshotStateMap:  make(map[string]*book.OrderBookSnapshot),
-		AckChannel:        AckChannel,
-		UpdateAckChannel:  updateAckChannel,
+		ID:                             id,
+		Ctx:                            ctx,
+		Depth:                          &atomic.Int64{},
+		UpdateChannel:                  channel,
+		SnapshotChannel:                make(chan *constants.SnapshotMsg, 10),
+		SnapshotPrepareIntervalSeconds: snapshotIntervalSec,
+		OrderbookStateMap:              make(map[string]*SymbolState),
+		SnapshotStateMap:               make(map[string]*book.OrderBookSnapshot),
+		AckChannel:                     AckChannel,
+		UpdateAckChannel:               updateAckChannel,
+		FlushDepth:                     flushDepth,
 	}
 }
 

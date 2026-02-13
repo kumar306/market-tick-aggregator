@@ -23,7 +23,7 @@ func newTestWorker(ctx context.Context) *Worker {
 	updateCh := make(chan *constants.DispatchRecord, 10)
 	ackCh := make(chan *constants.Ack, 10)
 	updateAckCh := make(chan *constants.Ack, 10)
-	w := NewWorker(1, ctx, updateCh, ackCh, updateAckCh)
+	w := NewWorker(1, ctx, 10, 15, updateCh, ackCh, updateAckCh)
 	w.FlushDepth = 5
 	return w
 }

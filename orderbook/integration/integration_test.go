@@ -88,7 +88,7 @@ func TestOrderbookIntegration_EndToEndSnapshotAndFlush(t *testing.T) {
 	updateAckCh := make(chan *constants.Ack, 20)
 
 	coord := kafka.NewCoordinator(1, []chan *constants.Ack{updateAckCh})
-	w := worker.NewWorker(0, ctx, updateCh, coord.FlushAckChannel, updateAckCh)
+	w := worker.NewWorker(0, ctx, 10, 15, updateCh, coord.FlushAckChannel, updateAckCh)
 	w.FlushDepth = 5
 	w.SnapshotPrepareIntervalSeconds = 1
 

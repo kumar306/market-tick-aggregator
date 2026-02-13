@@ -114,7 +114,7 @@ func TestMainFlowSmoke(t *testing.T) {
 	coordinator := kafka.NewCoordinator(workerCount, workerAckChannels)
 
 	for idx, ch := range workerChannels {
-		w := worker.NewWorker(idx, ctx, ch, coordinator.FlushAckChannel, workerAckChannels[idx])
+		w := worker.NewWorker(idx, ctx, 10, 15, ch, coordinator.FlushAckChannel, workerAckChannels[idx])
 		w.FlushDepth = 5
 		w.SnapshotPrepareIntervalSeconds = 1
 		g.Go(func() error {

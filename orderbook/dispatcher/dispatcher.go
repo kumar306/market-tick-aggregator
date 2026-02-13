@@ -96,18 +96,23 @@ func CreateWorkerAckChannels(workerCount int, chanSize int) []chan *constants.Ac
 	return workerAckChannels
 }
 
-func StartWorkerChannels(ctx context.Context, workerChannels []chan *constants.DispatchRecord,
+func StartWorkerChannels(ctx context.Context,
+	snapshotIntervalSec int,
+	flushDepth int,
+	workerChannels []chan *constants.DispatchRecord,
 	AckCh chan *constants.Ack,
 	workerAckChannels []chan *constants.Ack) {
 	for idx, ch := range workerChannels {
-		go startWorker(ctx, idx, ch, AckCh, workerAckChannels[idx])
+		go startWorker(ctx, idx, snapshotIntervalSec, flushDepth, ch, AckCh, workerAckChannels[idx])
 	}
 }
 
 func startWorker(ctx context.Context, idx int,
+	snapshotIntervalSec int,
+	flushDepth int,
 	ch chan *constants.DispatchRecord,
 	AckCh, updateAckCh chan *constants.Ack) {
 	logger.Log.Info("Starting worker.", "workerIdx", idx)
-	worker := worker.NewWorker(idx, ctx, ch, AckCh, updateAckCh)
+	worker := worker.NewWorker(idx, ctx, snapshotIntervalSec, flushDepth, ch, AckCh, updateAckCh)
 	worker.Run()
 }
