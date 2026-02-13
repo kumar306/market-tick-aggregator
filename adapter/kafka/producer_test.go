@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	kf "market-adapter/kafka"
+	"shared/metrics"
 	"testing"
 	"time"
 
@@ -21,6 +22,7 @@ import (
 // fetch from the same topic - if len(records) = 0 or some error, then means message didnt get produced so fail the test
 
 func Test_ProduceAsync(t *testing.T) {
+	metrics.InitAdapterMetrics()
 	ctx := context.Background()
 
 	kafkaContainer, err := kafka.Run(ctx,

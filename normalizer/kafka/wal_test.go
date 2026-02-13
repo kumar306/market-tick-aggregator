@@ -166,7 +166,7 @@ func TestReplay(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		kafka.Client.Close()
+		kafka.Close()
 		time.Sleep(150 * time.Millisecond)
 		kafka.Wal.Close()
 		kafka.Wal = nil
@@ -307,7 +307,7 @@ func TestReplayError(t *testing.T) {
 		t.Fatalf("Unexpected error: %v", err)
 	}
 	t.Cleanup(func() {
-		kafka.Client.Close()
+		kafka.Close()
 		time.Sleep(150 * time.Millisecond)
 		kafka.Wal.Close()
 		kafka.Wal = nil
@@ -427,7 +427,7 @@ func TestOrdering(t *testing.T) {
 		t.Fatalf("Unexpected error: %v", err)
 	}
 	t.Cleanup(func() {
-		kafka.Client.Close()
+		kafka.Close()
 		time.Sleep(150 * time.Millisecond)
 		kafka.Wal.Close()
 		kafka.Wal = nil

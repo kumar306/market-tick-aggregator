@@ -13,6 +13,7 @@ import (
 // test the ring buffer to ensure it drops oldest message
 
 func Test_RingBufferDropsOldest(t *testing.T) {
+	metrics.InitAdapterMetrics()
 	bufName := "test_drop_oldest"
 	cap := uint64(4)
 	ring := ring.NewSpscDropOldestRing[int](cap, bufName)

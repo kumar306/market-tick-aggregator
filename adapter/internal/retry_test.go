@@ -5,6 +5,7 @@ import (
 	"market-adapter/constants"
 	"market-adapter/internal"
 	"math"
+	"shared/metrics"
 	"sync"
 	"testing"
 	"time"
@@ -22,6 +23,7 @@ import (
 // ii. store timestamps in a slice and calculate the time difference b/w the timestamps and ensure the intervals are exponentially increasing within jitter
 
 func Test_RetryConnection(t *testing.T) {
+	metrics.InitAdapterMetrics()
 	feed := &constants.Feed{
 		Name: "binance",
 		Url:  "http://localhost:5999999/ws",
@@ -69,7 +71,7 @@ func Test_RetryConnection(t *testing.T) {
 
 	require.Equal(t, feed.Streams[0].MaxRetries, len(retryTimes), "Number of retries should be equal to max retries")
 
-	for i, _ := range retryTimes {
+	for i := range retryTimes {
 		if i > 0 {
 			interval := retryTimes[i].Sub(retryTimes[i-1])
 			t.Logf("Got the interval %v: %v", i, interval)

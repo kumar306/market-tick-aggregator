@@ -29,9 +29,9 @@ func TestRouting(t *testing.T) {
 	rec1 := &kgo.Record{Key: []byte("ETH-USD"), Topic: "coinbase.ticker", Value: []byte("{\"exchange\":\"coinbase\", \"channel\":\"ticker\"}")}
 	rec2 := &kgo.Record{Key: []byte("ETH-USD"), Topic: "coinbase.ticker", Value: []byte("{\"exchange\":\"coinbase\", \"channel\":\"ticker\"}")}
 	rec3 := &kgo.Record{Key: []byte("ETH-USD"), Topic: "coinbase.ticker", Value: []byte("{\"exchange\":\"coinbase\", \"channel\":\"ticker\"}")}
-	rec4 := &kgo.Record{Key: []byte("ETH-USD"), Topic: "coinbase.ticker", Value: []byte("{\"exchange\":\"coinbase\", \"channel\":\"ticker\"}")}
-	rec5 := &kgo.Record{Key: []byte("ETH-USD"), Topic: "coinbase.ticker", Value: []byte("{\"exchange\":\"coinbase\", \"channel\":\"ticker\"}")}
-	rec6 := &kgo.Record{Key: []byte("ETH-USD"), Topic: "coinbase.ticker", Value: []byte("{\"exchange\":\"coinbase\", \"channel\":\"ticker\"}")}
+	rec4 := &kgo.Record{Key: []byte("BTC-USD"), Topic: "coinbase.ticker", Value: []byte("{\"exchange\":\"coinbase\", \"channel\":\"ticker\"}")}
+	rec5 := &kgo.Record{Key: []byte("BTC-USD"), Topic: "coinbase.ticker", Value: []byte("{\"exchange\":\"coinbase\", \"channel\":\"ticker\"}")}
+	rec6 := &kgo.Record{Key: []byte("BTC-USD"), Topic: "coinbase.ticker", Value: []byte("{\"exchange\":\"coinbase\", \"channel\":\"ticker\"}")}
 
 	wg.Add(1)
 	dispatchChannel <- rec1

@@ -28,7 +28,7 @@ func TestConsumerLoop(t *testing.T) {
 	// start consumer client
 	_, kafkaContainer := kafkatest.InitKafkaContainer(t, topics)
 	defer func() {
-		kafka.Client.Close()
+		kafka.Close()
 		if err := testcontainers.TerminateContainer(kafkaContainer); err != nil {
 			t.Fatalf("Error in terminating the kafka container: %v", err)
 		}
