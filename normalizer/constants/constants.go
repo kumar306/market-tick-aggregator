@@ -8,9 +8,10 @@ import (
 )
 
 type Config struct {
-	KafkaConfig *KafkaConfig `yaml:"kafka"`
-	WorkerCount int          `yaml:"worker_count"`
-	RedisConfig *RedisConfig `yaml:"redis"`
+	KafkaConfig     *KafkaConfig `yaml:"kafka"`
+	WorkerCount     int          `yaml:"worker_count"`
+	RedisConfig     *RedisConfig `yaml:"redis"`
+	WorkerQueueSize int          `yaml:"worker_queue_size"`
 }
 
 type KafkaConfig struct {
@@ -119,7 +120,7 @@ type PipelineMessage struct {
 	Channel    string
 	Symbol     string
 	SeqId      int64
-	Ts         int64 // ts in unix nano
+	Ts         int64 // ts in unix milli
 	RawMessage interface{}
 	Record     *kgo.Record `json:"record"`
 	EventType  string

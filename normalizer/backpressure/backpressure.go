@@ -1,133 +1,206 @@
 package backpressure
 
 import (
-	"context"
 	"market-normalizer/constants"
-	"market-normalizer/dispatcher"
 	"market-normalizer/utils/kafkatest"
-	"market-normalizer/worker"
 	"shared/logger"
 	"shared/metrics"
 	"strconv"
-	"sync/atomic"
-	"time"
+	"sync"
 )
 
-type WorkerTime struct {
-	ThresholdStartTime *time.Time
-	PauseActive        bool
-	CooldownActive     *atomic.Bool
+// just keep track of worker, depth of messages in his channel.
+// if its less than threshold and hot, then resume
+type WorkerBPState struct {
+	Depth  int64
+	Paused bool
 }
+
+// worker bp map
+var workerBPMap map[int]*WorkerBPState
+
+// mapping of workers to topic/partitions
+var workerPartitionMap map[int]map[string]map[int32]struct{}
+
+// count of number of times a topic partition is paused at the present
+var topicPartitionHotCount map[string]map[int32]int
+
+var highThreshold, lowThreshold int64
+var bpQueueCapacity int64
+var pauseResumerImpl kafkatest.PauseResumer
+var bpMu sync.Mutex
+var bpOnce sync.Once
 
 // track the metrics for worker queue usage and do the pause fetches here to slow down rate of consuming and let the system catch up
 // pause/resume as per metrics
-func BackpressureController(ctx context.Context,
-	client kafkatest.PauseResumer,
-	channelPool []chan *constants.DispatchRecord,
-	backpressureConfig *constants.BackpressureConfig) {
-	ticker := time.NewTicker(1 * time.Second)
+func InitBackpressureController(client kafkatest.PauseResumer,
+	backpressureConfig *constants.BackpressureConfig,
+	queueCapacity int64) {
+	bpOnce.Do(func() {
+		bpMu.Lock()
+		defer bpMu.Unlock()
+		highThreshold = int64(backpressureConfig.QueueUsageHighThreshold * float64(queueCapacity))
+		lowThreshold = int64(backpressureConfig.QueueUsageLowThreshold * float64(queueCapacity))
+		bpQueueCapacity = queueCapacity
+		pauseResumerImpl = client
+		workerBPMap = map[int]*WorkerBPState{}
+		workerPartitionMap = map[int]map[string]map[int32]struct{}{}
+		topicPartitionHotCount = map[string]map[int32]int{}
+	})
+}
 
-	// per worker map to deadlines to pause his partitions
-	var workerTimerMap = make(map[int]*WorkerTime)
-
-	for workerId := range channelPool {
-		c := &atomic.Bool{}
-		c.Store(false)
-		workerTimerMap[workerId] = &WorkerTime{
-			CooldownActive: c,
-		}
+func OnEnqueue(workerId int, topic string, partition int32) {
+	bpMu.Lock()
+	if workerBPMap == nil {
+		workerBPMap = map[int]*WorkerBPState{}
 	}
 
-	for {
-		select {
-		case <-ctx.Done():
-			logger.Log.Info("Received ctx done event.. shutting down backpressure controller")
-			return
+	if workerPartitionMap == nil {
+		workerPartitionMap = map[int]map[string]map[int32]struct{}{}
+	}
 
-		case <-ticker.C:
-			// iterate through worker channels to get the worker
+	if topicPartitionHotCount == nil {
+		topicPartitionHotCount = map[string]map[int32]int{}
+	}
 
-			for workerId := range channelPool {
+	if _, exists := workerBPMap[workerId]; !exists {
+		workerBPMap[workerId] = &WorkerBPState{}
+	}
 
-				// if worker is not assigned a partition during temporary partition rebalance, this can occur so check it
-				parts := dispatcher.WorkerPartitionAssignmentsHandler.GetPartitionAssignments(workerId)
-				if len(parts) == 0 {
-					continue
-				}
+	if _, exists := workerPartitionMap[workerId]; !exists {
+		workerPartitionMap[workerId] = map[string]map[int32]struct{}{}
+	}
 
-				if workerTimerMap[workerId].CooldownActive.Load() {
-					continue
-				}
+	if _, exists := workerPartitionMap[workerId][topic]; !exists {
+		workerPartitionMap[workerId][topic] = map[int32]struct{}{}
+	}
 
-				val := worker.WorkerQueueUsageHandler.GetQueueUsage(workerId)
+	if _, exists := topicPartitionHotCount[topic]; !exists {
+		topicPartitionHotCount[topic] = map[int32]int{}
+	}
 
-				// if val is above high configurable threshold set in config
-				// and val is high for >= x seconds - also configurable
-				// then pause partitions fetch
+	workerBPMap[workerId].Depth++
+	workerPartitionMap[workerId][topic][partition] = struct{}{}
 
-				// identify all the topics and partitions assigned to a worker and store in memory
-				if val >= backpressureConfig.QueueUsageHighThreshold {
+	if metrics.Normalizer_WorkerQueueUsage != nil && bpQueueCapacity > 0 {
+		usage := float64(workerBPMap[workerId].Depth) / float64(bpQueueCapacity)
+		metrics.Normalizer_WorkerQueueUsage.WithLabelValues(strconv.Itoa(workerId)).Set(usage)
+	}
 
-					logger.Log.Info("Queue usage is high for worker", "workerId", workerId, "usage", val)
-
-					if workerTimerMap[workerId].PauseActive {
-						continue
+	topicPartitionsToPause := make(map[string][]int32, 0)
+	if workerBPMap[workerId].Depth > highThreshold && workerBPMap[workerId].Paused == false {
+		workerBPMap[workerId].Paused = true
+		if metrics.Normalizer_BackpressureWorkerPaused != nil {
+			metrics.Normalizer_BackpressureWorkerPaused.WithLabelValues(strconv.Itoa(workerId)).Set(1)
+		}
+		if metrics.Normalizer_BackpressureTransitionsTotal != nil {
+			metrics.Normalizer_BackpressureTransitionsTotal.Inc()
+		}
+		for topic, topicPartitions := range workerPartitionMap[workerId] {
+			for part := range topicPartitions {
+				topicPartitionHotCount[topic][part]++
+				if topicPartitionHotCount[topic][part] == 1 {
+					if _, exists := topicPartitionsToPause[topic]; !exists {
+						topicPartitionsToPause[topic] = make([]int32, 0)
 					}
-
-					logger.Log.Info("Worker having high queue usage is not paused", "workerId", workerId)
-
-					if workerTimerMap[workerId].ThresholdStartTime == nil {
-						curTime := time.Now()
-						workerTimerMap[workerId].ThresholdStartTime = &curTime
-					}
-
-					if time.Since(*(workerTimerMap[workerId].ThresholdStartTime)) >
-						(time.Duration(backpressureConfig.ThresholdActiveMillis) * time.Millisecond) {
-
-						// pause those partitions to be fetched for a cooldown period till queue usage reduces
-						client.PauseFetchPartitions(
-							constructPartitionMap(dispatcher.WorkerPartitionAssignmentsHandler.GetPartitionAssignments(workerId)))
-
-						metrics.Normalizer_PausedPartitions.WithLabelValues(strconv.Itoa(workerId)).Set(1.0)
-						logger.Log.Info("Backpressure - Pausing fetch partitions for worker", "worker", workerId)
-
-						workerTimerMap[workerId].PauseActive = true
-						workerTimerMap[workerId].CooldownActive.Store(true)
-
-						time.AfterFunc(time.Duration(backpressureConfig.CooldownTimeMillis)*time.Millisecond, func() {
-							logger.Log.Info("Backpressure - Cooldown completed for pause partitions", "worker", workerId)
-							workerTimerMap[workerId].CooldownActive.Store(false)
-						})
-					}
-
-				} else {
-
-					if workerTimerMap[workerId].ThresholdStartTime != nil {
-						workerTimerMap[workerId].ThresholdStartTime = nil
-					}
-
-					if val <= backpressureConfig.QueueUsageLowThreshold && workerTimerMap[workerId].PauseActive {
-						// resume partition fetch if queue usage is under low threshold and worker is in pause mode
-						client.ResumeFetchPartitions(
-							constructPartitionMap(dispatcher.WorkerPartitionAssignmentsHandler.GetPartitionAssignments(workerId)))
-
-						metrics.Normalizer_PausedPartitions.WithLabelValues(strconv.Itoa(workerId)).Set(0.0)
-						logger.Log.Info("Resuming fetch partitions for worker", "worker", workerId)
-
-						workerTimerMap[workerId].PauseActive = false
-					}
+					topicPartitionsToPause[topic] = append(topicPartitionsToPause[topic], part)
 				}
 			}
 		}
 	}
-}
+	pauseResumer := pauseResumerImpl
+	bpMu.Unlock()
 
-func constructPartitionMap(workerPartitionMap map[string]map[int32]bool) map[string][]int32 {
-	pausedPartitionMap := make(map[string][]int32)
-	for topic := range workerPartitionMap {
-		for partition := range workerPartitionMap[topic] {
-			pausedPartitionMap[topic] = append(pausedPartitionMap[topic], int32(partition))
+	// construct the map to call pause fetch
+	if pauseResumer == nil {
+		return
+	}
+
+	for topic, parts := range topicPartitionsToPause {
+		for _, part := range parts {
+			pausedMap := constructPartitionMap(topic, part)
+			pauseResumer.PauseFetchPartitions(pausedMap)
+			logger.Log.Info("Paused fetch partition for topic, partition", "topic", topic, "partition", part)
 		}
 	}
-	return pausedPartitionMap
+
+}
+
+func OnDequeue(workerId int) {
+	bpMu.Lock()
+
+	if workerBPMap == nil {
+		workerBPMap = map[int]*WorkerBPState{}
+	}
+
+	workerState, exists := workerBPMap[workerId]
+	if !exists {
+		bpMu.Unlock()
+		return
+	}
+
+	// decrement
+	workerState.Depth--
+	if workerState.Depth < 0 {
+		workerState.Depth = 0
+	}
+
+	if metrics.Normalizer_WorkerQueueUsage != nil && bpQueueCapacity > 0 {
+		usage := float64(workerState.Depth) / float64(bpQueueCapacity)
+		metrics.Normalizer_WorkerQueueUsage.WithLabelValues(strconv.Itoa(workerId)).Set(usage)
+	}
+
+	if workerState.Depth < lowThreshold && workerState.Paused == true {
+		workerState.Paused = false
+		if metrics.Normalizer_BackpressureWorkerPaused != nil {
+			metrics.Normalizer_BackpressureWorkerPaused.WithLabelValues(strconv.Itoa(workerId)).Set(0)
+		}
+		if metrics.Normalizer_BackpressureTransitionsTotal != nil {
+			metrics.Normalizer_BackpressureTransitionsTotal.Inc()
+		}
+
+		topicPartitionsToResume := make(map[string][]int32, 0)
+
+		for topic, partitions := range workerPartitionMap[workerId] {
+			if _, exists := topicPartitionHotCount[topic]; !exists {
+				topicPartitionHotCount[topic] = map[int32]int{}
+			}
+			for part := range partitions {
+				topicPartitionHotCount[topic][part]--
+				if topicPartitionHotCount[topic][part] <= 0 {
+					topicPartitionHotCount[topic][part] = 0
+					if _, exists := topicPartitionsToResume[topic]; !exists {
+						topicPartitionsToResume[topic] = make([]int32, 0)
+					}
+					topicPartitionsToResume[topic] = append(topicPartitionsToResume[topic], part)
+				}
+			}
+		}
+
+		pauseResumer := pauseResumerImpl
+		bpMu.Unlock()
+
+		if pauseResumer == nil {
+			logger.Log.Info("Pause resumer is nil on dequeue. Returning")
+			return
+		}
+
+		for topic, partitions := range topicPartitionsToResume {
+			for _, part := range partitions {
+				resumedMap := constructPartitionMap(topic, part)
+				pauseResumer.ResumeFetchPartitions(resumedMap)
+				logger.Log.Info("Resumed fetch partition for topic, partition", "topic", topic, "partition", part)
+			}
+		}
+		return
+	}
+
+	bpMu.Unlock()
+}
+
+func constructPartitionMap(topic string, partition int32) map[string][]int32 {
+	pauseResumePartitionMap := make(map[string][]int32)
+	pauseResumePartitionMap[topic] = make([]int32, 0)
+	pauseResumePartitionMap[topic] = append(pauseResumePartitionMap[topic], partition)
+	return pauseResumePartitionMap
 }

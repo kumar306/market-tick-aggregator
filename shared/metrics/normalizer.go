@@ -37,6 +37,7 @@ var (
 	Normalizer_ProducerLatencySeconds  *prometheus.HistogramVec
 	Normalizer_CommitOffsetsTotal      *prometheus.GaugeVec
 	Normalizer_CommitOffsetErrorsTotal prometheus.Counter
+	Normalizer_WorkerQueueDepth        *prometheus.GaugeVec
 
 	// commit lag
 	Normalizer_CommitLatencySeconds prometheus.Histogram
@@ -53,7 +54,9 @@ var (
 	Normalizer_WorkerProcessedMessagesTotal *prometheus.CounterVec
 
 	// if kafka saturated or redis overloaded - for circuit breaker
-	Normalizer_BackpressureTriggeredTotal *prometheus.CounterVec
+	Normalizer_BackpressureTriggeredTotal   *prometheus.CounterVec
+	Normalizer_BackpressureWorkerPaused     *prometheus.GaugeVec
+	Normalizer_BackpressureTransitionsTotal prometheus.Counter
 
 	// circuit breaker state change metrics
 	Normalizer_RedisCB_StateChanges   *prometheus.CounterVec
@@ -193,6 +196,11 @@ func InitNormalizerMetrics() {
 			"Number of errors while committing kafka offsets",
 		)
 
+		Normalizer_WorkerQueueDepth = NewGaugeVec(
+			"normalizer_worker_queue_depth",
+			"Worker queue depth used to calculate backpressure",
+			[]string{"worker"})
+
 		// commit lag
 		Normalizer_CommitLatencySeconds = NewHistogram(
 			"normalizer_commit_latency_seconds",
@@ -257,12 +265,21 @@ func InitNormalizerMetrics() {
 			[]string{"worker_id"},
 		)
 
+		Normalizer_BackpressureWorkerPaused = NewGaugeVec(
+			"normalizer_backpressure_worker_paused",
+			"Per-worker backpressure pause state, 1 when worker is paused",
+			[]string{"worker"})
+
 		// if kafka saturated or redis overloaded - for circuit breaker
 		Normalizer_BackpressureTriggeredTotal = NewCounterVec(
 			"normalizer_backpressure_triggered_total",
 			"Number of backpressure triggers in Kafka/Redis",
 			[]string{"service", "exchange", "channel", "symbol"},
 		)
+
+		Normalizer_BackpressureTransitionsTotal = NewCounter(
+			"normalizer_backpressure_transitions_total",
+			"Total number of backpressure events")
 
 		// circuit breaker state change metrics
 		Normalizer_RedisCB_StateChanges = NewCounterVec(

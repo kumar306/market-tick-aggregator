@@ -24,6 +24,7 @@ kafka:
   wal_max_entries: 1000
 
 worker_count: 16
+worker_queue_size: 1000
 redis:
   ttl_minutes: 15
   cb_req_count: 10

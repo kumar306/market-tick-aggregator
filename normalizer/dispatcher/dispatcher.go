@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"hash/fnv"
+	"market-normalizer/backpressure"
 	"market-normalizer/constants"
 	"market-normalizer/worker"
 	"shared/logger"
@@ -83,18 +84,30 @@ func StartDispatcher(ctx context.Context, dispatchChannel chan *kgo.Record, chan
 			hash.Write([]byte(dedupeKey))
 			sum := hash.Sum32()
 
-			shardKey := sum % uint32(len(channelPool))
+			workerId := sum % uint32(len(channelPool))
 
-			WorkerPartitionAssignmentsHandler.SetPartitionAssignments(int(shardKey), rec.Topic, rec.Partition)
+			// let dispatcher monitor worker queue metrics similar to orderbook
+			usage := float64(len(channelPool[workerId])) / float64(cap(channelPool[workerId]))
+			metrics.Normalizer_WorkerQueueDepth.WithLabelValues(strconv.Itoa(int(workerId))).Set(usage)
 
-			channelPool[shardKey] <- &constants.DispatchRecord{
+			dispatchRec := &constants.DispatchRecord{
 				Event:     constants.NewMessage,
 				Record:    rec,
 				BufferKey: dedupeKey,
-				ShardKey:  shardKey,
+				ShardKey:  workerId,
 				Exchange:  header.Exchange,
 				Channel:   header.Channel,
 				Symbol:    symbol,
+			}
+
+			select {
+			case channelPool[workerId] <- dispatchRec:
+				backpressure.OnEnqueue(int(workerId), rec.Topic, rec.Partition)
+			default:
+				logger.Log.Warn("Dropping dispatch record due to full worker channel",
+					"workerId", workerId,
+					"partition", rec.Partition,
+					"offset", rec.Offset)
 			}
 
 			// injected only in testing to signal done
@@ -124,7 +137,7 @@ start the workers listening on those channels. shutdown worker pool on ctx shutd
 */
 func StartWorkerPool(ctx context.Context, channelPool []chan *constants.DispatchRecord) {
 	for i, workerChannel := range channelPool {
-		go func(i int, workerChannel chan *constants.DispatchRecord) {
+		go func(workerId int, workerChannel chan *constants.DispatchRecord) {
 			logger.Log.Info("Starting worker.", "worker", i)
 			// in memory map per worker
 			workerMap := make(map[string]*constants.SymbolState)
@@ -158,11 +171,13 @@ func StartWorkerPool(ctx context.Context, channelPool []chan *constants.Dispatch
 						workerStartTime := time.Now()
 
 						worker.ProcessRecord(ctx, dispatchRec, workerMap, workerChannel)
-
 						workerLatency := time.Since(workerStartTime).Seconds()
 						metrics.Normalizer_WorkerLatencySeconds.WithLabelValues(strconv.Itoa(i)).Observe(workerLatency)
-						metrics.Normalizer_WorkerProcessedMessagesTotal.WithLabelValues(strconv.Itoa(i)).Inc()
 
+						// call on dequeue after process for backpressure
+						backpressure.OnDequeue(workerId)
+
+						metrics.Normalizer_WorkerProcessedMessagesTotal.WithLabelValues(strconv.Itoa(i)).Inc()
 						// used only in tests
 						if WorkerTestingHook != nil {
 							WorkerTestingHook()

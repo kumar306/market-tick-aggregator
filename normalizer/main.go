@@ -61,13 +61,16 @@ func main() {
 	go kafka.KafkaConsumerMetrics(ctx, cfg.KafkaConfig.Topics)
 
 	// create the dispatch channel
-	var dispatchChannel chan *kgo.Record = make(chan *kgo.Record, 1000)
+	var dispatchChannel chan *kgo.Record = make(chan *kgo.Record, cfg.WorkerQueueSize)
 
 	// create the worker channels
 	channelPool := dispatcher.CreateWorkerChannels(cfg.WorkerCount, 1000)
 
 	// start worker pool
 	dispatcher.StartWorkerPool(ctx, channelPool)
+
+	// init backpressure state
+	backpressure.InitBackpressureController(kafka.Client, cfg.KafkaConfig.BackpressureConfig, int64(cfg.WorkerQueueSize))
 
 	// setup dispatcher
 	go dispatcher.StartDispatcher(ctx, dispatchChannel, channelPool)
@@ -84,8 +87,7 @@ func main() {
 	// metrics goroutine for worker ingestion
 	go worker.StartWorkerMetrics(ctx, channelPool)
 
-	// start backpressure controller
-	go backpressure.BackpressureController(ctx, kafka.Client, channelPool, cfg.KafkaConfig.BackpressureConfig)
+	logger.Log.Info("Started normalizer service successfully..")
 
 	// wait until SIGTERM
 	<-ctx.Done()
