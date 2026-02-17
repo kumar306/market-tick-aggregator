@@ -2,3 +2,4 @@
 .env
 .VSCodeCounter*
 .vscode
+logs*
