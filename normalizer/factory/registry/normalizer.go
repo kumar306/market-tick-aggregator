@@ -55,7 +55,7 @@ func RegisterNormalizer(exchange string, channel string) error {
 		return logger.LogAndWrap("Could not register normalizer", nil, "error", err)
 	}
 	normalizerRegistry[key] = normalizer
-	logger.Log.Info("Registered normalizerer for key", "key", key)
+	logger.Log.Info("Registered normalizer for key", "key", key)
 	return nil
 }
 

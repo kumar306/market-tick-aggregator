@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type KrakenTickerNormalizer struct{}
@@ -81,7 +80,8 @@ func (k *KrakenBookNormalizer) Normalize(msg *constants.PipelineMessage) ([]byte
 			return nil, logger.LogAndWrap("Normalizer stage: Error when parsing time", err, "exchange", msg.Exchange, "channel", msg.Channel, "symbol", msg.Symbol)
 		}
 
-		normalizedMsg.Timestamp = timestamppb.New(parsedTime)
+		normalizedMsg.EventTimeMillis = parsedTime.UnixMilli()
+		logger.Log.Info("Received the kraken message", "msg", msg, "parsedTime", parsedTime, "proto_gen_message", &normalizedMsg)
 	}
 
 	protoStream, err := proto.Marshal(&normalizedMsg)

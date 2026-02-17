@@ -28,6 +28,7 @@ func SequenceOrderer(
 		// if same message resent, we will have duplicate in seq id means duplicate publish so check before appending
 		if _, exists := symbolState.BufferSeqMap[msg.SeqId]; !exists {
 			symbolState.BufferSeqId = append(symbolState.BufferSeqId, msg.SeqId)
+			logger.Log.Info("Appended seq id to buffer seq id", "seq_id", msg.SeqId, "buffer_size", len(symbolState.BufferSeqId))
 		}
 		symbolState.BufferSeqMap[msg.SeqId] = msg
 		return []*constants.PipelineMessage{}, nil
@@ -47,11 +48,12 @@ func SequenceOrderer(
 
 	lastSeqId := symbolState.LastSeqId
 	symbolState.LastSeqId = msg.SeqId
+	logger.Log.Info("Got the last sequence Id", "seqId", msg.SeqId)
 
-	// get the last seqId -> msg seq id should be that + 1
-	if msg.SeqId > lastSeqId+1 {
+	// get the last seqId > current seq id
+	if msg.SeqId < lastSeqId {
 		// dropped message. start timer
-		logger.Log.Warn("Detected a message drop")
+		logger.Log.Warn("Detected a message drop", "expected_seq_id", lastSeqId, "actual_seq_id", msg.SeqId)
 		symbolState.GapActive = true
 		if _, exists := symbolState.BufferSeqMap[msg.SeqId]; !exists {
 			symbolState.BufferSeqId = append(symbolState.BufferSeqId, msg.SeqId)
@@ -61,6 +63,7 @@ func SequenceOrderer(
 
 		// send a timer event to worker channel to flush the buffer
 		go func(t *time.Timer) {
+			logger.Log.Info("Timer started to flush buffer", "bufferKey", bufferKey)
 			<-t.C
 			workerChannel <- &constants.DispatchRecord{
 				Event:     constants.FlushBuffer,
@@ -73,7 +76,7 @@ func SequenceOrderer(
 		return []*constants.PipelineMessage{}, nil
 
 	} else {
-		// can be <= last processed seq id + 1: just apply it.
+		// can be >= last processed seq id + 1: just apply it.
 		return []*constants.PipelineMessage{msg}, nil
 	}
 }

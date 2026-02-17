@@ -3,6 +3,7 @@ package orderer
 import (
 	"market-normalizer/constants"
 	"market-normalizer/utils"
+	"shared/logger"
 )
 
 type CoinbaseTickerOrderer struct {
@@ -20,7 +21,10 @@ func (c *CoinbaseTickerOrderer) InitOrdererState(msg *constants.PipelineMessage)
 func (c *CoinbaseTickerOrderer) Order(msg *constants.PipelineMessage,
 	bufferKey string,
 	workerChannel chan *constants.DispatchRecord) ([]*constants.PipelineMessage, error) {
-	return utils.SequenceOrderer(msg, c.SymbolState, bufferKey, workerChannel)
+	logger.Log.Info("CoinbaseTickerOrderer:: init sequence orderer")
+	orderedMsgs, err := utils.SequenceOrderer(msg, c.SymbolState, bufferKey, workerChannel)
+	logger.Log.Info("CoinbaseTickerOrderer:: exit sequence orderer", "msgs_size", len(orderedMsgs))
+	return orderedMsgs, err
 }
 
 func (c *CoinbaseTickerOrderer) PrepareBufferFlush() []*constants.PipelineMessage {

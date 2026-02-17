@@ -79,7 +79,7 @@ func (w *WAL) Append(topic string, msg *constants.PipelineMessage, key, value []
 	}
 
 	entry := WALEntry{
-		Ts:    time.Now().UnixNano(),
+		Ts:    time.Now().UnixMilli(),
 		Topic: topic,
 		Key:   key,
 		Value: value,

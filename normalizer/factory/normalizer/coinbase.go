@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type CoinbaseTickerNormalizer struct{}
@@ -35,17 +34,17 @@ func (c *CoinbaseTickerNormalizer) Normalize(msg *constants.PipelineMessage) ([]
 	}
 
 	var normalizedMsg generated.NormalizedTicker = generated.NormalizedTicker{
-		Exchange:  msg.Exchange,
-		Channel:   msg.Channel,
-		Symbol:    msg.Symbol,
-		Price:     floatPrice,
-		Volume:    floatVolume,
-		SeqId:     msg.SeqId,
-		Open:      floatOpen,
-		Close:     floatClose,
-		Low:       floatLow,
-		High:      floatHigh,
-		Timestamp: timestamppb.New(parsedTimestamp),
+		Exchange:      msg.Exchange,
+		Channel:       msg.Channel,
+		Symbol:        msg.Symbol,
+		Price:         floatPrice,
+		Volume:        floatVolume,
+		SeqId:         msg.SeqId,
+		Open:          floatOpen,
+		Close:         floatClose,
+		Low:           floatLow,
+		High:          floatHigh,
+		EventTsMillis: parsedTimestamp.UnixMilli(),
 	}
 
 	protoStream, err := proto.Marshal(&normalizedMsg)
@@ -74,13 +73,13 @@ func (c *CoinbaseLevel2Normalizer) Normalize(msg *constants.PipelineMessage) ([]
 	}
 
 	var normalizedMsg generated.NormalizedBook = generated.NormalizedBook{
-		Exchange:  msg.Exchange,
-		Channel:   msg.Channel,
-		Symbol:    msg.Symbol,
-		Bids:      []*generated.NormalizedBook_BookLevel{},
-		Asks:      []*generated.NormalizedBook_BookLevel{},
-		EventType: rawMessage.Type,
-		Timestamp: timestamppb.New(parsedTime),
+		Exchange:        msg.Exchange,
+		Channel:         msg.Channel,
+		Symbol:          msg.Symbol,
+		Bids:            []*generated.NormalizedBook_BookLevel{},
+		Asks:            []*generated.NormalizedBook_BookLevel{},
+		EventType:       rawMessage.Type,
+		EventTimeMillis: parsedTime.UnixMilli(),
 	}
 
 	if rawMessage.Type == constants.Snapshot {

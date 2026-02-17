@@ -45,6 +45,8 @@ func ProcessRecord(ctx context.Context,
 			Normalizer: normalizer,
 			Publisher:  publisher,
 		}
+
+		logger.Log.Info("Inserted entry for key in worker", "id", dispatchRec.ShardKey, "bufferKey", dispatchRec.BufferKey)
 	}
 
 	symbolState := workerMap[dispatchRec.BufferKey]
@@ -59,6 +61,7 @@ func ProcessRecord(ctx context.Context,
 	if !exists {
 		symbolState.Orderer.SetSymbolState(symbolState)
 		symbolState.Orderer.InitOrdererState(normalizedMsg)
+		logger.Log.Info("Set symbol state for key", "bufferKey", dispatchRec.BufferKey)
 		exists = true
 	}
 
@@ -101,10 +104,14 @@ func ProcessRecord(ctx context.Context,
 		metrics.Normalizer_BufferSize.WithLabelValues(dispatchRec.Exchange,
 			dispatchRec.Channel,
 			dispatchRec.Symbol).Inc()
-		logger.Log.Info("Inserted in buffer. Returning")
+		logger.Log.Info("Inserted in buffer. Returning", "bufferKey", dispatchRec.BufferKey,
+			"topic", dispatchRec.Record.Topic,
+			"partition", dispatchRec.Record.Partition,
+			"offset", dispatchRec.Record.Offset)
 		return nil
 	}
 
+	logger.Log.Info("Normal flow. Calling ProcessBuffer() for message")
 	// convert to a normalized schema and publish to downstream
 	ProcessBuffer(ctx, normalizedBuf, dispatchRec.BufferKey, symbolState.Normalizer, symbolState.Publisher, symbolState.Orderer)
 	return err
@@ -118,13 +125,15 @@ func ProcessBuffer(ctx context.Context,
 	orderer constants.OrdererStrategy) {
 
 	for _, msg := range normalizedBuffer {
-
+		logger.Log.Info("Init processBuffer for message", "msg", msg, "topic", msg.Record.Topic, "partition", msg.Record.Partition, "offset", msg.Record.Offset)
 		protoStream, err := normalizer.Normalize(msg)
 		if err != nil {
 			metrics.Normalizer_NormalizedMessageErrorsTotal.WithLabelValues(msg.Exchange, msg.Channel, msg.Symbol).Inc()
 			logger.Log.Error(err.Error())
 			continue
 		}
+
+		logger.Log.Info("Completed normalize: processBuffer for message", "msg", msg, "topic", msg.Record.Topic, "partition", msg.Record.Partition, "offset", msg.Record.Offset)
 
 		metrics.Normalizer_NormalizedMessagesTotal.WithLabelValues(msg.Exchange, msg.Channel, msg.Symbol).Inc()
 

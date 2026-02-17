@@ -46,7 +46,7 @@ func (k *KrakenBookConverter) Convert(raw []byte) (*constants.PipelineMessage, e
 			return nil, logger.LogAndWrap("Converter error: Could not parse timestamp for kraken book update message", err)
 		}
 
-		msg.Ts = parsedTime.UnixNano()
+		msg.Ts = parsedTime.UnixMilli()
 	}
 
 	return msg, nil

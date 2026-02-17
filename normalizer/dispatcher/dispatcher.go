@@ -78,7 +78,7 @@ func StartDispatcher(ctx context.Context, dispatchChannel chan *kgo.Record, chan
 
 			// compute hash - hash of feed + stream + symbol
 			// route to respective worker
-			dedupeKey := strings.ToLower(header.Exchange) + "-" + strings.ToLower(header.Channel) + "-" + strings.ToLower(symbol)
+			dedupeKey := strings.ToLower(header.Exchange) + ":" + strings.ToLower(header.Channel) + ":" + strings.ToLower(symbol)
 
 			hash := fnv.New32a()
 			hash.Write([]byte(dedupeKey))

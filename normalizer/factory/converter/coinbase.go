@@ -49,7 +49,7 @@ func (c *CoinbaseLevel2Converter) Convert(raw []byte) (*constants.PipelineMessag
 				"symbol", msg.Symbol)
 		}
 
-		msg.Ts = ts.UnixNano()
+		msg.Ts = ts.UnixMilli()
 	} else {
 		msg.EventType = constants.Snapshot
 	}

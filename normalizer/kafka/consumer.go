@@ -48,9 +48,10 @@ func Init(ctx context.Context, cfg *constants.KafkaConfig) *kgo.Client {
 	client, err := kgo.NewClient(
 		kgo.SeedBrokers(cfg.Brokers...),
 		kgo.ConsumeTopics(cfg.Topics...),
-		kgo.DisableAutoCommit(),
+		kgo.AutoCommitMarks(),
 		kgo.ConsumerGroup(cfg.ConsumerGroup),
 		kgo.MaxBufferedRecords(cfg.MaxBufferRecords),
+		kgo.WithLogger(kgo.BasicLogger(os.Stdout, kgo.LogLevelDebug, nil)),
 	)
 
 	Client = client
@@ -156,6 +157,16 @@ func Close() {
 			logger.Log.Warn("Kafka flush timed out or canceled", "err", err)
 		}
 
+		// Commit once more after flush so offsets marked by late produce callbacks are persisted.
+		commitCtx, commitCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer commitCancel()
+		commitErr := Client.CommitMarkedOffsets(commitCtx)
+		if commitErr != nil {
+			logger.Log.Warn("Final offset commit during close failed", "err", commitErr)
+		} else {
+			logger.Log.Info("Final offset commit during close succeeded")
+		}
+
 		Client.Close()
 		Client = nil
 		logger.Log.Info("Kafka client closed.")
@@ -201,17 +212,21 @@ func ConsumerLoop(ctx context.Context, client *kgo.Client, dispatchChannel chan 
 		default:
 		}
 
+		logger.Log.Info("KafkaConsumer:: Init fetch upstream records")
 		fetches := client.PollFetches(ctx)
 		if fetches.IsClientClosed() {
 			logger.Log.Info("Kafka client is closed upon poll fetch, returning")
 			return
 		}
 
+		logger.Log.Info("KafkaConsumer:: End fetch records from upstream..")
+
 		fetches.EachRecord(func(rec *kgo.Record) {
 			// in event that channel is blocked, avoid hanging upon shutdown
+			logger.Log.Info("Reading record from consumer", "topic", rec.Topic, "partition", rec.Partition, "offset", rec.Offset)
 			select {
 			case dispatchChannel <- rec:
-				metrics.Normalizer_ConsumerMessagesTotal.WithLabelValues(rec.Topic, string(rec.Partition)).Inc()
+				metrics.Normalizer_ConsumerMessagesTotal.WithLabelValues(rec.Topic, strconv.Itoa(int(rec.Partition))).Inc()
 			case <-ctx.Done():
 				return
 			}
@@ -224,7 +239,7 @@ func ConsumerLoop(ctx context.Context, client *kgo.Client, dispatchChannel chan 
 
 		fetches.EachError(func(topic string, partition int32, err error) {
 			logger.Log.Error("Error occurred for fetch", "topic", topic, "partition", partition, "err", err)
-			metrics.Normalizer_ConsumerErrorsTotal.WithLabelValues(topic, string(partition)).Inc()
+			metrics.Normalizer_ConsumerErrorsTotal.WithLabelValues(topic, strconv.Itoa(int(partition))).Inc()
 		})
 	}
 }
