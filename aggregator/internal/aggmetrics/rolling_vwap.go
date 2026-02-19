@@ -3,6 +3,7 @@ package aggmetrics
 import (
 	"market-aggregator/constants"
 	"market-aggregator/proto/generated"
+	"shared/logger"
 )
 
 type VWAPBucket struct {
@@ -70,6 +71,7 @@ func (r *RollingVWAP) Update(t *generated.NormalizedTick) {
 
 	r.totalSumPV += t.Price * t.Volume
 	r.totalSumV += t.Volume
+	logger.Log.Info("Updating Rolling VWAP", "idx", r.idx, "total_sum_pv", r.totalSumPV, "total_sum_v", r.totalSumV, "exchange", t.Exchange, "symbol", t.Symbol, "event_time", t.EventTsMillis)
 }
 
 func (r *RollingVWAP) Apply(target *generated.AggregatedTick) {

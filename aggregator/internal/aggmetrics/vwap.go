@@ -1,6 +1,9 @@
 package aggmetrics
 
-import "market-aggregator/proto/generated"
+import (
+	"market-aggregator/proto/generated"
+	"shared/logger"
+)
 
 type VWAP struct {
 	SumPV float64
@@ -10,6 +13,7 @@ type VWAP struct {
 func (v *VWAP) Update(t *generated.NormalizedTick) {
 	v.SumPV += t.Price * t.Volume
 	v.SumV += t.Volume
+	logger.Log.Info("Updating VWAP", "sum_pv", v.SumPV, "sum_v", v.SumV, "exchange", t.Exchange, "symbol", t.Symbol, "event_time", t.EventTsMillis)
 }
 
 func (v *VWAP) Apply(a *generated.AggregatedTick) {

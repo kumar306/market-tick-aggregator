@@ -1,6 +1,9 @@
 package internal
 
-import "market-aggregator/constants"
+import (
+	"market-aggregator/constants"
+	"shared/logger"
+)
 
 // func to create windows - this is called when symbol enters a worker for first time
 // wire up the windows from config. for each window wire up the metrics
@@ -9,6 +12,7 @@ import "market-aggregator/constants"
 // this should return a map[string]Window - each Window contains map[string]Metric
 
 func BuildWindows(cfg []*constants.WindowConfig) map[string]*constants.Window {
+	logger.Log.Info("Init BuildWindows")
 	windowMap := make(map[string]*constants.Window)
 
 	for _, w := range cfg {
@@ -25,7 +29,10 @@ func BuildWindows(cfg []*constants.WindowConfig) map[string]*constants.Window {
 			Metrics:        metrics,
 			LastFlushTsMs:  0,
 		}
+
+		logger.Log.Info("Building window", "id", w.Id, "durationMs", w.DurationMs)
 	}
 
+	logger.Log.Info("Exit BuildWindows")
 	return windowMap
 }

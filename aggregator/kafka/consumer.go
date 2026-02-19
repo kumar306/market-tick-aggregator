@@ -10,11 +10,13 @@ import (
 	"time"
 
 	"github.com/sony/gobreaker"
+	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"
 )
 
 var (
 	Client                  *kgo.Client
+	adm                     *kadm.Client
 	once                    sync.Once
 	UpstreamTopic           string
 	DownstreamTopic         string
@@ -25,11 +27,14 @@ var (
 
 func Init(ctx context.Context, cfg *constants.KafkaConfig) {
 	once.Do(func() {
+		// auto commit is enabled here
 		client, err := kgo.NewClient(
 			kgo.SeedBrokers(cfg.BootstrapServers...),
 			kgo.ConsumeTopics(cfg.TopicConfig.Upstream),
 			kgo.ConsumerGroup(cfg.ConsumerGroup),
 			kgo.MaxBufferedRecords(cfg.MaxBufferRecords),
+			kgo.WithLogger(kgo.BasicLogger(os.Stdout, kgo.LogLevelDebug, nil)),
+			kgo.AutoCommitMarks(),
 		)
 		Client = client
 		if err != nil || client == nil {
@@ -44,6 +49,7 @@ func Init(ctx context.Context, cfg *constants.KafkaConfig) {
 
 		UpstreamTopic = cfg.TopicConfig.Upstream
 		DownstreamTopic = cfg.TopicConfig.Downstream
+		adm = kadm.NewClient(Client)
 
 		KafkaBreaker = gobreaker.NewCircuitBreaker(gobreaker.Settings{
 			Name: "kafka-cb",
@@ -74,6 +80,9 @@ func Close() {
 	}
 
 	Client.Close()
+	Client = nil
+	adm = nil
+	KafkaBreaker = nil
 	logger.Log.Info("Kafka client closed.")
 }
 
@@ -98,9 +107,12 @@ func StartConsumer(ctx context.Context, dispatchChannel chan *kgo.Record) {
 		fetches.EachRecord(func(rec *kgo.Record) {
 			select {
 			case dispatchChannel <- rec:
+				logger.Log.Info("Fetched record from kafka", "partition", rec.Partition, "offset", rec.Offset)
 				metrics.Aggregator_ConsumerSuccessesTotal.WithLabelValues(string(rec.Partition)).Inc()
 			case <-ctx.Done():
 				return
+			default:
+				// if dispatch channel blocks
 			}
 		})
 

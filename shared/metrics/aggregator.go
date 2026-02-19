@@ -21,6 +21,17 @@ var (
 	Aggregator_ProduceSuccessesTotal    *prometheus.CounterVec
 	Aggregator_SymbolsPerWorker         *prometheus.GaugeVec
 	Aggregator_WindowsPerSymbol         *prometheus.GaugeVec
+	Aggregator_RedisCB_StateChanges     *prometheus.CounterVec
+	Aggregator_DedupeChecksTotal        *prometheus.CounterVec
+	Aggregator_DedupeHitsTotal          *prometheus.CounterVec
+	Aggregator_DedupeErrorsTotal        *prometheus.CounterVec
+	Aggregator_RedisCB_FallbacksTotal   prometheus.Counter
+	Aggregator_RedisCB_State            prometheus.Gauge
+	Aggregator_DedupeStoreErrorsTotal   *prometheus.CounterVec
+	Aggregator_DedupeLatencySeconds     *prometheus.HistogramVec
+	Aggregator_CommitOffsetsTotal       *prometheus.GaugeVec
+	Aggregator_CommitOffsetErrorsTotal  prometheus.Counter
+	Aggregator_CommitLatencySeconds     prometheus.Histogram
 	aggregatorMetricsOnce               sync.Once
 )
 
@@ -109,6 +120,64 @@ func InitAggregatorMetrics() {
 			"aggregator_windows_per_symbol",
 			"Number of windows managed per symbol",
 			[]string{"worker_id", "exchange", "channel", "symbol"},
+		)
+
+		Aggregator_DedupeChecksTotal = NewCounterVec(
+			"aggregator_dedupe_checks_total",
+			"Number of dedupe checks in worker",
+			[]string{"exchange", "symbol"},
+		)
+
+		Aggregator_DedupeHitsTotal = NewCounterVec(
+			"aggregator_dedupe_hits_total",
+			"Number of duplicate messages detected",
+			[]string{"exchange", "symbol"},
+		)
+
+		Aggregator_DedupeErrorsTotal = NewCounterVec(
+			"aggregator_dedupe_errors_total",
+			"Number of errors when checking redis dedupe",
+			[]string{"exchange", "symbol"},
+		)
+
+		Aggregator_RedisCB_FallbacksTotal = NewCounter(
+			"aggregator_dedupe_cb_fallbacks_total",
+			"Number of dedupe skips when circuit in open state",
+		)
+
+		Aggregator_RedisCB_State = NewGauge(
+			"aggregator_dedupe_cb_state",
+			"Current redis circuit breaker state",
+		)
+
+		Aggregator_DedupeStoreErrorsTotal = NewCounterVec(
+			"aggregator_dedupe_store_errors_total",
+			"Number of errors when writing dedupe key to redis",
+			[]string{"exchange", "symbol"},
+		)
+
+		Aggregator_DedupeLatencySeconds = NewHistogramVec(
+			"aggregator_dedupe_latency_seconds",
+			"Latency taken by dedupe check in seconds",
+			prometheus.DefBuckets,
+			[]string{"exchange", "symbol"},
+		)
+
+		Aggregator_CommitOffsetsTotal = NewGaugeVec(
+			"aggregator_commit_offsets_total",
+			"Latest offset committed by offset committer",
+			[]string{"topic", "partition"},
+		)
+
+		Aggregator_CommitOffsetErrorsTotal = NewCounter(
+			"aggregator_commit_offsets_errors_total",
+			"Number of errors while committing kafka offsets",
+		)
+
+		Aggregator_CommitLatencySeconds = NewHistogram(
+			"normalizer_commit_latency_seconds",
+			"Commit latency in seconds",
+			prometheus.ExponentialBuckets(0.001, 2, 12),
 		)
 	})
 }

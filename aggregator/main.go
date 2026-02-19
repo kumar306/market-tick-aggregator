@@ -4,6 +4,7 @@ import (
 	"context"
 	"market-aggregator/config"
 	"market-aggregator/constants"
+	"market-aggregator/dedupe"
 	"market-aggregator/dispatcher"
 	"market-aggregator/flush"
 	"market-aggregator/internal"
@@ -36,6 +37,8 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	dedupe.InitRedis(cfg.RedisConfig)
+
 	// init kafka client
 	kafka.Init(ctx, cfg.KafkaConfig)
 	defer kafka.Close()
@@ -57,7 +60,8 @@ func main() {
 	dispatchCh := make(chan *kgo.Record, 1000)
 	go dispatcher.RunDispatcher(ctx, dispatchCh, workerChannels)
 
-	// start kafka consumer
+	// start offset committer and kafka consumer
+	go kafka.OffsetCommitter(ctx, cfg.KafkaConfig.CommitOffsetIntervalMillis)
 	go kafka.StartConsumer(ctx, dispatchCh)
 
 	logger.Log.Info(
@@ -65,6 +69,10 @@ func main() {
 		"workers", cfg.WorkerCount,
 		"windows", len(cfg.WindowConfig),
 	)
+
+	<-ctx.Done()
+
+	logger.Log.Info("Aggregator shutting down..")
 }
 
 func exposeMetrics() {

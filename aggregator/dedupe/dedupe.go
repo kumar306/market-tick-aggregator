@@ -3,7 +3,7 @@ package dedupe
 import (
 	"context"
 	"errors"
-	"market-normalizer/constants"
+	"market-aggregator/constants"
 	"os"
 	"shared/logger"
 	"shared/metrics"
@@ -47,9 +47,9 @@ func InitRedis(redisConfig *constants.RedisConfig) {
 		},
 		Timeout: time.Duration(redisConfig.CBTimeoutMillis) * time.Millisecond,
 		OnStateChange: func(name string, from, to gobreaker.State) {
-			logger.Log.Warn("Redis circuit breaker state change", "name", name, "from", from.String(), "to", to.String())
-			metrics.Normalizer_RedisCB_StateChanges.WithLabelValues(to.String()).Inc()
-			metrics.Normalizer_RedisCB_State.Set(float64(to))
+			logger.Log.Warn("Aggregator Redis circuit breaker state change", "name", name, "from", from.String(), "to", to.String())
+			metrics.Aggregator_RedisCB_StateChanges.WithLabelValues(to.String()).Inc()
+			metrics.Aggregator_RedisCB_State.Set(float64(to))
 		},
 	})
 
@@ -68,6 +68,11 @@ func MarkForDedupe(ctx context.Context, key string) error {
 		return TestingHook()
 	}
 
+	// allow unit tests (or early startup paths) to run without redis wiring
+	if RedisBreaker == nil || Rdb == nil {
+		return nil
+	}
+
 	ok, err := RedisBreaker.Execute(func() (interface{}, error) {
 		return Rdb.SetNX(ctx, key, 1, Ttl).Result()
 	})
@@ -76,8 +81,8 @@ func MarkForDedupe(ctx context.Context, key string) error {
 
 		// don't stop pipeline processing if circuit is open
 		if errors.Is(err, gobreaker.ErrOpenState) || errors.Is(err, gobreaker.ErrTooManyRequests) {
-			metrics.Normalizer_RedisCB_FallbacksTotal.Inc()
-			logger.Log.Error("Dedupe MarkForDedupe skipped as circuit breaker - OPEN state", "err", err)
+			metrics.Aggregator_RedisCB_FallbacksTotal.Inc()
+			logger.Log.Error("Aggregator Dedupe MarkForDedupe skipped as circuit breaker - OPEN state", "err", err)
 			return nil
 		}
 
@@ -99,6 +104,11 @@ func IsDuplicate(ctx context.Context, key string) (bool, error) {
 		return false, TestingHook()
 	}
 
+	// allow unit tests (or early startup paths) to run without redis wiring
+	if RedisBreaker == nil || Rdb == nil {
+		return false, nil
+	}
+
 	ok, err := RedisBreaker.Execute(func() (interface{}, error) {
 		return Rdb.Exists(ctx, key).Result()
 	})
@@ -107,8 +117,8 @@ func IsDuplicate(ctx context.Context, key string) (bool, error) {
 
 		// don't stop pipeline processing if circuit is open
 		if errors.Is(err, gobreaker.ErrOpenState) || errors.Is(err, gobreaker.ErrTooManyRequests) {
-			metrics.Normalizer_RedisCB_FallbacksTotal.Inc()
-			logger.Log.Warn("Dedupe IsDuplicate skipped as circuit breaker - OPEN state", "err", err)
+			metrics.Aggregator_RedisCB_FallbacksTotal.Inc()
+			logger.Log.Warn("Aggregator Dedupe IsDuplicate skipped as circuit breaker - OPEN state", "err", err)
 			return false, nil
 		}
 

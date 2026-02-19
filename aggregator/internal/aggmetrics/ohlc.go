@@ -2,6 +2,7 @@ package aggmetrics
 
 import (
 	"market-aggregator/proto/generated"
+	"shared/logger"
 )
 
 type OHLC struct {
@@ -25,6 +26,13 @@ func (o *OHLC) Update(t *generated.NormalizedTick) {
 	}
 
 	o.Close = t.Close
+	logger.Log.Info("Updating OHLC", "open", o.Open,
+		"close", o.Close,
+		"low", o.Low,
+		"high", o.High,
+		"exchange", t.Exchange,
+		"symbol", t.Symbol,
+		"event_time", t.EventTsMillis)
 }
 
 func (o *OHLC) Apply(target *generated.AggregatedTick) {

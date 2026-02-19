@@ -8,6 +8,7 @@ kafka:
     downstream: aggregated.ticks
   consumer_group: aggregator-group-1
   max_buffer_records: 5000
+  commit_offset_interval_millis: 5000
   backpressure:
     queue_usage_high_threshold: 0.8
     queue_usage_low_threshold: 0.4
@@ -18,6 +19,11 @@ kafka:
   produce_error_buffer_size: 1000
 
 worker_count: 16
+redis:
+  ttl_minutes: 15
+  cb_req_count: 10
+  cb_failure_ratio: 0.25
+  cb_timeout_millis: 5000
   
 window:
   - id: 5s

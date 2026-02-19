@@ -69,10 +69,9 @@ func ProcessRecord(ctx context.Context,
 
 	// dedupe check
 	dedupeKey := dedupe.ConstructDedupeKey(
-		dispatchRec.Exchange,
-		dispatchRec.Channel,
-		dispatchRec.Symbol,
-		symbolState.Orderer.GetOrderingId(normalizedMsg))
+		dispatchRec.Record.Topic,
+		dispatchRec.Record.Partition,
+		dispatchRec.Record.Offset)
 
 	dedupeExists, err := dedupe.IsDuplicate(ctx, dedupeKey)
 	if err != nil {
@@ -147,10 +146,7 @@ func ProcessBuffer(ctx context.Context,
 		metrics.Normalizer_BufferSize.WithLabelValues(msg.Exchange, msg.Channel, msg.Symbol).Dec()
 
 		// mark for dedupe
-		dedupeErr := dedupe.MarkForDedupe(ctx, dedupe.ConstructDedupeKey(msg.Exchange,
-			msg.Channel,
-			msg.Symbol,
-			orderer.GetOrderingId(msg)))
+		dedupeErr := dedupe.MarkForDedupe(ctx, dedupe.ConstructDedupeKey(msg.Record.Topic, msg.Record.Partition, msg.Record.Offset))
 
 		if dedupeErr != nil {
 			metrics.Normalizer_DedupeStoreErrorsTotal.WithLabelValues(msg.Exchange,

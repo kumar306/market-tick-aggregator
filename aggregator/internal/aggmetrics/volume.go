@@ -1,6 +1,9 @@
 package aggmetrics
 
-import "market-aggregator/proto/generated"
+import (
+	"market-aggregator/proto/generated"
+	"shared/logger"
+)
 
 type Volume struct {
 	Volume float64
@@ -8,6 +11,7 @@ type Volume struct {
 
 func (v *Volume) Update(tick *generated.NormalizedTick) {
 	v.Volume += tick.Volume
+	logger.Log.Info("Updating volume", "volume", v.Volume, "exchange", tick.Exchange, "symbol", tick.Symbol, "event_time", tick.EventTsMillis)
 }
 
 func (v *Volume) Apply(a *generated.AggregatedTick) {

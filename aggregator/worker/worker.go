@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"market-aggregator/constants"
+	"market-aggregator/dedupe"
 	"market-aggregator/internal"
 	"market-aggregator/kafka"
 	"market-aggregator/proto/generated"
@@ -66,12 +67,50 @@ func (w *Worker) Run(ctx context.Context, client utils.KafkaClient) {
 	}
 }
 
+// before processing it, check if exists in redis
+// publish and then mark dedupe
+// mark committed records and then commit offsets
+
 func (w *Worker) ProcessTick(ctx context.Context,
 	dispatchRec *constants.DispatchRecord) {
 	// if not present, wire it and create all metrics - from the wired registry
 	// else skip
 	// update all window metrics
+	logger.Log.Info("Received tick",
+		"worker", w.ID,
+		"bufferKey", dispatchRec.BufferKey,
+		"partition", dispatchRec.Record.Partition,
+		"offset", dispatchRec.Record.Offset)
+
 	start := time.Now().UnixMilli()
+
+	// dedupe mark occurs only after publish.
+	// one record will be used to flush for all windows. as soon as its applied, if we mark for dedupe, then if service crashed, its data loss for us
+	// but we know metrics converge and they are not source of truth. they are constructed
+	// its better if immediately dup check, then apply to windows and store in redis. as only metrics are persisted down and not actual record
+	// commit offsets manually after done with the record
+
+	dedupeStartTime := time.Now()
+	dedupeKey := dedupe.ConstructDedupeKey(dispatchRec.Record.Topic, dispatchRec.Record.Partition, dispatchRec.Record.Offset)
+	dedupeExists, err := dedupe.IsDuplicate(ctx, dedupeKey)
+	if err != nil {
+		metrics.Aggregator_DedupeErrorsTotal.WithLabelValues(dispatchRec.Exchange, dispatchRec.Symbol).Inc()
+		logger.Log.Error("Error in worker dedupe check", "err", err, "key", dedupeKey)
+		return
+	}
+
+	metrics.Aggregator_DedupeChecksTotal.WithLabelValues(dispatchRec.Exchange, dispatchRec.Symbol).Inc()
+
+	if dedupeExists {
+		metrics.Aggregator_DedupeHitsTotal.WithLabelValues(dispatchRec.Exchange, dispatchRec.Symbol).Inc()
+		logger.Log.Warn("Duplicate message detected. Skipping", "key", dedupeKey)
+		return
+	}
+
+	dedupeLatency := time.Since(dedupeStartTime).Seconds()
+	metrics.Aggregator_DedupeLatencySeconds.WithLabelValues(
+		dispatchRec.Exchange,
+		dispatchRec.Symbol).Observe(dedupeLatency)
 
 	workerState := w.SymbolState
 	_, ok := workerState[dispatchRec.BufferKey]
@@ -79,6 +118,11 @@ func (w *Worker) ProcessTick(ctx context.Context,
 		// wire up the state
 		// create window objects. for each window object, wire up the metrics
 		// get window objects created via a window registry
+		logger.Log.Info("Worker doesnt contain entry for bufferKey. Creating entry", "workerId", w.ID,
+			"bufferKey", dispatchRec.BufferKey,
+			"partition", dispatchRec.Record.Partition,
+			"offset", dispatchRec.Record.Offset)
+
 		windowState := &WindowState{
 			Windows:  internal.BuildWindows(w.WindowConfig),
 			Exchange: dispatchRec.Tick.Exchange,
@@ -112,6 +156,22 @@ func (w *Worker) ProcessTick(ctx context.Context,
 	if nil != WorkerTestingHook {
 		WorkerTestingHook()
 	}
+
+	// mark for dedupe and mark for commit
+	dedupeErr := dedupe.MarkForDedupe(ctx, dedupe.ConstructDedupeKey(dispatchRec.Record.Topic, dispatchRec.Record.Partition, dispatchRec.Record.Offset))
+	if dedupeErr != nil {
+		metrics.Aggregator_DedupeStoreErrorsTotal.WithLabelValues(dispatchRec.Exchange, dispatchRec.Symbol).Inc()
+	}
+
+	if kafka.Client != nil {
+		kafka.Client.MarkCommitRecords(dispatchRec.Record)
+	}
+
+	logger.Log.Info("Completed update for tick",
+		"worker", w.ID,
+		"bufferKey", dispatchRec.BufferKey,
+		"partition", dispatchRec.Record.Partition,
+		"offset", dispatchRec.Record.Offset)
 }
 
 func (w *Worker) FlushWindow(ctx context.Context, flushRec *constants.DispatchRecord, client utils.KafkaClient) {
@@ -121,17 +181,19 @@ func (w *Worker) FlushWindow(ctx context.Context, flushRec *constants.DispatchRe
 	// post into kafka aggregated_ticks
 	cfg := flushRec.WindowConfig
 
-	logger.Log.Info("Preparing to flush for window", "ID", cfg.Id, "Duration Ms", cfg.DurationMs, "Flush Cadency Ms", cfg.FlushCadencyMs, "Flush Timestamp", time.UnixMilli(flushRec.FlushTsMs))
+	logger.Log.Info("Preparing to flush for window", "workerId", w.ID, "ID", cfg.Id, "Duration Ms", cfg.DurationMs, "Flush Cadency Ms", cfg.FlushCadencyMs, "Flush Timestamp", time.UnixMilli(flushRec.FlushTsMs))
 
 	// per symbol window, create an aggregated tick,
 	// enrich it with its window metric information
 	// then persist to kafka
 
 	for _, windowState := range w.SymbolState {
+		logger.Log.Info("Preparing flush for worker state", "exchange", windowState.Exchange, "symbol", windowState.Symbol)
 		start := time.Now().UnixMilli()
 
 		window := windowState.Windows[cfg.Id]
 		if window == nil {
+			logger.Log.Warn("Window is nil. Skipping", "worker", w.ID, "windowId", cfg.Id, "durationMs", cfg.DurationMs)
 			continue
 		}
 
@@ -154,6 +216,7 @@ func (w *Worker) FlushWindow(ctx context.Context, flushRec *constants.DispatchRe
 		}
 
 		if kafka.KafkaBreaker.State() == gobreaker.StateOpen {
+			logger.Log.Warn("Circuit breaker is open. Dropping the aggregate", "exchange", windowState.Exchange, "symbol", windowState.Symbol)
 			metrics.Aggregator_AggregatesDroppedTotal.WithLabelValues(strconv.Itoa(w.ID)).Inc()
 		} else {
 			kafka.PublishAggregate(aggregatedTick, client)

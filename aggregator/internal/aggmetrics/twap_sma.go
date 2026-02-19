@@ -1,6 +1,9 @@
 package aggmetrics
 
-import "market-aggregator/proto/generated"
+import (
+	"market-aggregator/proto/generated"
+	"shared/logger"
+)
 
 type TWAP struct {
 	SumPrice float64
@@ -10,6 +13,7 @@ type TWAP struct {
 func (t *TWAP) Update(tick *generated.NormalizedTick) {
 	t.SumPrice += tick.Price
 	t.Count++
+	logger.Log.Info("Updating TWAP SMA", "sum_price", t.SumPrice, "count", t.Count, "exchange", tick.Exchange, "symbol", tick.Symbol, "event_time", tick.EventTsMillis)
 }
 
 func (t *TWAP) Apply(a *generated.AggregatedTick) {

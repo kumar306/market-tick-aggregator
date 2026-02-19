@@ -4,6 +4,7 @@ import (
 	"market-aggregator/constants"
 	"market-aggregator/proto/generated"
 	"math"
+	"shared/logger"
 )
 
 // its a decayed rolling metric where old values still contribute to the current value but its importance reduces with age
@@ -44,6 +45,8 @@ func (e *EMA) Update(t *generated.NormalizedTick) {
 	} else {
 		e.Value = e.Alpha*t.Price + (1-e.Alpha)*e.Value
 	}
+	logger.Log.Info("Updating EMA", "value", e.Value, "exchange", t.Exchange, "symbol", t.Symbol, "event_time", t.EventTsMillis)
+
 }
 
 func (e *EMA) Apply(a *generated.AggregatedTick) {

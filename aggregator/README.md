@@ -63,3 +63,7 @@ testing plan:
 4. tumbling metrics to be reset and rolling metrics to be no-op
 5. rolling buckets test
 6. no publish when circuit breaker is open
+
+18/02/2026: 
+1. need to add idempotency guard in aggregator to avoid duplicate publish from normalizer (dedupe key - topic:partition:offset) - same dedupe logic as upstream
+2. since adding point 1, need to revert from auto commit to manual commit, so ensures that commit occurs only after downstream publish and mark for dedupe

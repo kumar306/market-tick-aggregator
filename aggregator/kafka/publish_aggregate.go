@@ -33,6 +33,7 @@ func PublishAggregate(aggregate *generated.AggregatedTick, client utils.KafkaCli
 			metrics.Aggregator_ProduceFailuresTotal.WithLabelValues(aggregate.Exchange, aggregate.Channel, aggregate.Symbol, string(rec.Partition)).Inc()
 			ProducerErrors <- err
 		} else {
+			logger.Log.Info("Produce success for aggregated ticks", "exchange", aggregate.Exchange, "symbol", aggregate.Symbol, "start_time", aggregate.StartTsMs, "end_time", aggregate.EndTsMs)
 			metrics.Aggregator_ProduceSuccessesTotal.WithLabelValues(aggregate.Exchange, aggregate.Channel, aggregate.Symbol, string(rec.Partition)).Inc()
 			ProducerErrors <- nil
 		}
@@ -48,10 +49,15 @@ func MonitorKafkaBreaker(ctx context.Context) {
 			logger.Log.Info("Received ctx done.. exiting monitor kafka breaker loop")
 			return
 		case err := <-ProducerErrors:
-			logger.Log.Info("Reading err from producer err channel", "error", err)
+
+			if err != nil {
+				logger.Log.Error("Reading err from producer err channel", "error", err)
+			}
+
 			KafkaBreaker.Execute(func() (interface{}, error) {
 				return nil, err
 			})
+
 			if KafkaBreakerTestingHook != nil {
 				KafkaBreakerTestingHook()
 			}

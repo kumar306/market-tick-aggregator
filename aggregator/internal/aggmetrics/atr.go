@@ -4,6 +4,7 @@ import (
 	"market-aggregator/constants"
 	"market-aggregator/proto/generated"
 	"math"
+	"shared/logger"
 )
 
 // this is also a depiction of price fluctuation
@@ -46,6 +47,7 @@ func (atr *ATR) Update(t *generated.NormalizedTick) {
 
 	atr.prevClose = t.Close
 	atr.value = atr.alpha*tr + (1-atr.alpha)*atr.value
+	logger.Log.Info("Updating ATR", "value", atr.value, "prevClose", atr.prevClose, "exchange", t.Exchange, "symbol", t.Symbol, "event_time", t.EventTsMillis)
 }
 
 func (atr *ATR) Apply(a *generated.AggregatedTick) {

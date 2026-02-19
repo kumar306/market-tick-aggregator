@@ -3,6 +3,7 @@ package aggmetrics
 import (
 	"market-aggregator/proto/generated"
 	"math"
+	"shared/logger"
 )
 
 // it is a depiction of price fluctuation, not direction
@@ -36,7 +37,7 @@ func (v *Volatility) Update(t *generated.NormalizedTick) {
 	v.mean += delta / float64(v.n)
 	delta2 := ret - v.mean
 	v.m2 += delta * delta2
-
+	logger.Log.Info("Updating volatility", "n", v.n, "m2", v.m2, "exchange", t.Exchange, "symbol", t.Symbol, "event_time", t.EventTsMillis)
 }
 
 func (v *Volatility) Apply(a *generated.AggregatedTick) {
