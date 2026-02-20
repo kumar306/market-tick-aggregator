@@ -85,7 +85,7 @@ func main() {
 }
 
 func exposeMetrics() {
-	http.Handle("/metrics", promhttp.Handler())
+	http.Handle("/metrics", promhttp.HandlerFor(&metrics.Registry, promhttp.HandlerOpts{}))
 	logger.Log.Info("Exposed persistence metrics endpoint at 2116", "url", ":2116/metrics")
 	err := http.ListenAndServe("0.0.0.0:2116", nil)
 	if err != nil {

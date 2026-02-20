@@ -104,7 +104,7 @@ func InitPipelineRegistries() {
 }
 
 func exposeMetrics() {
-	http.Handle("/metrics", promhttp.Handler())
+	http.Handle("/metrics", promhttp.HandlerFor(&metrics.Registry, promhttp.HandlerOpts{}))
 	logger.Log.Info("Exposed normalizer metrics endpoint at 2113", "url", ":2113/metrics")
 	err := http.ListenAndServe("0.0.0.0:2113", nil)
 	if err != nil {

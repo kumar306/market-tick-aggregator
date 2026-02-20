@@ -85,7 +85,7 @@ func main() {
 }
 
 func exposeMetrics() {
-	http.Handle("/metrics", promhttp.Handler())
+	http.Handle("/metrics", promhttp.HandlerFor(&metrics.Registry, promhttp.HandlerOpts{}))
 	logger.Log.Info("Exposed orderbook metrics endpoint at 2115", "url", ":2115/metrics")
 	err := http.ListenAndServe("0.0.0.0:2115", nil)
 	if err != nil {

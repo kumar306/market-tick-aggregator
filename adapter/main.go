@@ -73,7 +73,7 @@ func main() {
 			supervisor := &constants.Supervisor{
 				Wg:           &sync.WaitGroup{},
 				Handler:      handler,
-				StatusChan:   make(chan constants.Status, 3),
+				StatusChan:   make(chan constants.Status, 1000),
 				LastPongTime: time.Now(),
 			}
 
@@ -95,7 +95,7 @@ func main() {
 }
 
 func exposeMetrics() {
-	http.Handle("/metrics", promhttp.Handler())
+	http.Handle("/metrics", promhttp.HandlerFor(&metrics.Registry, promhttp.HandlerOpts{}))
 	logger.Log.Info("Exposed adapter metrics endpoint at 2112", "url", ":2112/metrics")
 	err := http.ListenAndServe("0.0.0.0:2112", nil)
 	if err != nil {
