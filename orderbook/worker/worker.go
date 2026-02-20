@@ -101,7 +101,7 @@ func (w *Worker) Run() {
 				w.ProcessBookUpdate(rec)
 
 				// to resume paused partitions
-				backpressure.OnDequeue(w.ID)
+				backpressure.OnDequeue(w.ID, rec.Partition, rec.Offset)
 
 			case constants.SnapshotRequestEvent:
 				// this is a empty record carrying a request to copy the current orderbook state into a OrderbookSnapshot struct
@@ -127,7 +127,7 @@ func (w *Worker) Run() {
 func (w *Worker) ProcessBookUpdate(rec *constants.DispatchRecord) {
 	bufferKey := rec.Exchange + ":" + rec.Symbol
 
-	logger.Log.Info("Received process book update for key", "key", bufferKey)
+	logger.Log.Info("Received process book update for key", "key", bufferKey, "partition", rec.Partition, "offset", rec.Offset)
 	state, exists := w.OrderbookStateMap[bufferKey]
 	if !exists {
 		// if the worker doesnt have an order book for the incoming symbol in memory,
@@ -150,7 +150,7 @@ func (w *Worker) ProcessBookUpdate(rec *constants.DispatchRecord) {
 
 	// maintain the last processed offset. on flush the last committed offset = last processed offset
 	// trigger an event to snapshot channel after flush
-	state.LastProcessedOffset[rec.Partition] = rec.Offset
+	state.LastProcessedOffset[rec.Partition] = max(state.LastProcessedOffset[rec.Partition], rec.Offset)
 	metrics.Orderbook_UpdatesTotal.WithLabelValues(strconv.Itoa(w.ID), state.Exchange, state.Symbol).Add(1)
 }
 
@@ -214,6 +214,8 @@ func (w *Worker) FlushBook(flushEpoch int32) {
 			Spread: spread,
 		}
 
+		logger.Log.Info("Created flush book", "worker", w.ID, "epoch", flushEpoch)
+
 		keyBytes := []byte(key)
 		valBytes, protoErr := proto.Marshal(flushedBook)
 		if protoErr != nil {
@@ -237,6 +239,10 @@ func (w *Worker) FlushBook(flushEpoch int32) {
 		}
 	}
 
+	for p, o := range ackOffsetMap {
+		logger.Log.Info("Worker max offset", "worker", w.ID, "epoch", flushEpoch, "partition", p, "offset", o)
+	}
+
 	logger.Log.Info("Sending ack to coordinator for worker, epoch", "epoch", flushEpoch, "worker", w.ID)
 
 	// send the flush ack with epoch for distributed commit
@@ -258,10 +264,12 @@ func (w *Worker) FlushBook(flushEpoch int32) {
 func (w *Worker) HandleSnapshotRequest() {
 	// this will clone the current orderbook state into another variable with snapshotOffset metadata
 	// will post it to its snapshotchannel which is read by a goroutine
+	logger.Log.Info("Init HandleSnapshotRequest()", "worker", w.ID)
 
 	for key, st := range w.OrderbookStateMap {
 		// if the current symbol already has a snapshot pending, skip the symbol
 		if st.SnapshotPending {
+			logger.Log.Warn("Current symbol has snapshot pending. Skip", "worker", w.ID, "exchange", st.Exchange, "symbol", st.Symbol)
 			continue
 		}
 
@@ -269,6 +277,7 @@ func (w *Worker) HandleSnapshotRequest() {
 		clonedBook := w.CloneLightWeight(st.Exchange, st.Symbol, st.LastProcessedOffset)
 		w.SnapshotStateMap[key] = clonedBook
 		st.SnapshotPending = true
+		logger.Log.Info("Cloned book for snapshot", "worker", w.ID, "exchange", st.Exchange, "symbol", st.Symbol)
 	}
 }
 
@@ -301,9 +310,14 @@ func (w *Worker) EvaluateAndDispatchSnapshot() {
 		}
 
 		logger.Log.Info("Snapshot execute condition success. Posting into snapshot channel for worker", "worker", w.ID, "key", key)
-		w.SnapshotChannel <- &constants.SnapshotMsg{
+		select {
+		case w.SnapshotChannel <- &constants.SnapshotMsg{
 			Snapshot: snapshot,
 			Key:      key,
+		}:
+			logger.Log.Info("Posted snapshot message into snapshot channel", "worker", w.ID, "key", key)
+		default:
+			logger.Log.Warn("Dropping snapshot message into snapshot channel as overloaded", "worker", w.ID, "key", key, "snapshotChannelSize", len(w.SnapshotChannel))
 		}
 	}
 }
@@ -377,15 +391,19 @@ func (w *Worker) SnapshotPersistLoop() {
 
 			logger.Log.Info("Successfully loaded snapshot in redis for key", "worker", w.ID, "key", key)
 
-			w.UpdateChannel <- &constants.DispatchRecord{
+			select {
+			case w.UpdateChannel <- &constants.DispatchRecord{
 				Event:     constants.SnapshotPersistedEvent,
 				BufferKey: key,
+			}:
+				logger.Log.Info("Inserted snapshot persisted event into update channel", "worker", w.ID, "key", key)
+				metrics.Orderbook_SnapshotSuccessesTotal.WithLabelValues(strconv.Itoa(w.ID)).Inc()
+				logger.Log.Info("Backed up snapshot to redis", "workerIdx", w.ID, "key", key)
+			default:
+				logger.Log.Warn("Dropped snapshot persisted event from update channel", "worker", w.ID, "key", key, "size", len(w.UpdateChannel))
 			}
 
-			metrics.Orderbook_SnapshotSuccessesTotal.WithLabelValues(strconv.Itoa(w.ID)).Inc()
-			logger.Log.Info("Backed up snapshot to redis", "workerIdx", w.ID, "key", key)
 		}
-
 	}
 }
 
@@ -433,7 +451,7 @@ func (w *Worker) RestoreOrCreateState(exchange string, symbol string) *SymbolSta
 	}
 
 	// reapply partition offset maps from snapshot
-	return &SymbolState{
+	st := &SymbolState{
 		Exchange:            exchange,
 		Symbol:              symbol,
 		TimestampMillis:     orderbookSnapshot.SnapshotTsMs,
@@ -443,6 +461,9 @@ func (w *Worker) RestoreOrCreateState(exchange string, symbol string) *SymbolSta
 		Restored:            true,
 		Orderbook:           book,
 	}
+
+	logger.Log.Info("Retrieved stored snapshot and restoring state for key", "key", bufferKey, "state", st)
+	return st
 }
 
 func (w *Worker) CloneLightWeight(exchange string,
@@ -479,7 +500,7 @@ func (w *Worker) CloneLightWeight(exchange string,
 		return true
 	})
 
-	return &book.OrderBookSnapshot{
+	cloned := &book.OrderBookSnapshot{
 		Exchange:         exchange,
 		Symbol:           symbol,
 		PartitionOffsets: copiedOffsets,
@@ -487,6 +508,9 @@ func (w *Worker) CloneLightWeight(exchange string,
 		Bids:             bids,
 		Asks:             asks,
 	}
+
+	logger.Log.Info("Cloned book", "worker", w.ID)
+	return cloned
 }
 
 // process the update ack from commit coordinator post offset commit and trigger snapshot execute
@@ -497,16 +521,17 @@ func (w *Worker) ProcessUpdateAck() {
 			logger.Log.Info("Received ctx done in process update ack. Returning", "worker", w.ID)
 			return
 		case updateAck := <-w.UpdateAckChannel:
-			logger.Log.Info("Received ack from update ack channel post commit", "worker", w.ID, "epoch", updateAck.Epoch)
+			logger.Log.Info("Received ack from update ack channel post commit", "worker", w.ID, "epoch", updateAck.Epoch, "offsets", updateAck.PartitionOffsets)
 			for _, st := range w.OrderbookStateMap {
 				copiedMap := make(map[int32]int64)
 				for partition, offset := range updateAck.PartitionOffsets {
 					copiedMap[partition] = offset
 				}
 				st.LastCommittedOffset = copiedMap
+				logger.Log.Info("Updated the last committed offsets for worker state", "worker", w.ID, "partitionOffsets", st.LastCommittedOffset)
 			}
 
-			logger.Log.Info("Updated the last committed offsets for worker. Triggering snapshot execute", "worker", w.ID)
+			logger.Log.Info("Triggering snapshot execute for worker", "worker", w.ID)
 
 			// trigger snapshot execute post commit
 			w.UpdateChannel <- &constants.DispatchRecord{

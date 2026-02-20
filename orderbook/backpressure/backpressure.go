@@ -2,6 +2,7 @@ package backpressure
 
 import (
 	"market-orderbook/constants"
+	"shared/logger"
 	"shared/metrics"
 	"strconv"
 	"sync"
@@ -57,7 +58,8 @@ func InitBP(cfg *constants.BackpressureConfig, pauseResumer PauseResumer, topic 
 // updates the partition map if its not present
 // if usage > high threshold, mark the worker as hot
 // for each of its partitions update map. if partition count was 0 before inc, call pauseFetchPartition(partition)
-func OnEnqueue(workerId int, partition int32) {
+func OnEnqueue(workerId int, partition int32, offset int64) {
+	logger.Log.Info("Entered backpressure OnEnqueue", "workerId", workerId, "partition", partition, "offset", offset)
 	bpMu.Lock()
 	if workerBPMap == nil {
 		workerBPMap = map[int]*WorkerBPState{}
@@ -76,6 +78,7 @@ func OnEnqueue(workerId int, partition int32) {
 
 	workerBPMap[workerId].depth++
 	workerPartitionMap[workerId][partition] = struct{}{}
+	logger.Log.Info("Worker ID depth increased", "worker_id", workerId, "depth", workerBPMap[workerId].depth)
 
 	if metrics.Orderbook_BackpressureWorkerQueueUsage != nil && bpQueueCapacity > 0 {
 		usage := float64(workerBPMap[workerId].depth) / float64(bpQueueCapacity)
@@ -92,6 +95,7 @@ func OnEnqueue(workerId int, partition int32) {
 			metrics.Orderbook_BackpressureTransitionsTotal.Inc()
 		}
 		for part := range workerPartitionMap[workerId] {
+			logger.Log.Info("Partition hot count incremented", "partition", strconv.Itoa(int(part)), "count", partitionHotCount[part])
 			partitionHotCount[part]++
 			if partitionHotCount[part] == 1 {
 				partitionsToPause = append(partitionsToPause, part)
@@ -106,13 +110,18 @@ func OnEnqueue(workerId int, partition int32) {
 		return
 	}
 	for _, part := range partitionsToPause {
+		logger.Log.Warn("Pausing fetch for partition", "partition", strconv.Itoa(int(part)))
 		pausedMap := constructPauseResumeMap(topic, part)
 		pauseResumer.PauseFetchPartitions(pausedMap)
 	}
+
+	logger.Log.Info("Exit backpressure OnEnqueue", "workerId", workerId, "partition", partition, "offset", offset)
+
 }
 
 // reduce the depth of worker. if gone under low threshold, then set it non hot
-func OnDequeue(workerId int) {
+func OnDequeue(workerId int, partition int32, offset int64) {
+	logger.Log.Info("Entered backpressure OnDequeue", "workerId", workerId, "partition", partition, "offset", offset)
 	bpMu.Lock()
 	if workerBPMap == nil {
 		workerBPMap = map[int]*WorkerBPState{}
@@ -133,6 +142,8 @@ func OnDequeue(workerId int) {
 		metrics.Orderbook_BackpressureWorkerQueueUsage.WithLabelValues(strconv.Itoa(workerId)).Set(usage)
 	}
 
+	logger.Log.Info("Worker ID depth decreased", "worker_id", workerId, "depth", workerState.depth)
+
 	partitionsToResume := make([]int32, 0)
 	if workerState.depth < lowThreshold && workerState.hot == true {
 		workerState.hot = false
@@ -145,6 +156,7 @@ func OnDequeue(workerId int) {
 		for part := range workerPartitionMap[workerId] {
 
 			partitionHotCount[part]--
+			logger.Log.Info("Partition hot count decremented", "partition", strconv.Itoa(int(part)), "count", partitionHotCount[part])
 			if partitionHotCount[part] <= 0 {
 				partitionHotCount[part] = 0
 				partitionsToResume = append(partitionsToResume, part)
@@ -159,9 +171,12 @@ func OnDequeue(workerId int) {
 		return
 	}
 	for _, part := range partitionsToResume {
+		logger.Log.Warn("Resuming fetch for partition", "partition", strconv.Itoa(int(part)))
 		resumedMap := constructPauseResumeMap(topic, part)
 		pauseResumer.ResumeFetchPartitions(resumedMap)
 	}
+
+	logger.Log.Info("Exited backpressure OnDequeue", "workerId", workerId, "partition", partition, "offset", offset)
 }
 
 func constructPauseResumeMap(topic string, partition int32) map[string][]int32 {

@@ -23,7 +23,7 @@ redis:
   pool_size: 1000
   min_idle_conns: 100
 
-worker_count: 16
-worker_queue_size: 1000
+worker_count: 8
+worker_queue_size: 5000
 snapshot_interval_seconds: 20
 worker_flush_depth: 15

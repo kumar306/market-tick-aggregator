@@ -32,6 +32,7 @@ func Init(ctx context.Context, cfg *constants.KafkaConfig) {
 			kgo.ConsumerGroup(cfg.ConsumerGroup),
 			kgo.MaxBufferedRecords(cfg.MaxBufferRecords),
 			kgo.DisableAutoCommit(),
+			kgo.WithLogger(kgo.BasicLogger(os.Stdout, kgo.LogLevelDebug, nil)),
 		)
 		Client = client
 		DownstreamTopic = cfg.TopicConfig.Downstream
@@ -101,6 +102,7 @@ func StartConsumer(ctx context.Context, dispatchChannel chan *kgo.Record) {
 			select {
 			case dispatchChannel <- rec:
 				metrics.Orderbook_ConsumerSuccessesTotal.WithLabelValues(string(rec.Partition)).Inc()
+				logger.Log.Info("Fetched record from consumer", "partition", rec.Partition, "offset", rec.Offset)
 			case <-ctx.Done():
 				return
 			}

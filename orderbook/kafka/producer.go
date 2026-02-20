@@ -30,7 +30,7 @@ func ProduceAsync(id int, ctx context.Context, client *kgo.Client, key, value []
 			logger.Log.Error("Produce to aggregate book failed", "error", err)
 			metrics.Orderbook_FlushKafkaErrorsTotal.WithLabelValues(strconv.Itoa(id)).Add(1)
 		} else {
-			logger.Log.Info("Published record to aggregate book")
+			logger.Log.Info("Published record to aggregate book", "topic", r.Topic, "partition", r.Partition, "offset", r.Offset)
 			metrics.Orderbook_FlushSuccessTotal.WithLabelValues(strconv.Itoa(id)).Add(1)
 			metrics.Orderbook_FlushLatencyMs.WithLabelValues(strconv.Itoa(id)).Observe(float64(time.Since(start).Milliseconds()))
 		}

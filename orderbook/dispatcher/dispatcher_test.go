@@ -77,6 +77,9 @@ func TestRunDispatcherRoutesToWorker(t *testing.T) {
 		if got.Exchange != "coinbase" || got.Symbol != "ETH-USD" {
 			t.Fatalf("unexpected exchange/symbol: %s/%s", got.Exchange, got.Symbol)
 		}
+		if got.Partition != 0 {
+			t.Fatalf("expected partition=0, got %d", got.Partition)
+		}
 		if got.Offset != 7 {
 			t.Fatalf("expected offset=7, got %d", got.Offset)
 		}

@@ -101,6 +101,7 @@ func (c *CommitCoordinator) PostCommitProcess(res *CommitResult) {
 
 	// broadcast it back to the workers via ack channel who then trigger a snapshot execute
 	// broadcast it only if its a flush event. dont broadcast for old epoch timeout handling
+	logger.Log.Info("Started post commit process", "commit_result", res)
 	if res.EventType == FlushAckEvent {
 		for _, ch := range c.UpdateAckChannels {
 			select {
@@ -147,6 +148,7 @@ func (c *CommitCoordinator) Run(ctx context.Context, client *kgo.Client) {
 				c.CheckEpochTimeouts(ev.EventType, ctx, client)
 			}
 		case ack := <-c.FlushAckChannel:
+			logger.Log.Info("Received event in flush ack channel. Forwarding to coordinator", "worker", ack.WorkerID, "epoch", ack.Epoch, "partitionOffsets", ack.PartitionOffsets)
 			c.EventChannel <- &CoordinatorEvent{
 				EventType: FlushAckEvent,
 				Ack:       ack,
@@ -206,6 +208,10 @@ func (c *CommitCoordinator) commitEpochOffsets(ev CoordinatorEventType, epoch in
 		}
 	}
 
+	for p, o := range minOffsetPerPartition {
+		logger.Log.Info("Constructed min offset per partition", "epoch", epoch, "partition", p, "offset", o)
+	}
+
 	uncommitted := make(map[string]map[int32]kgo.EpochOffset)
 	uncommitted[UpstreamTopic] = make(map[int32]kgo.EpochOffset)
 
@@ -251,7 +257,7 @@ func (c *CommitCoordinator) commitEpochOffsets(ev CoordinatorEventType, epoch in
 			}
 		}
 
-		logger.Log.Info("Committed offsets for epoch", "epoch", epoch, "event", ev.String())
+		logger.Log.Info("Committed offsets for epoch", "epoch", epoch, "event", ev.String(), "uncommitted", uncommitted)
 		metrics.Orderbook_CommitLatencyMs.Observe(float64(time.Since(start).Milliseconds()))
 
 		// shifted post commit state broadcast and state cleanup back to coordinator

@@ -81,28 +81,28 @@ func TestBackpressurePausesAndResumesSharedPartitionOnce(t *testing.T) {
 	InitBP(cfg, mock, "orderbook.upstream", 10)
 
 	for i := 0; i < 9; i++ {
-		OnEnqueue(0, 0)
+		OnEnqueue(0, 0, 0)
 	}
 	if got := mock.pauseCount(0); got != 1 {
 		t.Fatalf("expected partition 0 to be paused once when first worker turns hot, got %d", got)
 	}
 
 	for i := 0; i < 9; i++ {
-		OnEnqueue(1, 0)
+		OnEnqueue(1, 0, 0)
 	}
 	if got := mock.pauseCount(0); got != 1 {
 		t.Fatalf("expected partition 0 pause count to remain 1 while already paused, got %d", got)
 	}
 
 	for i := 0; i < 9; i++ {
-		OnDequeue(0)
+		OnDequeue(0, 0, 0)
 	}
 	if got := mock.resumeCount(0); got != 0 {
 		t.Fatalf("expected no resume after only one worker cools down, got %d", got)
 	}
 
 	for i := 0; i < 9; i++ {
-		OnDequeue(1)
+		OnDequeue(1, 0, 0)
 	}
 	if got := mock.resumeCount(0); got != 1 {
 		t.Fatalf("expected one resume when final hot worker cools down, got %d", got)
@@ -120,10 +120,10 @@ func TestBackpressurePausesAllKnownWorkerPartitions(t *testing.T) {
 	}
 	InitBP(cfg, mock, "orderbook.upstream", 10)
 
-	OnEnqueue(2, 1)
-	OnEnqueue(2, 2)
+	OnEnqueue(2, 1, 0)
+	OnEnqueue(2, 2, 0)
 	for i := 0; i < 7; i++ {
-		OnEnqueue(2, 1)
+		OnEnqueue(2, 1, 0)
 	}
 
 	if got := mock.pauseCount(1); got != 1 {
@@ -134,7 +134,7 @@ func TestBackpressurePausesAllKnownWorkerPartitions(t *testing.T) {
 	}
 
 	for i := 0; i < 9; i++ {
-		OnDequeue(2)
+		OnDequeue(2, 0, 0)
 	}
 
 	if got := mock.resumeCount(1); got != 1 {

@@ -49,20 +49,22 @@ func RunDispatcher(ctx context.Context, dispatchCh chan *kgo.Record,
 				metrics.Orderbook_WorkerQueueDepth.WithLabelValues(strconv.Itoa(workerId)).Set(usage)
 
 				dispatchRec := &constants.DispatchRecord{
-					Event:    constants.ProcessEvent,
-					Offset:   rec.Offset,
-					Record:   rec,
-					Update:   bookUpdate,
-					Exchange: bookUpdate.Exchange,
-					Symbol:   bookUpdate.Symbol,
-					TsMs:     bookUpdate.EventTimeMillis,
+					Event:     constants.ProcessEvent,
+					Partition: rec.Partition,
+					Offset:    rec.Offset,
+					Record:    rec,
+					Update:    bookUpdate,
+					Exchange:  bookUpdate.Exchange,
+					Symbol:    bookUpdate.Symbol,
+					TsMs:      bookUpdate.EventTimeMillis,
 				}
 
 				select {
 				case workerChannels[workerId] <- dispatchRec:
-					backpressure.OnEnqueue(workerId, rec.Partition)
+					backpressure.OnEnqueue(workerId, rec.Partition, rec.Offset)
 				default:
-					logger.Log.Warn("Dropping dispatch record due to full worker channel",
+					logger.Log.Warn("Dropping dispatch record and backpressure enqueue due to full worker channel",
+						"size", len(workerChannels[workerId]),
 						"workerId", workerId,
 						"partition", rec.Partition,
 						"offset", rec.Offset)
