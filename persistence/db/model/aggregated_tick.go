@@ -1,6 +1,8 @@
 package model
 
-import "time"
+import (
+	"time"
+)
 
 type AggregatedTick struct {
 	Exchange           string
@@ -27,4 +29,8 @@ type AggregatedTick struct {
 	Sma                float64
 	LogReturn          float64
 	SimpleReturn       float64
+}
+
+func IsInvalidTick(t *AggregatedTick) error {
+	return nil
 }

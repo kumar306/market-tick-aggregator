@@ -12,6 +12,7 @@ kafka:
   topics:
     tick: aggregated.ticks
     book: aggregated.book
+    dlq: persistence.dlq
   consumer_group: persistence-group-1
   max_buffer_records: 5000
   backpressure:

@@ -41,7 +41,7 @@ func FlushOrderbook(ctx context.Context, tx util.Tx, rows []*model.OrderbookFlus
 	levelRowsAffected := 0
 
 	for _, row := range rows {
-
+		logger.Log.Info("print row", "row", row.FlushRow)
 		// insert parent row then insert level rows
 		r, err := tx.Exec(ctx,
 			flushSql,
@@ -52,7 +52,8 @@ func FlushOrderbook(ctx context.Context, tx util.Tx, rows []*model.OrderbookFlus
 			row.FlushRow.Spread,
 		)
 		if err != nil {
-			logger.Log.Error("Error in inserting into orderbook_flushes", "Error", err)
+			logger.Log.Error("Error in inserting into orderbook_flushes", "Error", err, "event_time", row.FlushRow.EventTime)
+			metrics.Persistence_DbInsertFailures.WithLabelValues("orderbook_flushes").Add(1)
 			return err
 		}
 		parentRowsAffected += int(r)
@@ -66,6 +67,7 @@ func FlushOrderbook(ctx context.Context, tx util.Tx, rows []*model.OrderbookFlus
 				levelRow.Price, levelRow.Volume)
 			if err != nil {
 				logger.Log.Error("Error in inserting into orderbook_flush_levels", "Error", err)
+				metrics.Persistence_DbInsertFailures.WithLabelValues("orderbook_flush_levels").Add(1)
 				return err
 			}
 

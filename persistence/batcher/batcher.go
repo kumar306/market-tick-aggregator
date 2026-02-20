@@ -2,10 +2,14 @@ package batcher
 
 import (
 	"context"
+	"encoding/json"
 	"market-persistence/batcher/util"
+	"market-persistence/config"
 	"shared/logger"
 	"shared/metrics"
 	"time"
+
+	"github.com/twmb/franz-go/pkg/kgo"
 )
 
 type BatchEvent int
@@ -16,9 +20,8 @@ const (
 )
 
 type BatchItem[T any] struct {
-	Item      T
-	Partition int32
-	Offset    int64
+	Item   T
+	Record *kgo.Record
 }
 
 // format for internal channel
@@ -34,16 +37,17 @@ type BatcherAdder[U any] interface {
 // batching logic is shared across both consumers. only flush fn differs
 // better to have 2 instantiations of the batcher rather than batcher interface
 type Batcher[T any] struct {
-	pipeline        string
-	ctx             context.Context
-	batchCh         chan *BatchMessage[T]
-	items           []*BatchItem[T]
-	intervalMs      time.Duration
-	lastFlush       time.Time
-	batchSize       int
-	flushFn         func(context.Context, util.Tx, []T) error
-	sink            util.Sink
-	offsetCommitter util.OffsetCommitter
+	pipeline       string
+	ctx            context.Context
+	batchCh        chan *BatchMessage[T]
+	items          []*BatchItem[T]
+	intervalMs     time.Duration
+	lastFlush      time.Time
+	batchSize      int
+	flushFn        func(context.Context, util.Tx, []T) error
+	invalidCheckFn func(T) error
+	sink           util.Sink
+	eventProcessor util.EventProcessor
 }
 
 func NewBatcher[T any](
@@ -52,19 +56,22 @@ func NewBatcher[T any](
 	batchSize int,
 	intervalMs time.Duration,
 	flushFn func(context.Context, util.Tx, []T) error,
+	invalidCheckFn func(T) error,
 	sink util.Sink,
-	offsetCommitter util.OffsetCommitter) Batcher[T] {
+	eventProcessor util.EventProcessor) Batcher[T] {
+	logger.Log.Info("Starting batcher", "batchSize", batchSize, "intervalMs", intervalMs)
 	return Batcher[T]{
-		batchSize:       batchSize,
-		pipeline:        pipeline,
-		batchCh:         make(chan *BatchMessage[T], batchSize*3),
-		intervalMs:      intervalMs,
-		flushFn:         flushFn,
-		items:           make([]*BatchItem[T], 0, batchSize),
-		lastFlush:       time.Now(),
-		ctx:             ctx,
-		sink:            sink,
-		offsetCommitter: offsetCommitter,
+		batchSize:      batchSize,
+		pipeline:       pipeline,
+		batchCh:        make(chan *BatchMessage[T], batchSize*3),
+		intervalMs:     intervalMs,
+		flushFn:        flushFn,
+		invalidCheckFn: invalidCheckFn,
+		items:          make([]*BatchItem[T], 0, batchSize),
+		lastFlush:      time.Now(),
+		ctx:            ctx,
+		sink:           sink,
+		eventProcessor: eventProcessor,
 	}
 }
 
@@ -113,11 +120,7 @@ func (b *Batcher[T]) Add(item BatchItem[T]) {
 	select {
 	case b.batchCh <- &BatchMessage[T]{
 		BatchEvent: AddEvent,
-		Item: BatchItem[T]{
-			Item:      item.Item,
-			Partition: item.Partition,
-			Offset:    item.Offset,
-		},
+		Item:       item,
 	}:
 	default:
 		logger.Log.Warn("Dropping message from batch channel as its overloaded")
@@ -128,13 +131,15 @@ func (b *Batcher[T]) Add(item BatchItem[T]) {
 // flush on items size exceeds limit
 func (b *Batcher[T]) HandleBatchAndFlush(item *BatchItem[T]) error {
 	b.items = append(b.items, item)
+	logger.Log.Info("Current size of batcher", "length", len(b.items), "pipeline", b.pipeline)
 	metrics.Persistence_BatchSize.WithLabelValues(b.pipeline).Observe(float64(len(b.items)))
 
 	if len(b.items) >= b.batchSize {
 		if err := b.Flush(); err != nil {
-			logger.Log.Error("Error in batcher flush", "error", err)
+			logger.Log.Error("Error in batcher flush", "error", err, "pipeline", b.pipeline)
 			return err
 		}
+		logger.Log.Info("Flush occurred and reset batch size to 0", "pipeline", b.pipeline)
 	}
 
 	return nil
@@ -143,12 +148,12 @@ func (b *Batcher[T]) HandleBatchAndFlush(item *BatchItem[T]) error {
 // timer based flush
 func (b *Batcher[T]) FlushIfNeeded() error {
 	if len(b.items) == 0 {
-		logger.Log.Info("Batch periodic flush -- No items present in batcher")
+		logger.Log.Info("Batch periodic flush -- No items present in batcher", "pipeline", b.pipeline)
 		return nil
 	}
 
 	if time.Since(b.lastFlush) >= b.intervalMs {
-		logger.Log.Info("Time since last flush >= Interval")
+		logger.Log.Info("Time since last flush >= Interval", "pipeline", b.pipeline)
 		return b.Flush()
 	}
 
@@ -159,6 +164,51 @@ func (b *Batcher[T]) FlushIfNeeded() error {
 // batcher opens db agnostic transaction. its not aware about postgres. can change the DB anytime by wiring up new Sink
 func (b *Batcher[T]) Flush() error {
 	start := time.Now()
+
+	// error handling for corrupted records
+	valid := make([]*BatchItem[T], 0, len(b.items))
+	var maxOffsetPerPartitionMap map[int32]int64 = make(map[int32]int64)
+
+	for _, batchItem := range b.items {
+		if err := b.invalidCheckFn(batchItem.Item); err != nil {
+			logger.Log.Error("invalid record, sending to DLQ",
+				"pipeline", b.pipeline,
+				"partition", batchItem.Record.Partition,
+				"offset", batchItem.Record.Offset)
+
+			errorMsg := err.Error()
+
+			payload, jsonErr := ToBytes(batchItem.Item)
+			if jsonErr != nil {
+				logger.Log.Error("Payload data is corrupted", "jsonErr", jsonErr)
+				errorMsg += " " + jsonErr.Error()
+			}
+
+			dlqMessage := &config.DLQMessage{
+				Topic:     b.pipeline,
+				Payload:   payload,
+				ErrorMsg:  errorMsg,
+				Timestamp: time.Now(),
+			}
+
+			if handleErrorErr := b.eventProcessor.HandleEventError(b.ctx, dlqMessage); handleErrorErr != nil {
+				logger.Log.Error("Failed to handle event error", "err", handleErrorErr)
+				return handleErrorErr
+			}
+
+			// if corrupted record was the last one in the batch, it will cause problem as it wouldnt be marked in map if invalid. so add it nevertheless
+			maxOffsetPerPartitionMap[batchItem.Record.Partition] = max(maxOffsetPerPartitionMap[batchItem.Record.Partition], batchItem.Record.Offset)
+
+		} else {
+			valid = append(valid, batchItem)
+		}
+	}
+
+	if len(valid) == 0 {
+		logger.Log.Warn("No valid records to flush after filtering out corrupted records. Returning from Flush()")
+		return nil
+	}
+
 	tx, err := b.sink.InitTx(b.ctx)
 	if err != nil {
 		logger.Log.Error("Error in beginning transaction", "error", err)
@@ -167,13 +217,13 @@ func (b *Batcher[T]) Flush() error {
 	defer tx.Rollback(b.ctx)
 
 	items := make([]T, 0)
-	for _, item := range b.items {
+	for _, item := range valid {
 		items = append(items, item.Item)
 	}
 
 	flushStart := time.Now()
 	if err := b.flushFn(b.ctx, tx, items); err != nil {
-		logger.Log.Error("Error in flushing aggregated tick rows", "error", err)
+		logger.Log.Error("Error in flushing rows", "error", err)
 		metrics.Persistence_TxnFailures.WithLabelValues(b.pipeline).Inc()
 		return err
 	}
@@ -185,14 +235,13 @@ func (b *Batcher[T]) Flush() error {
 		return err
 	}
 
-	var maxOffsetPerPartitionMap map[int32]int64 = make(map[int32]int64)
 	for _, item := range b.items {
-		maxOffsetPerPartitionMap[item.Partition] = max(maxOffsetPerPartitionMap[item.Partition], item.Offset)
+		maxOffsetPerPartitionMap[item.Record.Partition] = max(maxOffsetPerPartitionMap[item.Record.Partition], item.Record.Offset)
 	}
 
 	// commit offsets upon db write success
 	// fire and forget
-	b.offsetCommitter.CommitOffsets(b.ctx, maxOffsetPerPartitionMap)
+	b.eventProcessor.MarkUpstreamProcessed(b.ctx, maxOffsetPerPartitionMap)
 
 	// clear the batch
 	b.items = b.items[:0]
@@ -203,4 +252,12 @@ func (b *Batcher[T]) Flush() error {
 	metrics.Persistence_FlushCount.WithLabelValues(b.pipeline).Inc()
 
 	return nil
+}
+
+func ToBytes[T any](s T) ([]byte, error) {
+	bytes, err := json.Marshal(s)
+	if err != nil {
+		return nil, logger.LogAndWrap("json marshal failed", err)
+	}
+	return bytes, nil
 }

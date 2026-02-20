@@ -13,3 +13,5 @@ e.g batcher doesnt know anything about its downstream (can switch from postgres 
 postgres flushFn - only responsible for inserting records to postgres.
 we can have other flush fns for other DBs if we want a new sink and just wire it up
 
+20/02/2026:
+1. noticed if any corruption in the record, the entire batch is stopped. rather will skip that entry upon insertion and proceed.

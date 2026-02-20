@@ -50,7 +50,7 @@ func TestProcessAddsToBatcher(t *testing.T) {
 	if b.lastItem.Item != "converted" {
 		t.Fatalf("added item = %q, want %q", b.lastItem.Item, "converted")
 	}
-	if b.lastItem.Partition != 3 || b.lastItem.Offset != 99 {
+	if b.lastItem.Record.Partition != 3 || b.lastItem.Record.Offset != 99 {
 		t.Fatalf("unexpected partition/offset: %+v", b.lastItem)
 	}
 }

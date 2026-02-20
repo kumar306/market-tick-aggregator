@@ -27,6 +27,7 @@ func NewBookConverter() Converter[*model.OrderbookFlush] {
 }
 
 func (t *TickConverter) Convert(input []byte) (*model.AggregatedTick, error) {
+	logger.Log.Error("Converting input in tick converter")
 
 	output := &generated.AggregatedTick{}
 	// unmarshal and convert
@@ -55,6 +56,8 @@ func (t *TickConverter) Convert(input []byte) (*model.AggregatedTick, error) {
 	if output.TrendMetrics == nil {
 		output.TrendMetrics = &generated.TrendMetrics{}
 	}
+
+	logger.Log.Info("Message after conversion", "message", output)
 
 	return &model.AggregatedTick{
 		Exchange:           output.Exchange,
@@ -86,7 +89,7 @@ func (t *TickConverter) Convert(input []byte) (*model.AggregatedTick, error) {
 }
 
 func (b *BookConverter) Convert(input []byte) (*model.OrderbookFlush, error) {
-
+	logger.Log.Info("Converting input in book converter")
 	// unmarshal and convert
 	output := &generated.OrderbookFlush{}
 
@@ -136,6 +139,8 @@ func (b *BookConverter) Convert(input []byte) (*model.OrderbookFlush, error) {
 		},
 		LevelRows: levelRows,
 	}
+
+	logger.Log.Debug("Book after conversion", "book", book)
 
 	return book, nil
 }

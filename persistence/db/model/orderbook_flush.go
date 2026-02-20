@@ -1,6 +1,9 @@
 package model
 
-import "time"
+import (
+	"errors"
+	"time"
+)
 
 type OrderbookFlush struct {
 	FlushRow  *OrderbookFlushRow
@@ -24,4 +27,11 @@ type OrderbookFlushLevelRow struct {
 	Side       string
 	Price      float64
 	Volume     float64
+}
+
+func IsInvalidBookFlush(t *OrderbookFlush) error {
+	if t.FlushRow.EventTimeMillis == 0 {
+		return errors.New("Invalid timestamp")
+	}
+	return nil
 }

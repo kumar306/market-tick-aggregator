@@ -6,14 +6,18 @@ import (
 	"shared/logger"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/joho/godotenv"
 	"gopkg.in/yaml.v3"
 )
 
 const (
 	ConfigFile            string = "./config/config.yaml"
+	EnvFile               string = "../.env"
 	AggregatedTicksTopic  string = "aggregated.ticks"
 	OrderbookFlushesTopic string = "aggregated.book"
+	DlqTopic              string = "persistence.dlq"
 	TickPipelineName      string = "tickPipeline"
 	BookPipelineName      string = "bookPipeline"
 )
@@ -62,7 +66,21 @@ type BackpressureConfig struct {
 	PollIntervalMs          int64   `yaml:"poll_interval_ms"`
 }
 
+type DLQMessage struct {
+	Topic     string
+	Partition int32
+	Offset    int64
+	Payload   []byte
+	ErrorMsg  string
+	Timestamp time.Time
+}
+
 func GetConfig(cfgFilePath string) (*Config, error) {
+
+	loadErr := godotenv.Load(EnvFile)
+	if loadErr != nil {
+		return nil, logger.LogAndWrap("Error loading .env file", loadErr)
+	}
 
 	var c Config
 	yamlFile, err := os.ReadFile(cfgFilePath)

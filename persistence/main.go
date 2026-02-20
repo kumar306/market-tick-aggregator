@@ -57,6 +57,9 @@ func main() {
 		time.Duration(cfg.BatcherConfig.TickBatchConfig.IntervalMs)*time.Millisecond,
 		func(ctx context.Context, tx util.Tx, rows []*model.AggregatedTick) error {
 			return writer.FlushAggregateTicks(ctx, tx, rows)
+		},
+		func(at *model.AggregatedTick) error {
+			return model.IsInvalidTick(at)
 		})
 
 	bookPipeline = pipeline.InitBookPipeline(ctx,
@@ -66,6 +69,9 @@ func main() {
 		time.Duration(cfg.BatcherConfig.BookBatchConfig.IntervalMs)*time.Millisecond,
 		func(ctx context.Context, tx util.Tx, rows []*model.OrderbookFlush) error {
 			return writer.FlushOrderbook(ctx, tx, rows)
+		},
+		func(of *model.OrderbookFlush) error {
+			return model.IsInvalidBookFlush(of)
 		})
 
 	// start consumer and relevant metrics

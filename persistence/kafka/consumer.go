@@ -89,7 +89,7 @@ func StartConsumer(ctx context.Context,
 	for {
 		select {
 		case <-ctx.Done():
-			logger.Log.Info("Received done event in kafka orderbook consumer loop. Exiting")
+			logger.Log.Info("Received done event in kafka persistence consumer loop. Exiting")
 			return
 		default:
 		}

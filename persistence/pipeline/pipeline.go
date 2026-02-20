@@ -23,21 +23,24 @@ type Pipeline[U any] struct {
 }
 
 type FlushFn[T any] func(context.Context, util.Tx, []T) error
+type InvalidCheckFn[T any] func(T) error
 
 func InitTickPipeline(ctx context.Context,
 	name string,
 	topic string,
 	batchSize int,
 	intervalMs time.Duration,
-	flushFn FlushFn[*model.AggregatedTick]) *Pipeline[*model.AggregatedTick] {
+	flushFn FlushFn[*model.AggregatedTick],
+	invalidCheckFn InvalidCheckFn[*model.AggregatedTick]) *Pipeline[*model.AggregatedTick] {
 
 	batcher := batcher.NewBatcher(ctx,
 		name,
 		batchSize,
 		intervalMs,
 		(func(context.Context, util.Tx, []*model.AggregatedTick) error)(flushFn),
+		(func(*model.AggregatedTick) error)(invalidCheckFn),
 		util.NewPostgresSink(),
-		util.NewKafkaOffsetCommitter(topic))
+		util.NewKafkaProcessor(topic))
 
 	go batcher.Run()
 
@@ -53,15 +56,17 @@ func InitBookPipeline(ctx context.Context,
 	topic string,
 	batchSize int,
 	intervalMs time.Duration,
-	flushFn FlushFn[*model.OrderbookFlush]) *Pipeline[*model.OrderbookFlush] {
+	flushFn FlushFn[*model.OrderbookFlush],
+	invalidCheckFn InvalidCheckFn[*model.OrderbookFlush]) *Pipeline[*model.OrderbookFlush] {
 
 	batcher := batcher.NewBatcher(ctx,
 		name,
 		batchSize,
 		intervalMs,
 		(func(context.Context, util.Tx, []*model.OrderbookFlush) error)(flushFn),
+		(func(*model.OrderbookFlush) error)(invalidCheckFn),
 		util.NewPostgresSink(),
-		util.NewKafkaOffsetCommitter(topic))
+		util.NewKafkaProcessor(topic))
 
 	go batcher.Run()
 
@@ -80,9 +85,9 @@ func (p *Pipeline[U]) Process(rec *kgo.Record) {
 		logger.Log.Error("Error in pipeline processing for record", "error", err)
 		return
 	}
+	logger.Log.Info("Adding item to batcher add", "topic", rec.Topic, "partition", rec.Partition, "offset", rec.Offset)
 	p.Batcher.Add(batcher.BatchItem[U]{
-		Item:      u,
-		Partition: rec.Partition,
-		Offset:    rec.Offset,
+		Item:   u,
+		Record: rec,
 	})
 }

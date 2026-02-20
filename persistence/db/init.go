@@ -55,6 +55,7 @@ func InitDB(ctx context.Context) error {
 		for time.Now().Before(deadline) {
 			err := db.Ping(ctx)
 			if err != nil {
+				logger.Log.Error("Ping to postgres failed. Sleeping for 1 second", "error", err)
 				time.Sleep(1 * time.Second)
 			} else {
 				logger.Log.Info("Successfully pinged postgres db")

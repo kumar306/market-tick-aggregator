@@ -16,9 +16,9 @@ func TestKafkaOffsetCommitterCommitOffsetsDelegatesToKafka(t *testing.T) {
 		gotOffsets = offsets
 	}
 
-	committer := NewKafkaOffsetCommitter("aggregated_ticks")
+	committer := NewKafkaProcessor("aggregated_ticks")
 	input := map[int32]int64{0: 10, 1: 20}
-	if err := committer.CommitOffsets(context.Background(), input); err != nil {
+	if err := committer.MarkUpstreamProcessed(context.Background(), input); err != nil {
 		t.Fatalf("CommitOffsets() error = %v, want nil", err)
 	}
 
