@@ -7,4 +7,5 @@ use (
 	./orderbook
 	./persistence
 	./shared
+	./ui-backend
 )
