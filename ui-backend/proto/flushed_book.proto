@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package persistence;
+option go_package = "proto/generated";
+
+message OrderbookFlush {
+    string exchange = 1;
+    string symbol = 2;
+    int64 event_time_millis = 3;
+
+
+    message BookLevel {
+        double price = 1;
+        double volume = 2;
+    }
+
+    repeated BookLevel bids = 4;
+    repeated BookLevel asks = 5;
+    BookLevel bestBid = 7;
+    BookLevel bestAsk = 8;
+    double spread = 9;
+    string message_type = 10;
+}

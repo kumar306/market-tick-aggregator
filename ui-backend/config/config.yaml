@@ -1,0 +1,8 @@
+kafka:
+  bootstrap_servers:
+    - localhost:9092
+  topics:
+    book: aggregated.book
+    ticks: aggregated.ticks
+  consumer_group: ui-group-1
+  max_buffer_records: 5000

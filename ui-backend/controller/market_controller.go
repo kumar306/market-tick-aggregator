@@ -45,7 +45,3 @@ func (c *MarketController) GetCandles(ctx *gin.Context) {
 
 	ctx.JSON(http.StatusOK, data)
 }
-
-func HandleWebSocket(ctx *gin.Context) {
-
-}
