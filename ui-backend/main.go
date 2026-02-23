@@ -61,6 +61,8 @@ func main() {
 	api := r.Group("/api")
 	{
 		api.GET("/candles", ctrl.GetCandles)
+		api.GET("/metrics", ctrl.GetMetrics)
+		api.GET("/orderbook", ctrl.GetOrderbook)
 	}
 
 	r.GET("/ws", controller.HandleWebSocket)
