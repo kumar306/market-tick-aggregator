@@ -57,6 +57,11 @@ func HandleSubscribe(client *stream.WSClient) {
 		_, msg, err := client.Conn.ReadMessage()
 		if err != nil {
 			logger.Log.Error("Read error", "error", err)
+
+			if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
+				logger.Log.Info("Connection closed", "error", err)
+				break
+			}
 			continue
 		}
 
