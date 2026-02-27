@@ -135,11 +135,25 @@ export class WSClient {
 
     // reset the connection to receive for new feed and stop receiving old feed messages
     private reconnect(): void {
-        const old = this.ws;
-        this.ws = null;
-        if(old && (old.readyState == WebSocket.OPEN || old.readyState == WebSocket.CONNECTING)) {
-            old.close();
+        if(this.ws && (this.ws.readyState == WebSocket.OPEN || this.ws.readyState == WebSocket.CONNECTING)) {
+            close();
         }
         this.connect();
+    }
+
+    // cleanup
+    close(): void {
+        if(this.reconnectTimer) {
+            clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = null;
+        }
+
+        const socket = this.ws;
+        this.ws = null;
+        this.setStatus("closed")
+
+        if(socket && (socket.readyState == WebSocket.OPEN || socket.readyState == WebSocket.CONNECTING)) {
+            socket.close();
+        }
     }
 }
