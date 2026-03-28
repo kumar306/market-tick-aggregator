@@ -67,17 +67,19 @@ func NewMarketRepository(db *pgxpool.Pool) *MarketRepository {
 func (m *MarketRepository) GetCandles(ctx context.Context,
 	exchange string,
 	symbol string,
+	windowID string,
 	from time.Time,
 	to time.Time) ([]*CandleRow, error) {
 	rows, err := m.db.Query(ctx, `
-		SELECT start_ts, end_ts, open, close, low, high, volume 
-		FROM aggregated_ticks
-		WHERE exchange = $1 
-		AND symbol = $2
-		AND start_ts >= $3
-		AND end_ts <= $4
-		ORDER BY start_ts
-		`, exchange, symbol, from, to)
+			SELECT start_ts, end_ts, open_price, close_price, low_price, high_price, volume 
+			FROM aggregated_ticks
+			WHERE exchange = $1 
+			AND symbol = $2
+			AND window_id = $3
+			AND start_ts >= $4
+			AND end_ts <= $5
+			ORDER BY start_ts
+			`, exchange, symbol, windowID, from, to)
 
 	if err != nil {
 		return nil, err
@@ -136,7 +138,7 @@ func (m *MarketRepository) GetMetrics(ctx context.Context,
 
 	for rows.Next() {
 		row := MetricRow{}
-		rows.Scan(
+		err := rows.Scan(
 			&row.Exchange,
 			&row.Symbol,
 			&row.WindowId,
@@ -156,6 +158,9 @@ func (m *MarketRepository) GetMetrics(ctx context.Context,
 			&row.LogReturn,
 			&row.SimpleReturn,
 		)
+		if err != nil {
+			return nil, err
+		}
 		results = append(results, &row)
 	}
 

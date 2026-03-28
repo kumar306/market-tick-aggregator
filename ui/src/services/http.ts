@@ -15,6 +15,7 @@ function ToIso(value: DateInput): string {
 export interface CandleParams {
     exchange: string;
     symbol: string;
+    window: string;
     from: DateInput;
     to: DateInput;
 }
@@ -56,6 +57,7 @@ export async function getCandles(params: CandleParams): Promise<CandleDTO[]> {
     const queryParam = new URLSearchParams({
         exchange: params.exchange,
         symbol: params.symbol,
+        window: params.window,
         from: ToIso(params.from),
         to: ToIso(params.to)
     })

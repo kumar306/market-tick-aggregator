@@ -21,6 +21,7 @@ func NewMarketController(service *service.MarketService) *MarketController {
 func (c *MarketController) GetCandles(ctx *gin.Context) {
 	exchange := ctx.Query("exchange")
 	symbol := ctx.Query("symbol")
+	windowID := ctx.Query("window")
 	fromStr := ctx.Query("from")
 	toStr := ctx.Query("to")
 
@@ -37,7 +38,7 @@ func (c *MarketController) GetCandles(ctx *gin.Context) {
 		return
 	}
 
-	data, err := c.service.GetCandles(ctx.Request.Context(), exchange, symbol, from, to)
+	data, err := c.service.GetCandles(ctx.Request.Context(), exchange, symbol, windowID, from, to)
 	if err != nil {
 		logger.Log.Error("Error in controller", "error", err)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

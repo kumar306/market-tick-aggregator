@@ -5,6 +5,7 @@ import (
 	"errors"
 	"market-ui-backend/dto"
 	"market-ui-backend/repository"
+	"math"
 	"shared/logger"
 	"time"
 )
@@ -20,9 +21,10 @@ func NewMarketService(repository *repository.MarketRepository) *MarketService {
 func (s *MarketService) GetCandles(ctx context.Context,
 	exchange string,
 	symbol string,
+	windowID string,
 	from time.Time,
 	to time.Time) ([]*dto.CandleDTO, error) {
-	rows, err := s.repository.GetCandles(ctx, exchange, symbol, from, to)
+	rows, err := s.repository.GetCandles(ctx, exchange, symbol, windowID, from, to)
 	if err != nil {
 		return nil, err
 	}
@@ -76,6 +78,8 @@ func (s *MarketService) GetMetrics(ctx context.Context,
 			}
 
 			switch metric {
+			case "microprice":
+				metricDto.Value = row.Microprice
 			case "volume":
 				metricDto.Value = row.Volume
 			case "rolling_volume":
@@ -103,6 +107,10 @@ func (s *MarketService) GetMetrics(ctx context.Context,
 			default:
 				logger.Log.Info("invalid input metric", "metrics", metrics)
 				return nil, errors.New("Invalid metric")
+			}
+
+			if math.IsNaN(metricDto.Value) || math.IsInf(metricDto.Value, 0) {
+				continue
 			}
 
 			result.WindowMetrics[windowId] = append(result.WindowMetrics[windowId], metricDto)

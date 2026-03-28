@@ -36,6 +36,7 @@ export class WSClient {
     private ws: WebSocket | null = null;
     private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     private status: ConnStatus = "idle";
+    private shouldReconnect = true;
 
     // let handlers not be able to be mutated later on. passed into ws client which handles its emitted events
     private readonly handlers: Handlers;
@@ -87,6 +88,7 @@ export class WSClient {
             return;
         }
 
+        this.shouldReconnect = true;
         this.setStatus("connecting")
         this.ws = new WebSocket(WS_URL)
 
@@ -113,7 +115,9 @@ export class WSClient {
         this.ws.onclose = () => {
             this.setStatus("closed")
             // in case the connection got closed unexpectedly
-            this.scheduleReconnect();
+            if(this.shouldReconnect) {
+                this.scheduleReconnect();
+            }
         }
     }
 
@@ -135,14 +139,18 @@ export class WSClient {
 
     // reset the connection to receive for new feed and stop receiving old feed messages
     private reconnect(): void {
+        this.shouldReconnect = true;
         if(this.ws && (this.ws.readyState == WebSocket.OPEN || this.ws.readyState == WebSocket.CONNECTING)) {
-            close();
+            const socket = this.ws;
+            this.ws = null;
+            socket.close();
         }
         this.connect();
     }
 
     // cleanup
     close(): void {
+        this.shouldReconnect = false;
         if(this.reconnectTimer) {
             clearTimeout(this.reconnectTimer);
             this.reconnectTimer = null;
