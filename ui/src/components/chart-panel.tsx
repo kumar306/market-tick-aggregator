@@ -18,6 +18,8 @@ import {
   LineData,
   LineSeries,
   LogicalRange,
+  MouseEventParams,
+  Time,
   UTCTimestamp,
   type IChartApi,
   type ISeriesApi,
@@ -30,6 +32,8 @@ import {
   type CandleBar,
   type MetricPoint,
 } from "@/store/market-store";
+import { useUIStore } from "@/store/ui-store";
+import { useShallow } from "zustand/shallow";
 
 interface ChartPanelProps {
   exchange: string;
@@ -84,6 +88,13 @@ function logicalRangeEquals(a: LogicalRange | null, b: LogicalRange | null): boo
   return Math.abs(a.from - b.from) < 0.01 && Math.abs(a.to - b.to) < 0.01;
 }
 
+function shouldRenderOverlayPoint(metric: MetricName, value: number): boolean {
+  if (!Number.isFinite(value)) return false;
+  // price overlays having zero values flatten the entire chart scale and make it smaller so add this check
+  if (isOverlayMetric(metric) && value <= 0) return false;
+  return true;
+}
+
 // i pass in the range and its dispatch fn
 // 1 use effect to subscribe to change in chart range and set new state
 // 1 use effect to actually set the range in chart timescale api
@@ -129,19 +140,31 @@ function useSyncedLogicalRange(
   }, [chartRef, sharedLogicalRange]);
 }
 
+const EMPTY_POINTS: MetricPoint[] = []; 
+
 // return a view of given exchage, symbol, window, metric - its points
 function useMetricSeries(exchange: string, symbol: string, windowId: string, metrics: MetricName[]) {
-  return useMarketStore((state) => {
+  return useMarketStore(
+    // new object reference is returned from zustand state which is an unstable result so add useShallow to compare the result
+    useShallow((state) => {
     const series: Partial<Record<MetricName, MetricPoint[]>> = {};
     for (const metric of metrics) {
       const key = buildMetricSeriesKey(exchange, symbol, windowId, metric);
-      series[metric] = state.metricSeriesByKey[key] ?? [];
+      series[metric] = state.metricSeriesByKey[key] ?? EMPTY_POINTS;
     }
     return series;
-  });
+  }));
 }
 
-function MetricLegend({ metrics, seriesByMetric }: { metrics: MetricName[]; seriesByMetric: Partial<Record<MetricName, MetricPoint[]>> }) {
+function MetricLegend({
+  metrics,
+  seriesByMetric,
+  theme,
+}: {
+  metrics: MetricName[];
+  seriesByMetric: Partial<Record<MetricName, MetricPoint[]>>;
+  theme: "light" | "dark";
+}) {
   if (metrics.length === 0) return null;
 
   return (
@@ -149,10 +172,14 @@ function MetricLegend({ metrics, seriesByMetric }: { metrics: MetricName[]; seri
       {metrics.map((metric) => {
         const latest = seriesByMetric[metric]?.[seriesByMetric[metric]!.length - 1];
         return (
-          <div key={metric} className="flex items-center gap-2 rounded-full border border-slate-200 bg-white/80 px-2 py-1 text-[11px] text-slate-600">
+          <div key={metric} className={`flex items-center gap-2 rounded-full border px-2 py-1 text-[11px] ${
+            theme === "dark"
+              ? "border-slate-700 bg-slate-900/80 text-slate-300"
+              : "border-slate-200 bg-white/80 text-slate-600"
+          }`}>
             <span className="h-2 w-2 rounded-full" style={{ backgroundColor: metricColor(metric) }} />
             <span>{metricLabel(metric)}</span>
-            <span className="font-medium text-slate-800">{formatMetricValue(metric, latest?.value)}</span>
+            <span className={`font-medium ${theme === "dark" ? "text-slate-100" : "text-slate-800"}`}>{formatMetricValue(metric, latest?.value)}</span>
           </div>
         );
       })}
@@ -168,6 +195,7 @@ function PriceChart({
   overlayMetrics,
   overlaySeriesByMetric,
   loading,
+  theme,
   sharedLogicalRange,
   onLogicalRangeChange,
 }: {
@@ -178,6 +206,7 @@ function PriceChart({
   overlayMetrics: MetricName[];
   overlaySeriesByMetric: Partial<Record<MetricName, MetricPoint[]>>;
   loading: boolean;
+  theme: "light" | "dark";
   sharedLogicalRange: LogicalRange | null;
   onLogicalRangeChange: Dispatch<SetStateAction<LogicalRange | null>>;
 }) {
@@ -186,6 +215,8 @@ function PriceChart({
   const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const overlaySeriesRef = useRef<Partial<Record<MetricName, ISeriesApi<"Line">>>>({});
   const didFitRef = useRef(false);
+  const [hoveredBar, setHoveredBar] = useState<CandleBar | null>(null);
+  const [hoverX, setHoverX] = useState<number | null>(null);
 
   // hook to update state of zoom and pan
   useSyncedLogicalRange(chartRef, sharedLogicalRange, onLogicalRangeChange);
@@ -196,25 +227,25 @@ function PriceChart({
 
     const chart = createChart(el, {
       layout: {
-        textColor: "#1e293b",
-        background: { type: ColorType.Solid, color: "#ffffff" },
+        textColor: theme === "dark" ? "#e2e8f0" : "#1e293b",
+        background: { type: ColorType.Solid, color: theme === "dark" ? "#020617" : "#ffffff" },
       },
       grid: {
-        vertLines: { color: "#e2e8f0" },
-        horzLines: { color: "#f1f5f9" },
+        vertLines: { color: theme === "dark" ? "#1e293b" : "#e2e8f0" },
+        horzLines: { color: theme === "dark" ? "#0f172a" : "#f1f5f9" },
       },
       rightPriceScale: {
-        borderColor: "#cbd5e1",
+        borderColor: theme === "dark" ? "#334155" : "#cbd5e1",
       },
       timeScale: {
-        borderColor: "#cbd5e1",
+        borderColor: theme === "dark" ? "#334155" : "#cbd5e1",
         timeVisible: true,
         secondsVisible: false,
         lockVisibleTimeRangeOnResize: true,
       },
       crosshair: {
-        vertLine: { color: "#64748b", width: 1 },
-        horzLine: { color: "#94a3b8", width: 1 },
+        vertLine: { color: theme === "dark" ? "#64748b" : "#64748b", width: 1 },
+        horzLine: { color: theme === "dark" ? "#475569" : "#94a3b8", width: 1 },
       },
       width: el.clientWidth,
       height: 420,
@@ -263,28 +294,31 @@ function PriceChart({
       candleSeriesRef.current = null;
       overlaySeriesRef.current = {};
     };
-  }, [overlayMetrics]);
+  }, [overlayMetrics, theme]);
+
+  const validBars = useMemo(() => {
+    return bars.filter((bar) => bar.open !== 0 || bar.high !== 0 || bar.low !== 0 || bar.close !== 0);
+  }, [bars]);
 
   const candleData = useMemo<CandlestickData<UTCTimestamp>[]>(() => {
-    return bars.map((bar) => ({
+    return validBars.map((bar) => ({
       time: bar.timeSec as UTCTimestamp,
       open: bar.open,
       high: bar.high,
       low: bar.low,
       close: bar.close,
     }));
-  }, [bars]);
+  }, [validBars]);
 
-  const hasRenderableCandles = useMemo(() => {
-    return bars.some((bar) => bar.open !== 0 || bar.high !== 0 || bar.low !== 0 || bar.close !== 0);
-  }, [bars]);
+  const hasRenderableCandles = validBars.length > 0;
+  const candleLookup = useMemo(() => new Map(validBars.map((bar) => [bar.timeSec, bar])), [validBars]);
 
   useEffect(() => {
     const candleSeries = candleSeriesRef.current;
     const chart = chartRef.current;
     if (!candleSeries || !chart) return;
 
-    candleSeries.setData(hasRenderableCandles ? candleData : []);
+    candleSeries.setData(candleData);
     if (!didFitRef.current && (candleData.length > 0 || overlayMetrics.length > 0) && !sharedLogicalRange) {
       chart.timeScale().fitContent();
       didFitRef.current = true;
@@ -296,33 +330,60 @@ function PriceChart({
       const series = overlaySeriesRef.current[metric];
       if (!series) continue;
 
-      const lineData: LineData<UTCTimestamp>[] = (overlaySeriesByMetric[metric] ?? []).map((point) => ({
-        time: point.timeSec as UTCTimestamp,
-        value: point.value,
-      }));
+      const lineData: LineData<UTCTimestamp>[] = (overlaySeriesByMetric[metric] ?? [])
+        .filter((point) => shouldRenderOverlayPoint(metric, point.value))
+        .map((point) => ({
+          time: point.timeSec as UTCTimestamp,
+          value: point.value,
+        }));
       series.setData(lineData);
     }
   }, [overlayMetrics, overlaySeriesByMetric]);
 
-  const latest = hasRenderableCandles ? bars[bars.length - 1] : undefined;
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart) return;
+
+    const handleCrosshairMove = (param: MouseEventParams<Time>) => {
+      if (typeof param.time !== "number" || typeof param.point?.x !== "number") {
+        setHoveredBar(null);
+        setHoverX(null);
+        return;
+      }
+
+      setHoverX(param.point.x);
+      setHoveredBar(candleLookup.get(param.time) ?? null);
+    };
+
+    chart.subscribeCrosshairMove(handleCrosshairMove);
+    return () => {
+      chart.unsubscribeCrosshairMove(handleCrosshairMove);
+    };
+  }, [candleLookup]);
+
+  const latest = hasRenderableCandles ? validBars[validBars.length - 1] : undefined;
+  const displayBar = hoveredBar ?? latest;
+  const tooltipLeft = hoverX == null ? null : Math.min(Math.max(hoverX + 12, 12), 520);
 
   return (
-    <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <article className={`rounded-2xl border p-4 shadow-sm transition-colors ${
+      theme === "dark" ? "border-slate-800 bg-slate-950/80 text-slate-100" : "border-slate-200 bg-white"
+    }`}>
       <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-sm font-semibold text-slate-800">
+          <h2 className={`text-sm font-semibold ${theme === "dark" ? "text-slate-100" : "text-slate-800"}`}>
             Price ({exchange}:{symbol} | {windowId})
           </h2>
-          <p className="mt-1 text-xs text-slate-500">Candles with price-derived overlays on a shared time axis.</p>
+          <p className={`mt-1 text-xs ${theme === "dark" ? "text-slate-400" : "text-slate-500"}`}>Candles with price-derived overlays on a shared time axis.</p>
         </div>
-        <div className="text-xs text-slate-500">{loading ? "loading..." : `bars: ${bars.length}`}</div>
+        <div className={`text-xs ${theme === "dark" ? "text-slate-400" : "text-slate-500"}`}>{loading ? "loading..." : `bars: ${bars.length}`}</div>
       </div>
 
-      <div className="mb-3 flex flex-wrap gap-4 text-xs text-slate-600">
-        <span>O: {latest?.open?.toFixed(4) ?? "-"}</span>
-        <span>H: {latest?.high?.toFixed(4) ?? "-"}</span>
-        <span>L: {latest?.low?.toFixed(4) ?? "-"}</span>
-        <span>C: {latest?.close?.toFixed(4) ?? "-"}</span>
+      <div className={`mb-3 flex flex-wrap gap-4 text-xs ${theme === "dark" ? "text-slate-300" : "text-slate-600"}`}>
+        <span>{hoveredBar ? "Hover O" : "O"}: {displayBar?.open?.toFixed(4) ?? "-"}</span>
+        <span>{hoveredBar ? "Hover H" : "H"}: {displayBar?.high?.toFixed(4) ?? "-"}</span>
+        <span>{hoveredBar ? "Hover L" : "L"}: {displayBar?.low?.toFixed(4) ?? "-"}</span>
+        <span>{hoveredBar ? "Hover C" : "C"}: {displayBar?.close?.toFixed(4) ?? "-"}</span>
       </div>
 
       {!hasRenderableCandles ? (
@@ -331,8 +392,35 @@ function PriceChart({
         </div>
       ) : null}
 
-      <MetricLegend metrics={overlayMetrics} seriesByMetric={overlaySeriesByMetric} />
-      <div ref={containerRef} className="mt-3 h-[420px] w-full rounded-xl border border-slate-200" />
+      <MetricLegend metrics={overlayMetrics} seriesByMetric={overlaySeriesByMetric} theme={theme} />
+      <div className="relative mt-3">
+        <div ref={containerRef} className={`h-[420px] w-full rounded-xl border ${theme === "dark" ? "border-slate-800" : "border-slate-200"}`} />
+
+        {hoveredBar && tooltipLeft != null ? (
+          <div
+            className={`pointer-events-none absolute top-3 z-10 min-w-[170px] rounded-lg border px-3 py-2 text-[11px] shadow-lg ${
+              theme === "dark"
+                ? "border-slate-700 bg-slate-950/95 text-slate-100"
+                : "border-slate-200 bg-white/95 text-slate-800"
+            }`}
+            style={{ left: `${tooltipLeft}px` }}
+          >
+            <div className={`mb-1 font-semibold ${theme === "dark" ? "text-slate-100" : "text-slate-800"}`}>
+              {new Date(hoveredBar.timeSec * 1000).toLocaleString()}
+            </div>
+            <div className={`grid grid-cols-2 gap-x-3 gap-y-1 ${theme === "dark" ? "text-slate-300" : "text-slate-600"}`}>
+              <span>Open</span>
+              <span className="text-right">{hoveredBar.open.toFixed(4)}</span>
+              <span>High</span>
+              <span className="text-right">{hoveredBar.high.toFixed(4)}</span>
+              <span>Low</span>
+              <span className="text-right">{hoveredBar.low.toFixed(4)}</span>
+              <span>Close</span>
+              <span className="text-right">{hoveredBar.close.toFixed(4)}</span>
+            </div>
+          </div>
+        ) : null}
+      </div>
     </article>
   );
 }
@@ -343,6 +431,7 @@ function GroupMetricChart({
   metrics,
   seriesByMetric,
   loading,
+  theme,
   sharedLogicalRange,
   onLogicalRangeChange,
 }: {
@@ -351,6 +440,7 @@ function GroupMetricChart({
   metrics: MetricName[];
   seriesByMetric: Partial<Record<MetricName, MetricPoint[]>>;
   loading: boolean;
+  theme: "light" | "dark";
   sharedLogicalRange: LogicalRange | null;
   onLogicalRangeChange: Dispatch<SetStateAction<LogicalRange | null>>;
 }) {
@@ -367,18 +457,18 @@ function GroupMetricChart({
 
     const chart = createChart(el, {
       layout: {
-        textColor: "#334155",
-        background: { type: ColorType.Solid, color: "#ffffff" },
+        textColor: theme === "dark" ? "#cbd5e1" : "#334155",
+        background: { type: ColorType.Solid, color: theme === "dark" ? "#020617" : "#ffffff" },
       },
       grid: {
-        vertLines: { color: "#e2e8f0" },
-        horzLines: { color: "#f1f5f9" },
+        vertLines: { color: theme === "dark" ? "#1e293b" : "#e2e8f0" },
+        horzLines: { color: theme === "dark" ? "#0f172a" : "#f1f5f9" },
       },
       rightPriceScale: {
-        borderColor: "#cbd5e1",
+        borderColor: theme === "dark" ? "#334155" : "#cbd5e1",
       },
       timeScale: {
-        borderColor: "#cbd5e1",
+        borderColor: theme === "dark" ? "#334155" : "#cbd5e1",
         timeVisible: true,
         secondsVisible: false,
         lockVisibleTimeRangeOnResize: true,
@@ -416,7 +506,7 @@ function GroupMetricChart({
       chartRef.current = null;
       seriesRef.current = {};
     };
-  }, [metrics]);
+  }, [metrics, theme]);
 
   useEffect(() => {
     const chart = chartRef.current;
@@ -443,17 +533,19 @@ function GroupMetricChart({
   }, [metrics, seriesByMetric, sharedLogicalRange]);
 
   return (
-    <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <article className={`rounded-2xl border p-4 shadow-sm transition-colors ${
+      theme === "dark" ? "border-slate-800 bg-slate-950/80 text-slate-100" : "border-slate-200 bg-white"
+    }`}>
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold text-slate-800">{title}</h3>
-          <p className="mt-1 text-xs text-slate-500">{description}</p>
+          <h3 className={`text-sm font-semibold ${theme === "dark" ? "text-slate-100" : "text-slate-800"}`}>{title}</h3>
+          <p className={`mt-1 text-xs ${theme === "dark" ? "text-slate-400" : "text-slate-500"}`}>{description}</p>
         </div>
-        <div className="text-xs text-slate-500">{loading ? "loading..." : `${metrics.length} metrics`}</div>
+        <div className={`text-xs ${theme === "dark" ? "text-slate-400" : "text-slate-500"}`}>{loading ? "loading..." : `${metrics.length} metrics`}</div>
       </div>
 
-      <MetricLegend metrics={metrics} seriesByMetric={seriesByMetric} />
-      <div ref={containerRef} className="mt-3 h-[240px] w-full rounded-xl border border-slate-200" />
+      <MetricLegend metrics={metrics} seriesByMetric={seriesByMetric} theme={theme} />
+      <div ref={containerRef} className={`mt-3 h-[240px] w-full rounded-xl border ${theme === "dark" ? "border-slate-800" : "border-slate-200"}`} />
     </article>
   );
 }
@@ -467,6 +559,7 @@ export const ChartPanel = memo(function ChartPanel({
   selectedMetrics,
   loading,
 }: ChartPanelProps) {
+  const theme = useUIStore((s) => s.theme);
   const [sharedLogicalRange, setSharedLogicalRange] = useState<LogicalRange | null>(null);
 
   const seriesKey = useMemo(() => buildSeriesKey(exchange, symbol, windowId), [exchange, symbol, windowId]);
@@ -527,6 +620,7 @@ export const ChartPanel = memo(function ChartPanel({
         overlayMetrics={overlayMetrics}
         overlaySeriesByMetric={overlaySeriesByMetric}
         loading={loading}
+        theme={theme}
         sharedLogicalRange={sharedLogicalRange}
         onLogicalRangeChange={setSharedLogicalRange}
       />
@@ -547,6 +641,7 @@ export const ChartPanel = memo(function ChartPanel({
                 metrics={group.metrics}
                 seriesByMetric={groupSeriesByMetric}
                 loading={loading}
+                theme={theme}
                 sharedLogicalRange={sharedLogicalRange}
                 onLogicalRangeChange={setSharedLogicalRange}
               />
@@ -554,7 +649,9 @@ export const ChartPanel = memo(function ChartPanel({
           })}
         </div>
       ) : (
-        <article className="rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">
+        <article className={`rounded-2xl border border-dashed p-6 text-center text-sm ${
+          theme === "dark" ? "border-slate-700 bg-slate-950/80 text-slate-400" : "border-slate-300 bg-white text-slate-500"
+        }`}>
           Select at least one non-price metric to render the lower observability panels.
         </article>
       )}

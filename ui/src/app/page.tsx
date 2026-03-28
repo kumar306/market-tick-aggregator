@@ -64,6 +64,7 @@ export default function Page() {
   const symbol = useUIStore((s) => s.symbol);
   const windowId = useUIStore((s) => s.windowId);
   const depth = useUIStore((s) => s.depth);
+  const theme = useUIStore((s) => s.theme);
   const metricSelection = useUIStore((s) => s.metricSelection);
   const wsState = useMarketStore((s) => s.wsState);
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -77,6 +78,10 @@ export default function Page() {
 
     return () => window.clearInterval(timer);
   }, [exchange, symbol, windowId]);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", theme === "dark");
+  }, [theme]);
 
   const range = useMemo(() => {
     const to = new Date(nowMs);
@@ -112,12 +117,20 @@ export default function Page() {
   const chartsLoading = candlesQuery.isLoading || candlesQuery.isFetching || (selectedMetrics.length > 0 && (metricsQuery.isLoading || metricsQuery.isFetching));
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_right,_#dbeafe_0%,_#f8fafc_35%,_#f8fafc_100%)] p-4 md:p-6">
+    <main className={`min-h-screen p-4 transition-colors md:p-6 ${
+      theme === "dark"
+        ? "bg-[radial-gradient(circle_at_top_right,_#172554_0%,_#0f172a_42%,_#020617_100%)]"
+        : "bg-[radial-gradient(circle_at_top_right,_#dbeafe_0%,_#f8fafc_35%,_#f8fafc_100%)]"
+    }`}>
       <div className="mx-auto max-w-[1600px] space-y-4">
         <TopBar wsState={wsState} />
 
         {combinedError ? (
-          <section className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          <section className={`rounded-2xl px-4 py-3 text-sm ${
+            theme === "dark"
+              ? "border border-rose-500/30 bg-rose-950/70 text-rose-200"
+              : "border border-rose-200 bg-rose-50 text-rose-700"
+          }`}>
             {toErrorText(combinedError)}
           </section>
         ) : null}

@@ -8,6 +8,7 @@ import { useMemo } from "react";
 const WINDOW_OPTIONS = ["5s", "10s", "30s", "1m", "2m", "5m", "10m", "30m", "1h"] as const;
 
 export function MetricSidebar() {
+  const theme = useUIStore((s) => s.theme);
   const metricSelection = useUIStore((s) => s.metricSelection);
   const toggleMetric = useUIStore((s) => s.toggleMetric);
   const setMetricEnabled = useUIStore((s) => s.setMetricEnabled);
@@ -19,23 +20,31 @@ export function MetricSidebar() {
   const selectedCount = useMemo(() => ALL_METRICS.filter((metric) => metricSelection[metric]).length, [metricSelection]);
 
   return (
-    <aside className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <aside className={`rounded-2xl border p-4 shadow-sm transition-colors ${
+      theme === "dark" ? "border-slate-800 bg-slate-950/80 text-slate-100" : "border-slate-200 bg-white"
+    }`}>
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-sm font-semibold text-slate-800">Controls</h2>
-          <p className="mt-1 text-xs text-slate-500">Select the active window, orderbook depth, and which observability metrics to render.</p>
+          <h2 className={`text-sm font-semibold ${theme === "dark" ? "text-slate-100" : "text-slate-800"}`}>Controls</h2>
+          <p className={`mt-1 text-xs ${theme === "dark" ? "text-slate-400" : "text-slate-500"}`}>Select the active window, orderbook depth, and which observability metrics to render.</p>
         </div>
-        <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-600">
+        <span className={`rounded-full px-2 py-1 text-[11px] font-medium ${
+          theme === "dark" ? "bg-slate-900 text-slate-300" : "bg-slate-100 text-slate-600"
+        }`}>
           {selectedCount}/{ALL_METRICS.length}
         </span>
       </div>
 
       <div className="mt-3">
-        <label className="text-xs font-medium uppercase tracking-wide text-slate-500">Window</label>
+        <label className={`text-xs font-medium uppercase tracking-wide ${theme === "dark" ? "text-slate-400" : "text-slate-500"}`}>Window</label>
         <select
           value={windowId}
           onChange={(e) => setWindowId(e.target.value)}
-          className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm outline-none transition focus:border-slate-500"
+          className={`mt-1 w-full rounded-lg px-2 py-1.5 text-sm outline-none transition ${
+            theme === "dark"
+              ? "border border-slate-700 bg-slate-900 text-slate-100 focus:border-slate-500"
+              : "border border-slate-300 focus:border-slate-500"
+          }`}
         >
           {WINDOW_OPTIONS.map((window) => (
             <option key={window} value={window}>
@@ -46,7 +55,7 @@ export function MetricSidebar() {
       </div>
 
       <div className="mt-3">
-        <label className="text-xs font-medium uppercase tracking-wide text-slate-500">Orderbook Depth</label>
+        <label className={`text-xs font-medium uppercase tracking-wide ${theme === "dark" ? "text-slate-400" : "text-slate-500"}`}>Orderbook Depth</label>
         <input
           type="number"
           min={1}
@@ -57,12 +66,16 @@ export function MetricSidebar() {
             if (!Number.isFinite(parsed)) return;
             setDepth(Math.max(1, Math.min(50, Math.floor(parsed))));
           }}
-          className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm outline-none transition focus:border-slate-500"
+          className={`mt-1 w-full rounded-lg px-2 py-1.5 text-sm outline-none transition ${
+            theme === "dark"
+              ? "border border-slate-700 bg-slate-900 text-slate-100 focus:border-slate-500"
+              : "border border-slate-300 focus:border-slate-500"
+          }`}
         />
       </div>
 
       <div className="mt-4">
-        <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">Metrics</p>
+        <p className={`mb-2 text-xs font-medium uppercase tracking-wide ${theme === "dark" ? "text-slate-400" : "text-slate-500"}`}>Metrics</p>
 
         <div className="mb-2 flex gap-2">
           <button
@@ -70,7 +83,11 @@ export function MetricSidebar() {
             onClick={() => {
               for (const metric of ALL_METRICS) setMetricEnabled(metric, true);
             }}
-            className="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-600 transition hover:bg-slate-50"
+            className={`rounded-md border px-2 py-1 text-xs transition ${
+              theme === "dark"
+                ? "border-slate-700 text-slate-300 hover:bg-slate-900"
+                : "border-slate-300 text-slate-600 hover:bg-slate-50"
+            }`}
           >
             Enable all
           </button>
@@ -79,7 +96,11 @@ export function MetricSidebar() {
             onClick={() => {
               for (const metric of ALL_METRICS) setMetricEnabled(metric, false);
             }}
-            className="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-600 transition hover:bg-slate-50"
+            className={`rounded-md border px-2 py-1 text-xs transition ${
+              theme === "dark"
+                ? "border-slate-700 text-slate-300 hover:bg-slate-900"
+                : "border-slate-300 text-slate-600 hover:bg-slate-50"
+            }`}
           >
             Clear
           </button>
@@ -91,16 +112,20 @@ export function MetricSidebar() {
             return (
               <section key={group.id}>
                 <div className="mb-1">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">{group.label}</p>
-                  <p className="text-[11px] text-slate-500">{group.description}</p>
+                  <p className={`text-xs font-semibold uppercase tracking-wide ${theme === "dark" ? "text-slate-300" : "text-slate-600"}`}>{group.label}</p>
+                  <p className={`text-[11px] ${theme === "dark" ? "text-slate-400" : "text-slate-500"}`}>{group.description}</p>
                 </div>
 
                 <div className="space-y-1">
                   {metrics.map((metric) => (
-                    <label key={metric} className="flex cursor-pointer items-start justify-between gap-3 rounded-md border border-slate-200 px-2 py-2 text-sm transition hover:bg-slate-50">
+                    <label key={metric} className={`flex cursor-pointer items-start justify-between gap-3 rounded-md border px-2 py-2 text-sm transition ${
+                      theme === "dark"
+                        ? "border-slate-800 bg-slate-950/30 hover:bg-slate-900"
+                        : "border-slate-200 hover:bg-slate-50"
+                    }`}>
                       <div>
-                        <div className="text-slate-700">{metricLabel(metric)}</div>
-                        <div className="text-[11px] text-slate-500">{metricDescription(metric)}</div>
+                        <div className={theme === "dark" ? "text-slate-100" : "text-slate-700"}>{metricLabel(metric)}</div>
+                        <div className={`text-[11px] ${theme === "dark" ? "text-slate-400" : "text-slate-500"}`}>{metricDescription(metric)}</div>
                       </div>
                       <input
                         type="checkbox"
