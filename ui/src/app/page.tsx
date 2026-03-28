@@ -1,65 +1,152 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useEffect, useMemo, useState } from "react";
+import { ChartPanel } from "@/components/chart-panel";
+import { MetricSidebar } from "@/components/metric-sidebar";
+import { OrderbookPanel } from "@/components/orderbook-panel";
+import { TopBar } from "@/components/top-bar";
+import { useCandlesQuery, useMetricsQuery, useOrderbookQuery } from "@/hooks/use-market-queries";
+import { useMarketStream } from "@/hooks/use-market-stream";
+import { useMarketStore } from "@/store/market-store";
+import { useUIStore } from "@/store/ui-store";
+import { ALL_METRICS } from "@/types/types";
+
+function lookbackMs(windowId: string): number {
+  switch (windowId) {
+    case "5s":
+      return 45 * 24 * 60 * 60 * 1000;
+    case "10s":
+      return 45 * 24 * 60 * 60 * 1000;
+    case "30s":
+      return 45 * 24 * 60 * 60 * 1000;
+    case "1m":
+      return 45 * 24 * 60 * 60 * 1000;
+    case "2m":
+      return 45 * 24 * 60 * 60 * 1000;
+    case "5m":
+      return 60 * 24 * 60 * 60 * 1000;
+    case "10m":
+      return 60 * 24 * 60 * 60 * 1000;
+    case "30m":
+      return 90 * 24 * 60 * 60 * 1000;
+    case "1h":
+      return 120 * 24 * 60 * 60 * 1000;
+    default:
+      return 45 * 24 * 60 * 60 * 1000;
+  }
+}
+
+function refreshMs(windowId: string): number {
+  switch (windowId) {
+    case "1m":
+      return 15_000;
+    case "5m":
+      return 30_000;
+    case "15m":
+      return 45_000;
+    case "1h":
+      return 60_000;
+    default:
+      return 30_000;
+  }
+}
+
+function toErrorText(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
+export default function Page() {
+  // open ws connection
+  useMarketStream();
+
+  const exchange = useUIStore((s) => s.exchange);
+  const symbol = useUIStore((s) => s.symbol);
+  const windowId = useUIStore((s) => s.windowId);
+  const depth = useUIStore((s) => s.depth);
+  const metricSelection = useUIStore((s) => s.metricSelection);
+  const wsState = useMarketStore((s) => s.wsState);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+
+  const selectedMetrics = useMemo(() => ALL_METRICS.filter((metric) => metricSelection[metric]), [metricSelection]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setNowMs(Date.now());
+    }, refreshMs(windowId));
+
+    return () => window.clearInterval(timer);
+  }, [exchange, symbol, windowId]);
+
+  const range = useMemo(() => {
+    const to = new Date(nowMs);
+    const from = new Date(to.getTime() - lookbackMs(windowId));
+    return { from, to };
+  }, [nowMs, windowId]);
+
+  const candlesQuery = useCandlesQuery({
+    exchange,
+    symbol,
+    window: windowId,
+    from: range.from,
+    to: range.to,
+  });
+
+  const metricsQuery = useMetricsQuery({
+    exchange,
+    symbol,
+    from: range.from,
+    to: range.to,
+    windows: [windowId],
+    metrics: selectedMetrics,
+    enabled: selectedMetrics.length > 0,
+  });
+
+  const orderbookQuery = useOrderbookQuery({
+    exchange,
+    symbol,
+    depth,
+  });
+
+  const combinedError = candlesQuery.error ?? metricsQuery.error ?? orderbookQuery.error;
+  const chartsLoading = candlesQuery.isLoading || candlesQuery.isFetching || (selectedMetrics.length > 0 && (metricsQuery.isLoading || metricsQuery.isFetching));
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top_right,_#dbeafe_0%,_#f8fafc_35%,_#f8fafc_100%)] p-4 md:p-6">
+      <div className="mx-auto max-w-[1600px] space-y-4">
+        <TopBar wsState={wsState} />
+
+        {combinedError ? (
+          <section className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            {toErrorText(combinedError)}
+          </section>
+        ) : null}
+
+        <div className="grid gap-4 xl:grid-cols-[290px_minmax(0,1fr)]">
+          <MetricSidebar />
+
+          <section className="space-y-4">
+            <ChartPanel
+              key={`${exchange}:${symbol}:${windowId}`}
+              exchange={exchange}
+              symbol={symbol}
+              windowId={windowId}
+              selectedMetrics={selectedMetrics}
+              restCandles={candlesQuery.data}
+              restMetrics={metricsQuery.data}
+              loading={chartsLoading}
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+
+            <OrderbookPanel
+              exchange={exchange}
+              symbol={symbol}
+              depth={depth}
+              restBook={orderbookQuery.data}
+              loading={orderbookQuery.isLoading || orderbookQuery.isFetching}
+            />
+          </section>
         </div>
-      </main>
-    </div>
+      </div>
+    </main>
   );
 }
