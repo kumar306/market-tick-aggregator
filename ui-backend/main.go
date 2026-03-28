@@ -2,21 +2,48 @@ package main
 
 import (
 	"context"
+	"errors"
 	"market-ui-backend/config"
 	"market-ui-backend/constants"
 	"market-ui-backend/controller"
 	"market-ui-backend/repository"
 	"market-ui-backend/service"
 	"market-ui-backend/stream"
+	"net/http"
 	"os"
 	"os/signal"
 	"shared/logger"
 	"syscall"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 )
+
+func corsMiddleware() gin.HandlerFunc {
+	allowedOrigins := map[string]struct{}{
+		"http://localhost:3000": {},
+		"http://127.0.0.1:3000": {},
+	}
+
+	return func(c *gin.Context) {
+		origin := c.GetHeader("Origin")
+		if _, ok := allowedOrigins[origin]; ok {
+			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+			c.Writer.Header().Set("Vary", "Origin")
+			c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+			c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		}
+
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(204)
+			return
+		}
+
+		c.Next()
+	}
+}
 
 func main() {
 
@@ -47,6 +74,7 @@ func main() {
 		logger.Log.Error("Failed to connect to db", "error", err)
 		return
 	}
+	defer pool.Close()
 
 	repo := repository.NewMarketRepository(pool)
 	svc := service.NewMarketService(repo)
@@ -57,6 +85,7 @@ func main() {
 	go stream.StartConsumer(stream.Client)
 
 	r := gin.Default()
+	r.Use(corsMiddleware())
 
 	api := r.Group("/api")
 	{
@@ -67,6 +96,28 @@ func main() {
 
 	r.GET("/ws", controller.HandleWebSocket)
 
+	srv := &http.Server{
+		Addr:    ":8080",
+		Handler: r,
+	}
+
 	logger.Log.Info("UI backend running on :8080")
-	r.Run(":8080")
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			logger.Log.Error("HTTP server failed", "error", err)
+		}
+	}()
+
+	<-ctx.Done()
+	logger.Log.Info("Shutdown signal received")
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		logger.Log.Error("HTTP server shutdown failed", "error", err)
+		return
+	}
+
+	logger.Log.Info("UI backend stopped cleanly")
 }

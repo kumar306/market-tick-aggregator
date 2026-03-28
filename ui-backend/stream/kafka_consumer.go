@@ -29,7 +29,7 @@ func Init(ctx context.Context, cfg *constants.KafkaConfig) {
 			kgo.ConsumeTopics(cfg.TopicConfig.Ticks, cfg.TopicConfig.Book),
 			kgo.ConsumerGroup(cfg.ConsumerGroup),
 			kgo.MaxBufferedRecords(cfg.MaxBufferRecords),
-			kgo.WithLogger(kgo.BasicLogger(os.Stdout, kgo.LogLevelDebug, nil)),
+			// kgo.WithLogger(kgo.BasicLogger(os.Stdout, kgo.LogLevelDebug, nil)),
 		)
 		Client = client
 		if err != nil || client == nil {
