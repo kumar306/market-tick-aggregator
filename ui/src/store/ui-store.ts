@@ -20,7 +20,7 @@ interface UIState {
 }
 
 function buildDefaultMetricSelection(): MetricSelection {
-    const enabled = new Set<MetricName>(["volume", "vwap", "volatility"])
+    const enabled = new Set<MetricName>(["ema", "vwap", "volume", "volatility"])
     return ALL_METRICS.reduce((acc, metric) => {
         acc[metric] = enabled.has(metric)
         return acc

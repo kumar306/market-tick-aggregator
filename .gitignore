@@ -5,3 +5,4 @@
 logs*
 ui/node_modules
 next-env.d.ts
+.next

@@ -1,4 +1,5 @@
 export const ALL_METRICS = [
+    "microprice",
     "volume",
     "rolling_volume",
     "volume_acceleration",
@@ -100,8 +101,8 @@ export interface BookLevelStream {
 export interface OrderbookStreamMessage {
     exchange: string;
     symbol: string;
-    event_time_millis: number;
-    event_time: string;
+    event_time_millis?: number;
+    event_time?: string;
     bids: BookLevelStream[];
     asks: BookLevelStream[];
     bestBid?: BookLevelStream;

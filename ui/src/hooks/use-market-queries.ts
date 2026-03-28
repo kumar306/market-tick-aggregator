@@ -9,6 +9,7 @@ type DateInput = Date | string;
 interface BaseParams {
     exchange: string;
     symbol: string;
+    window?: string;
     from: DateInput;
     to: DateInput;
     enabled?: boolean;
@@ -30,8 +31,8 @@ export function useCandlesQuery(params: BaseParams) {
     const { exchange, symbol, from, to, enabled = true } = params;
 
     return useQuery({
-        queryKey: ["candles", exchange, symbol, String(from), String(to)],
-        queryFn: () => getCandles({ exchange, symbol, from, to }),
+        queryKey: ["candles", exchange, symbol, params.window ?? "", String(from), String(to)],
+        queryFn: () => getCandles({ exchange, symbol, window: params.window ?? "1m", from, to }),
         enabled: enabled && Boolean(exchange) && Boolean(symbol),
         staleTime: 5_000,
     });
