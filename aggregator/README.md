@@ -67,3 +67,6 @@ testing plan:
 18/02/2026: 
 1. need to add idempotency guard in aggregator to avoid duplicate publish from normalizer (dedupe key - topic:partition:offset) - same dedupe logic as upstream
 2. since adding point 1, need to revert from auto commit to manual commit, so ensures that commit occurs only after downstream publish and mark for dedupe
+
+20/02/2026:
+1. check why twap, microprice < 0 for some coinbase records when open > 0 and whe

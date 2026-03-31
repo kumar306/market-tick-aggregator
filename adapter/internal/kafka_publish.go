@@ -38,8 +38,8 @@ func PublishToKafkaLoop(wg *sync.WaitGroup,
 			// normalize after reading from ring buffer
 			symbol, normalized, normalizeErr := normalizer.Normalize(msg)
 			if normalizeErr != nil {
-				logger.Log.Error("Failed to normalize message for feed", "name", name, "err", normalizeErr)
-				metrics.Adapter_NormalizerErrors.WithLabelValues().Inc()
+				logger.Log.Error("Failed to normalize message for feed", "name", name, "err", normalizeErr, "msg", msg)
+				metrics.Adapter_NormalizerErrors.WithLabelValues(name).Inc()
 				continue
 			}
 

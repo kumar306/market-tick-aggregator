@@ -35,7 +35,14 @@ func (b *BinanceAggTradeNormalizer) Normalize(msg *constants.PipelineMessage) ([
 		EventTsMillis: rawMessage.EventTime,
 		Price:         priceFloat,
 		Volume:        volumeFloat,
-		SeqId:         msg.SeqId,
+		// Binance aggTrade does not provide candle OHLC fields.
+		// Treat each trade as a micro-candle so downstream window aggregation
+		// can build real OHLC values for 5s/1m/etc from the trade stream.
+		Open:  priceFloat,
+		Close: priceFloat,
+		Low:   priceFloat,
+		High:  priceFloat,
+		SeqId: msg.SeqId,
 	}
 
 	protoStream, err := proto.Marshal(&normalizedMsg)

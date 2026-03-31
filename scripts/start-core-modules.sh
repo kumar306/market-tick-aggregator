@@ -11,6 +11,8 @@ AUTO_PARTITION_MAINTAINER="${AUTO_PARTITION_MAINTAINER:-1}"
 
 # starting downstream first, then upstream at last. in the correct order
 SCRIPTS=(
+  "run-ui-backend.sh"
+  "run-ui.sh"
   "run-persistence.sh"
   "run-aggregator.sh"
   "run-orderbook.sh"

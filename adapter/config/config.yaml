@@ -34,7 +34,7 @@ feeds:
         pongTimeout: 25
         kafkaTopic: coinbase.raw.ticks
         ringBufferSize: 1024
-      - channel: level2
+      - channel: level2_batch
         productIds:
           - BTC-USD
         maxRetries: 5

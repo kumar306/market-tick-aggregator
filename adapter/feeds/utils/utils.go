@@ -34,6 +34,8 @@ func SendAndAckSubscribe[T any](conn *websocket.Conn, subscribeReq interface{}, 
 		return logger.LogAndWrap("Error in parsing subscribe response", err, "feed", feed, "stream", channel)
 	}
 
+	logger.Log.Info("Received subscription response for feed", "feed", feed, "res", subscribeRes)
+
 	return nil
 }
 
@@ -69,7 +71,7 @@ func Normalize(raw []byte, symbolKey, feed, channel string) ([]byte, []byte, err
 	}
 
 	if symbol == "" {
-		return nil, nil, logger.LogAndWrap("Unable to locate symbol in ticker message", nil, "feed", feed, "channel", channel)
+		return nil, nil, logger.LogAndWrap("Unable to locate symbol in ticker message", nil, "feed", feed, "channel", channel, "msg", msg)
 	}
 
 	// add in the root level for kafka consumer processing

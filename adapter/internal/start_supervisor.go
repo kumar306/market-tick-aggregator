@@ -33,4 +33,5 @@ func StartSupervisor(supervisor *constants.Supervisor,
 	wg.Add(1)
 	go SupervisorLoop(feed, stream, supervisor, wg)
 	wg.Wait()
+	logger.Log.Info("Supervisor shut down", "name", feed, "stream", stream)
 }

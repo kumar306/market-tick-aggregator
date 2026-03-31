@@ -100,6 +100,7 @@ const (
 	SubscriptionsType string = "subscriptions"
 	TickerType        string = "ticker"
 	Level2Type        string = "level2"
+	Level2BatchType   string = "level2_batch"
 	SymbolField       string = "product_id"
 )
 
@@ -112,6 +113,7 @@ type CBSubscribeRequest struct {
 type CBSubscribeResponse struct {
 	Type     string        `json:"type"`
 	Channels []ChannelInfo `json:"channels"`
+	Message  string        `json:"message"`
 }
 
 type ChannelInfo struct {
@@ -131,7 +133,7 @@ type CBNormalizer struct {
 type CBPinger struct{}
 
 func (c *CBNormalizer) Normalize(raw []byte) ([]byte, []byte, error) {
-	return utils.Normalize(raw, SymbolField, CoinbaseType, c.Channel)
+	return utils.Normalize(raw, SymbolField, CoinbaseType, normalizeChannel(c.Channel))
 }
 
 // create the req, write it. read ack. if any errors dont proceed.
@@ -144,6 +146,11 @@ func (c *CBSubscriber) Subscribe(conn *websocket.Conn) error {
 
 	var CBSubscribeResponse CBSubscribeResponse
 
+	logger.Log.Info("Sending subscribe",
+		"channel", c.Channel,
+		"productIds", c.ProductIds,
+	)
+
 	err := utils.SendAndAckSubscribe(conn, CBSubscribeRequest, &CBSubscribeResponse, CoinbaseType, c.Channel)
 	if err != nil {
 		return logger.LogAndWrap("Error when writing ping message to coinbase", err, "feed", CoinbaseType)
@@ -152,6 +159,14 @@ func (c *CBSubscriber) Subscribe(conn *websocket.Conn) error {
 	logger.Log.Info("Successfully subscribed to Coinbase", "channel", c.Channel, "productIds", c.ProductIds)
 
 	return nil
+}
+
+func normalizeChannel(channel string) string {
+	if channel == Level2BatchType {
+		return Level2Type
+	}
+
+	return channel
 }
 
 func (c *CBPinger) Ping(conn *websocket.Conn, mu *sync.Mutex) error {
