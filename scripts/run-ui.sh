@@ -16,11 +16,10 @@ TS="$(date +%Y%m%d-%H%M%S)"
 LOG_FILE="${LOG_DIR}/ui-${TS}.log"
 
 echo "[ui] starting; log=${LOG_FILE}"
-(
-  cd "${ROOT}/ui"
-  if command -v stdbuf >/dev/null 2>&1; then
-    stdbuf -oL -eL npm run dev
-  else
-    npm run dev
-  fi
-) 2>&1 | tee "${LOG_FILE}"
+exec > >(tee "${LOG_FILE}") 2>&1
+cd "${ROOT}/ui"
+if command -v stdbuf >/dev/null 2>&1; then
+  exec stdbuf -oL -eL npm run dev
+else
+  exec npm run dev
+fi

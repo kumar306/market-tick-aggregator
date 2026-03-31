@@ -70,7 +70,6 @@ func (sm *StreamManager) Broadcast(msgType, key string, msg []byte) {
 	defer sm.mu.RUnlock()
 
 	if _, ok := sm.Clients[msgType][key]; !ok {
-		logger.Log.Info("No connections present for key", "key", key)
 		return
 	}
 

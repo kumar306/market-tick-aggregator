@@ -9,22 +9,22 @@ kafka:
     - "kraken.raw.ticks"
     - "kraken.raw.book"
   consumer_group: normalizer-group-1
-  max_buffer_records: 5000
+  max_buffer_records: 1000
   commit_offset_interval_millis: 5000
   cb_consecutive_failures: 5
   cb_timeout_millis: 3000
   cb_req_count: 5
   cb_producer_error_buffer_size: 5000
   backpressure:
-    queue_usage_high_threshold: 0.8
-    queue_usage_low_threshold: 0.4
+    queue_usage_high_threshold: 0.4
+    queue_usage_low_threshold: 0.2
     threshold_active_millis: 5000
     cooldown_time_millis: 5000
   wal_path: ./wal.log
   wal_max_entries: 1000
 
 worker_count: 16
-worker_queue_size: 1000
+worker_queue_size: 2000
 redis:
   ttl_minutes: 15
   cb_req_count: 10

@@ -24,13 +24,11 @@ fi
 TS="$(date +%Y%m%d-%H%M%S)"
 LOG_FILE="${LOG_DIR}/${MODULE}-${TS}.log"
 
-# start line buffered output and write to console and logfile
 echo "[${MODULE}] starting; log=${LOG_FILE}"
-(
-  cd "${ROOT}/${MODULE}"
-  if command -v stdbuf >/dev/null 2>&1; then
-    stdbuf -oL -eL go run .
-  else
-    go run .
-  fi
-) 2>&1 | tee "${LOG_FILE}"
+exec > >(tee "${LOG_FILE}") 2>&1
+cd "${ROOT}/${MODULE}"
+if command -v stdbuf >/dev/null 2>&1; then
+  exec stdbuf -oL -eL go run .
+else
+  exec go run .
+fi

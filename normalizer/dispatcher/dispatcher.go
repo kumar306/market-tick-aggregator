@@ -11,7 +11,6 @@ import (
 	"shared/metrics"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/twmb/franz-go/pkg/kgo"
@@ -19,42 +18,6 @@ import (
 
 var DispatchTestingHook func()
 var WorkerTestingHook func()
-
-// for controlled access to the worker partition map
-// written by dispatcher and read by backpressure controller
-type WorkerPartitionAssignments struct {
-	mu sync.RWMutex
-	// map worker id to map of topics and its partition ids
-	workerPartitionMap map[int]map[string]map[int32]bool
-}
-
-func (w *WorkerPartitionAssignments) GetPartitionAssignments(workerId int) map[string]map[int32]bool {
-	w.mu.RLock()
-	defer w.mu.RUnlock()
-	parts := w.workerPartitionMap[workerId]
-	return parts
-}
-
-func (w *WorkerPartitionAssignments) SetPartitionAssignments(workerId int, topic string, partition int32) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	if _, ok := w.workerPartitionMap[workerId]; !ok {
-		logger.Log.Info("WorkerPartitionAssignments - Creating new worker map for worker id as it doesnt exist", "id", workerId)
-		w.workerPartitionMap[workerId] = make(map[string]map[int32]bool)
-	}
-	if _, ok := w.workerPartitionMap[workerId][topic]; !ok {
-		logger.Log.Info("WorkerPartitionAssignments - Creating new topic map for worker id as it doesnt exist", "id", workerId)
-		w.workerPartitionMap[workerId][topic] = make(map[int32]bool)
-	}
-
-	logger.Log.Info("WorkerPartitionAssignments - setting partition entry for worker", "id", workerId, "topic", topic, "partition", partition)
-	w.workerPartitionMap[workerId][topic][partition] = true
-
-}
-
-var WorkerPartitionAssignmentsHandler *WorkerPartitionAssignments = &WorkerPartitionAssignments{
-	workerPartitionMap: make(map[int]map[string]map[int32]bool),
-}
 
 /*
 goroutine which reads from dispatch channel
