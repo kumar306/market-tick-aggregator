@@ -32,7 +32,7 @@ func Init(ctx context.Context, cfg *constants.KafkaConfig) {
 			kgo.ConsumerGroup(cfg.ConsumerGroup),
 			kgo.MaxBufferedRecords(cfg.MaxBufferRecords),
 			kgo.DisableAutoCommit(),
-			kgo.WithLogger(kgo.BasicLogger(os.Stdout, kgo.LogLevelDebug, nil)),
+			kgo.WithLogger(kgo.BasicLogger(os.Stdout, kgo.LogLevelWarn, nil)),
 		)
 		Client = client
 		DownstreamTopic = cfg.TopicConfig.Downstream
@@ -102,14 +102,13 @@ func StartConsumer(ctx context.Context, dispatchChannel chan *kgo.Record) {
 			select {
 			case dispatchChannel <- rec:
 				metrics.Orderbook_ConsumerSuccessesTotal.WithLabelValues(string(rec.Partition)).Inc()
-				logger.Log.Info("Fetched record from consumer", "partition", rec.Partition, "offset", rec.Offset)
 			case <-ctx.Done():
 				return
 			}
 		})
 
 		fetches.EachError(func(topic string, partition int32, err error) {
-			logger.Log.Info("Error occurred in fetch", "topic", topic, "partition", partition, "err", err)
+			logger.Log.Error("Error occurred in fetch", "topic", topic, "partition", partition, "err", err)
 			metrics.Orderbook_ConsumerErrorsTotal.WithLabelValues(string(partition)).Inc()
 		})
 	}

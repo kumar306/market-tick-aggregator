@@ -27,8 +27,6 @@ func ProduceAsync(ctx context.Context, topic string, msg *constants.PipelineMess
 
 	// if file reaches 80 percent capacity (have a cap), then signal backpressure - pause fetch partitions
 
-	logger.Log.Info("Ready to publish normalized record to downstream services", "name", msg.Exchange, "channel", msg.Channel, "topic", topic, "partition", msg.Record.Partition, "offset", msg.Record.Offset, "key", string(key))
-
 	start := time.Now()
 
 	record := &kgo.Record{
@@ -48,11 +46,8 @@ func ProduceAsync(ctx context.Context, topic string, msg *constants.PipelineMess
 			producerErrors <- err
 
 		} else {
-			logger.Log.Info("Published record to kafka topic", "name", msg.Exchange, "channel", msg.Channel, "topic", topic, "partition", msg.Record.Partition, "offset", msg.Record.Offset)
-
 			// mark the record for commit.
 			Client.MarkCommitRecords(msg.Record)
-			logger.Log.Info("Marked record for commit", "name", msg.Exchange, "channel", msg.Channel, "topic", topic, "partition", msg.Record.Partition, "offset", msg.Record.Offset)
 
 			producerErrors <- nil
 

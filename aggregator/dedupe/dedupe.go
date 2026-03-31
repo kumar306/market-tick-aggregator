@@ -53,7 +53,6 @@ func InitRedis(redisConfig *constants.RedisConfig) {
 		},
 	})
 
-	logger.Log.Info("Initialised Redis Client")
 }
 
 func ConstructDedupeKey(topic string, partition int32, offset int64) string {
@@ -73,7 +72,7 @@ func MarkForDedupe(ctx context.Context, key string) error {
 		return nil
 	}
 
-	ok, err := RedisBreaker.Execute(func() (interface{}, error) {
+	_, err := RedisBreaker.Execute(func() (interface{}, error) {
 		return Rdb.SetNX(ctx, key, 1, Ttl).Result()
 	})
 
@@ -87,11 +86,6 @@ func MarkForDedupe(ctx context.Context, key string) error {
 		}
 
 		return logger.LogAndWrap("Error when setting dedupe key in redis", err, "key", key)
-	}
-
-	if !ok.(bool) {
-		// key exists
-		logger.Log.Warn("Key already exists in redis", "key", key)
 	}
 
 	return nil

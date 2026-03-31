@@ -65,7 +65,6 @@ func RunDispatcher(ctx context.Context, dispatchChannel chan *kgo.Record, worker
 			}
 
 		case <-ctx.Done():
-			logger.Log.Info("Received context done - stopping aggregator dispatcher")
 			return
 		}
 	}
@@ -79,7 +78,6 @@ func CreateWorkerChannels(workerCount int, chanSize int) []chan *constants.Dispa
 		workerChannels = append(workerChannels, ch)
 	}
 
-	logger.Log.Info("Created worker channels", "count", workerCount)
 	return workerChannels
 }
 
@@ -90,7 +88,6 @@ func StartWorkerChannels(ctx context.Context, workerChannels []chan *constants.D
 }
 
 func startWorker(ctx context.Context, idx int, ch chan *constants.DispatchRecord, cfg []*constants.WindowConfig, client utils.KafkaClient) {
-	logger.Log.Info("Starting worker.", "workerIdx", idx)
 	worker := worker.NewWorker(idx, ch, cfg)
 	worker.Run(ctx, client)
 }

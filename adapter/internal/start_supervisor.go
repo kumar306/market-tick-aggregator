@@ -3,7 +3,6 @@ package internal
 import (
 	"context"
 	"market-adapter/constants"
-	"shared/logger"
 	"sync"
 )
 
@@ -17,11 +16,6 @@ func StartSupervisor(supervisor *constants.Supervisor,
 	// keep trying to acquire the connection - until max retries
 	// each feed has its configured retry limit and backoff time
 
-	logger.Log.Info("Starting supervisor for stream",
-		"name", feed.Name,
-		"channel", stream.Channel,
-		"url", feed.Url)
-
 	// pass into spawned goroutines to handle shutdown
 	ctx, cancel := context.WithCancel(parentCtx)
 	defer cancel()
@@ -33,5 +27,4 @@ func StartSupervisor(supervisor *constants.Supervisor,
 	wg.Add(1)
 	go SupervisorLoop(feed, stream, supervisor, wg)
 	wg.Wait()
-	logger.Log.Info("Supervisor shut down", "name", feed, "stream", stream)
 }

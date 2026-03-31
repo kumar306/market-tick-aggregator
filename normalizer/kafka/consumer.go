@@ -51,7 +51,7 @@ func Init(ctx context.Context, cfg *constants.KafkaConfig) *kgo.Client {
 		kgo.AutoCommitMarks(),
 		kgo.ConsumerGroup(cfg.ConsumerGroup),
 		kgo.MaxBufferedRecords(cfg.MaxBufferRecords),
-		kgo.WithLogger(kgo.BasicLogger(os.Stdout, kgo.LogLevelDebug, nil)),
+		kgo.WithLogger(kgo.BasicLogger(os.Stdout, kgo.LogLevelWarn, nil)),
 	)
 
 	Client = client
@@ -212,18 +212,14 @@ func ConsumerLoop(ctx context.Context, client *kgo.Client, dispatchChannel chan 
 		default:
 		}
 
-		logger.Log.Info("KafkaConsumer:: Init fetch upstream records")
 		fetches := client.PollFetches(ctx)
 		if fetches.IsClientClosed() {
 			logger.Log.Info("Kafka client is closed upon poll fetch, returning")
 			return
 		}
 
-		logger.Log.Info("KafkaConsumer:: End fetch records from upstream..")
-
 		fetches.EachRecord(func(rec *kgo.Record) {
 			// in event that channel is blocked, avoid hanging upon shutdown
-			logger.Log.Info("Reading record from consumer", "topic", rec.Topic, "partition", rec.Partition, "offset", rec.Offset)
 			select {
 			case dispatchChannel <- rec:
 				metrics.Normalizer_ConsumerMessagesTotal.WithLabelValues(rec.Topic, strconv.Itoa(int(rec.Partition))).Inc()

@@ -146,17 +146,10 @@ func (c *CBSubscriber) Subscribe(conn *websocket.Conn) error {
 
 	var CBSubscribeResponse CBSubscribeResponse
 
-	logger.Log.Info("Sending subscribe",
-		"channel", c.Channel,
-		"productIds", c.ProductIds,
-	)
-
 	err := utils.SendAndAckSubscribe(conn, CBSubscribeRequest, &CBSubscribeResponse, CoinbaseType, c.Channel)
 	if err != nil {
 		return logger.LogAndWrap("Error when writing ping message to coinbase", err, "feed", CoinbaseType)
 	}
-
-	logger.Log.Info("Successfully subscribed to Coinbase", "channel", c.Channel, "productIds", c.ProductIds)
 
 	return nil
 }

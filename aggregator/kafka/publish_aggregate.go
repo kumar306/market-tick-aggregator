@@ -12,8 +12,6 @@ import (
 )
 
 func PublishAggregate(aggregate *generated.AggregatedTick, client utils.KafkaClient) {
-	logger.Log.Info("Ready to publish aggregate to Kafka")
-
 	val, err := proto.Marshal(aggregate)
 	if err != nil {
 		logger.Log.Error("Error in marshalling aggregate to bytes", "err", err)
@@ -33,7 +31,6 @@ func PublishAggregate(aggregate *generated.AggregatedTick, client utils.KafkaCli
 			metrics.Aggregator_ProduceFailuresTotal.WithLabelValues(aggregate.Exchange, aggregate.Channel, aggregate.Symbol, string(rec.Partition)).Inc()
 			ProducerErrors <- err
 		} else {
-			logger.Log.Info("Produce success for aggregated ticks", "exchange", aggregate.Exchange, "symbol", aggregate.Symbol, "start_time", aggregate.StartTsMs, "end_time", aggregate.EndTsMs)
 			metrics.Aggregator_ProduceSuccessesTotal.WithLabelValues(aggregate.Exchange, aggregate.Channel, aggregate.Symbol, string(rec.Partition)).Inc()
 			ProducerErrors <- nil
 		}
@@ -46,7 +43,6 @@ func MonitorKafkaBreaker(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			logger.Log.Info("Received ctx done.. exiting monitor kafka breaker loop")
 			return
 		case err := <-ProducerErrors:
 

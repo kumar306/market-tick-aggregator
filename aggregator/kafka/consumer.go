@@ -33,7 +33,7 @@ func Init(ctx context.Context, cfg *constants.KafkaConfig) {
 			kgo.ConsumeTopics(cfg.TopicConfig.Upstream),
 			kgo.ConsumerGroup(cfg.ConsumerGroup),
 			kgo.MaxBufferedRecords(cfg.MaxBufferRecords),
-			kgo.WithLogger(kgo.BasicLogger(os.Stdout, kgo.LogLevelDebug, nil)),
+			kgo.WithLogger(kgo.BasicLogger(os.Stdout, kgo.LogLevelWarn, nil)),
 			kgo.AutoCommitMarks(),
 		)
 		Client = client
@@ -60,9 +60,6 @@ func Init(ctx context.Context, cfg *constants.KafkaConfig) {
 				failureRatio := float64(counts.TotalFailures) / float64(counts.Requests)
 				return failureRatio >= cfg.CBFailureRatio
 			},
-			OnStateChange: func(name string, from, to gobreaker.State) {
-				logger.Log.Info("Aggregator kafka cb changed states", "from", from, "to", to)
-			},
 		})
 
 		ProducerErrors = make(chan error, cfg.ProduceErrorBufferSize)
@@ -83,7 +80,6 @@ func Close() {
 	Client = nil
 	adm = nil
 	KafkaBreaker = nil
-	logger.Log.Info("Kafka client closed.")
 }
 
 func StartConsumer(ctx context.Context, dispatchChannel chan *kgo.Record) {
@@ -93,21 +89,18 @@ func StartConsumer(ctx context.Context, dispatchChannel chan *kgo.Record) {
 	for {
 		select {
 		case <-ctx.Done():
-			logger.Log.Info("Received done event in kafka consumer loop. Exiting")
 			return
 		default:
 		}
 
 		fetches := Client.PollFetches(ctx)
 		if fetches.IsClientClosed() {
-			logger.Log.Info("Kafka client is closed upon poll fetch, returning")
 			return
 		}
 
 		fetches.EachRecord(func(rec *kgo.Record) {
 			select {
 			case dispatchChannel <- rec:
-				logger.Log.Info("Fetched record from kafka", "partition", rec.Partition, "offset", rec.Offset)
 				metrics.Aggregator_ConsumerSuccessesTotal.WithLabelValues(string(rec.Partition)).Inc()
 			case <-ctx.Done():
 				return
@@ -117,7 +110,7 @@ func StartConsumer(ctx context.Context, dispatchChannel chan *kgo.Record) {
 		})
 
 		fetches.EachError(func(topic string, partition int32, err error) {
-			logger.Log.Info("Error occurred in fetch", "topic", topic, "partition", partition, "err", err)
+			logger.Log.Error("Error occurred in fetch", "topic", topic, "partition", partition, "err", err)
 			metrics.Aggregator_ConsumerErrorsTotal.WithLabelValues(string(partition)).Inc()
 		})
 	}

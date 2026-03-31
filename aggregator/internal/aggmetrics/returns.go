@@ -3,7 +3,6 @@ package aggmetrics
 import (
 	"market-aggregator/proto/generated"
 	"math"
-	"shared/logger"
 )
 
 // calculate how much the price moved in the current window
@@ -36,8 +35,6 @@ func (r *Returns) Update(t *generated.NormalizedTick) {
 	r.SimpleReturn += (t.Price - r.PrevPrice) / r.PrevPrice
 	r.LogReturn += math.Log(t.Price / r.PrevPrice)
 	r.PrevPrice = t.Price
-
-	logger.Log.Info("Updating Returns", "simple_return", r.SimpleReturn, "log_return", r.LogReturn, "exchange", t.Exchange, "symbol", t.Symbol, "event_time", t.EventTsMillis)
 }
 
 func (r *Returns) Apply(a *generated.AggregatedTick) {

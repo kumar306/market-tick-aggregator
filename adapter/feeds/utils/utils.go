@@ -34,8 +34,6 @@ func SendAndAckSubscribe[T any](conn *websocket.Conn, subscribeReq interface{}, 
 		return logger.LogAndWrap("Error in parsing subscribe response", err, "feed", feed, "stream", channel)
 	}
 
-	logger.Log.Info("Received subscription response for feed", "feed", feed, "res", subscribeRes)
-
 	return nil
 }
 
@@ -84,8 +82,6 @@ func Normalize(raw []byte, symbolKey, feed, channel string) ([]byte, []byte, err
 		logger.Log.Error("Error in marshalling normalized trade message", "feed", feed, "channel", channel, "error", marshalErr)
 		return nil, nil, marshalErr
 	}
-
-	logger.Log.Info("Normalized trade response for message", "name", feed, "symbol", symbol)
 
 	return []byte(symbol), normalized, nil
 }

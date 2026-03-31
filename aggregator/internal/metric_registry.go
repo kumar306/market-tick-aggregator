@@ -3,7 +3,6 @@ package internal
 import (
 	"market-aggregator/constants"
 	"market-aggregator/internal/aggmetrics"
-	"shared/logger"
 	"sync"
 )
 
@@ -66,7 +65,6 @@ func InitMetricRegistry() {
 
 		for _, pair := range pairs {
 			MetricCtorRegistry[pair.id] = pair.ctor
-			logger.Log.Info("Registered metric constructor for metric", "metric", pair.id)
 		}
 	})
 }

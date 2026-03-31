@@ -13,10 +13,6 @@ import (
 var RetryHook func()
 
 func Connect(feed *constants.Feed, streamCfg *constants.Stream, supervisor *constants.Supervisor, isRetry bool) {
-	logger.Log.Info("Attempting to make connection to feed",
-		"name", feed.Name,
-		"channel", streamCfg.Channel,
-		"url", feed.Url)
 	conn, _, err := websocket.DefaultDialer.Dial(feed.Url, nil)
 	if err != nil {
 		logger.Log.Error("Error when connecting to server. Retry queued", "err", err)
@@ -28,7 +24,6 @@ func Connect(feed *constants.Feed, streamCfg *constants.Stream, supervisor *cons
 		}
 
 		if !isRetry {
-			logger.Log.Info("Supervisor backing off after queueing retry", "feed", feed.Name, "channel", streamCfg.Channel)
 			supervisor.StatusChan <- constants.StatusBackoff // if fresh retry signal backoff
 		}
 		return
@@ -52,10 +47,6 @@ func Connect(feed *constants.Feed, streamCfg *constants.Stream, supervisor *cons
 	// create a metric to track last pong time
 	conn.SetPongHandler(func(appData string) error {
 		supervisor.LastPongTime = time.Now()
-		logger.Log.Debug("Received pong",
-			"name", feed.Name,
-			"url", feed.Url,
-			"last_pong_time", supervisor.LastPongTime)
 		metrics.Adapter_LastPongTimes.WithLabelValues(feed.Name).Set(float64(time.Since(supervisor.LastPongTime) * time.Second))
 		return nil
 	})
@@ -75,13 +66,6 @@ func Connect(feed *constants.Feed, streamCfg *constants.Stream, supervisor *cons
 
 	supervisor.Wg.Add(1)
 	go MonitorConnection(supervisor, streamCfg, ticker)
-
-	logger.Log.Info("Started the supervisor loops for feed after establishing connection",
-		"name", feed.Name,
-		"url", feed.Url,
-		"channel", streamCfg.Channel,
-		"heartbeat_interval", streamCfg.HearbeatInterval,
-		"pong_timeout", streamCfg.PongTimeout)
 
 	// inc metric for supervisor count
 	metrics.Adapter_SupervisorCount.Inc()

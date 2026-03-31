@@ -82,13 +82,13 @@ func main() {
 		c.FeedMap[feed.Name] = feed
 	}
 
-	logger.Log.Info("Supervisors startup execution initiated")
+	logger.Log.Info("Adapter started", "feeds", len(c.Feeds))
 
 	// blocks until SIGTERM
 	<-ctx.Done()
-	logger.Log.Info("Received termination signal. Stopping supervisors and its processes gracefully.")
+	logger.Log.Info("Received termination signal. Stopping adapter supervisors gracefully.")
 	wg.Wait()
-	logger.Log.Info("Stopped all supervisors and its processes")
+	logger.Log.Info("Adapter stopped")
 
 	// inc app shutdown metric
 	metrics.Adapter_AppShutdowns.Inc()
@@ -96,7 +96,7 @@ func main() {
 
 func exposeMetrics() {
 	http.Handle("/metrics", promhttp.HandlerFor(&metrics.Registry, promhttp.HandlerOpts{}))
-	logger.Log.Info("Exposed adapter metrics endpoint at 2112", "url", ":2112/metrics")
+	logger.Log.Info("Exposed adapter metrics endpoint", "url", ":2112/metrics")
 	err := http.ListenAndServe("0.0.0.0:2112", nil)
 	if err != nil {
 		logger.Log.Error("Adapter metrics have stopped", "err", err)

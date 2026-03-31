@@ -48,7 +48,6 @@ func SequenceOrderer(
 
 	lastSeqId := symbolState.LastSeqId
 	symbolState.LastSeqId = msg.SeqId
-	logger.Log.Info("Got the last sequence Id", "seqId", msg.SeqId)
 
 	// get the last seqId > current seq id
 	if msg.SeqId < lastSeqId {

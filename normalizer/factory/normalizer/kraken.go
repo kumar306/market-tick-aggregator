@@ -92,7 +92,6 @@ func (k *KrakenBookNormalizer) Normalize(msg *constants.PipelineMessage) ([]byte
 		}
 
 		normalizedMsg.EventTimeMillis = parsedTime.UnixMilli()
-		logger.Log.Info("Received the kraken message", "msg", msg, "parsedTime", parsedTime, "proto_gen_message", &normalizedMsg)
 	}
 
 	protoStream, err := proto.Marshal(&normalizedMsg)

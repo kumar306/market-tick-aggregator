@@ -131,7 +131,6 @@ func (b *Batcher[T]) Add(item BatchItem[T]) {
 // flush on items size exceeds limit
 func (b *Batcher[T]) HandleBatchAndFlush(item *BatchItem[T]) error {
 	b.items = append(b.items, item)
-	logger.Log.Info("Current size of batcher", "length", len(b.items), "pipeline", b.pipeline)
 	metrics.Persistence_BatchSize.WithLabelValues(b.pipeline).Observe(float64(len(b.items)))
 
 	if len(b.items) >= b.batchSize {
@@ -139,7 +138,6 @@ func (b *Batcher[T]) HandleBatchAndFlush(item *BatchItem[T]) error {
 			logger.Log.Error("Error in batcher flush", "error", err, "pipeline", b.pipeline)
 			return err
 		}
-		logger.Log.Info("Flush occurred and reset batch size to 0", "pipeline", b.pipeline)
 	}
 
 	return nil

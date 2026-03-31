@@ -124,8 +124,6 @@ func (b *BinanceSubscriber) Subscribe(conn *websocket.Conn) error {
 		return logger.LogAndWrap("Got error response from Binance upon subscription", nil, "code", okResp.Code, "msg", okResp.Msg)
 	}
 
-	logger.Log.Info("Successfully subscribed to Binance stream", "channel", b.Channel)
-
 	return nil
 }
 

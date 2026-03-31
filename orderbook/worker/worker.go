@@ -127,7 +127,6 @@ func (w *Worker) Run() {
 func (w *Worker) ProcessBookUpdate(rec *constants.DispatchRecord) {
 	bufferKey := rec.Exchange + ":" + rec.Symbol
 
-	logger.Log.Info("Received process book update for key", "key", bufferKey, "partition", rec.Partition, "offset", rec.Offset)
 	state, exists := w.OrderbookStateMap[bufferKey]
 	if !exists {
 		// if the worker doesnt have an order book for the incoming symbol in memory,
@@ -521,7 +520,6 @@ func (w *Worker) ProcessUpdateAck() {
 			logger.Log.Info("Received ctx done in process update ack. Returning", "worker", w.ID)
 			return
 		case updateAck := <-w.UpdateAckChannel:
-			logger.Log.Info("Received ack from update ack channel post commit", "worker", w.ID, "epoch", updateAck.Epoch, "offsets", updateAck.PartitionOffsets)
 			for _, st := range w.OrderbookStateMap {
 				copiedMap := make(map[int32]int64)
 				for partition, offset := range updateAck.PartitionOffsets {

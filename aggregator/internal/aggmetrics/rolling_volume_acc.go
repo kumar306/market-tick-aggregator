@@ -3,7 +3,6 @@ package aggmetrics
 import (
 	"market-aggregator/constants"
 	"market-aggregator/proto/generated"
-	"shared/logger"
 )
 
 // for rolling volume and volume acceleration metrics
@@ -57,7 +56,6 @@ func (r *RollingVolume) Update(t *generated.NormalizedTick) {
 	r.LastBucketTsMs += steps * r.BucketSizeMs
 	r.VolumeBuckets[r.Idx] += t.Volume
 	r.RunningTotal += t.Volume
-	logger.Log.Info("Updating Rolling Volume Acceleration", "idx", r.Idx, "running_total", r.RunningTotal, "last_bucket_ts_ms", r.LastBucketTsMs, "exchange", t.Exchange, "symbol", t.Symbol, "event_time", t.EventTsMillis)
 }
 
 func (r *RollingVolume) Apply(a *generated.AggregatedTick) {

@@ -3,7 +3,6 @@ package flush
 import (
 	"context"
 	"market-aggregator/constants"
-	"shared/logger"
 	"time"
 )
 
@@ -14,15 +13,12 @@ func StartFlushSchedulers(ctx context.Context, workerChannels []chan *constants.
 }
 
 func startFlushScheduler(ctx context.Context, workerChannels []chan *constants.DispatchRecord, cfg *constants.WindowConfig) {
-	logger.Log.Info("Starting flush scheduler", "windowID", cfg.Id, "cadencyMs", cfg.FlushCadencyMs)
-
 	ticker := time.NewTicker(time.Duration(cfg.FlushCadencyMs) * time.Millisecond)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ctx.Done():
-			logger.Log.Info("Received ctx done.. terminating flush scheduler goroutine", "window ID", cfg.Id)
 			return
 		case t := <-ticker.C:
 			flushTs := t.UnixMilli()

@@ -22,7 +22,6 @@ func OffsetCommitter(ctx context.Context, gapMillis int) {
 	for {
 		select {
 		case <-ctx.Done():
-			logger.Log.Info("Received context done.. shutting down aggregator kafka commit loop")
 			finalCommitCtx, cancel := context.WithTimeout(context.Background(), commitTimeout)
 			if err := Client.CommitMarkedOffsets(finalCommitCtx); err != nil {
 				logger.Log.Error("Final commit failed", "error", err)
@@ -38,7 +37,6 @@ func OffsetCommitter(ctx context.Context, gapMillis int) {
 				logger.Log.Error("Aggregator CommitMarkedOffsets failed", "error", err)
 				metrics.Aggregator_CommitOffsetErrorsTotal.Inc()
 			} else {
-				logger.Log.Info("Aggregator CommitMarkedOffsets ok", "latencyMillis", time.Since(start).Milliseconds())
 				listCtx, listCancel := context.WithTimeout(context.Background(), listOffsetsTimeout)
 				offsets, err := adm.ListCommittedOffsets(listCtx, UpstreamTopic)
 				listCancel()

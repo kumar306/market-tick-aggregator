@@ -20,7 +20,6 @@ func ReadMessages(conn *websocket.Conn, ctx context.Context, wg *sync.WaitGroup,
 	for {
 		select {
 		case <-ctx.Done():
-			logger.Log.Info("Closing read loop. Returning", "name", name)
 			return
 		default:
 			_, msg, err := conn.ReadMessage()
@@ -30,7 +29,6 @@ func ReadMessages(conn *websocket.Conn, ctx context.Context, wg *sync.WaitGroup,
 			}
 
 			ring.Push(msg)
-			logger.Log.Info("Received message for feed", "name", name, "msg", string(msg))
 
 		}
 	}
@@ -50,7 +48,6 @@ func SendHeartbeat(conn *websocket.Conn,
 		case <-ticker.C:
 			handler.Pinger.Ping(conn, handler.Mu)
 		case <-ctx.Done():
-			logger.Log.Info("Shutting down heartbeat loop. Returning", "name", name)
 			return
 		}
 	}
@@ -73,7 +70,6 @@ func MonitorConnection(
 			}
 
 		case <-supervisor.Ctx.Done():
-			logger.Log.Info("Shutting down monitor loop", "name", streamCfg.Name)
 			return
 		}
 	}

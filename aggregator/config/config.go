@@ -38,9 +38,6 @@ func GetConfig(cfgFilePath string) (*constants.Config, error) {
 }
 
 func Validate(cfg *constants.Config) error {
-
-	logger.Log.Info("Starting aggregator config validation")
-
 	if cfg.WorkerCount <= 0 {
 		return logger.LogAndWrap("worker_count must be > 0", nil)
 	}
@@ -120,11 +117,5 @@ func Validate(cfg *constants.Config) error {
 			return logger.LogAndWrap("Bucket size ms should be <= window duration ms", nil)
 		}
 	}
-
-	logger.Log.Info("Aggregator config validated successfully",
-		"workers", cfg.WorkerCount,
-		"windows", len(cfg.WindowConfig),
-	)
-
 	return nil
 }

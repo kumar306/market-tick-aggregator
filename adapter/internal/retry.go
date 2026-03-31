@@ -12,7 +12,6 @@ func Retry(feed *constants.Feed, streamCfg *constants.Stream, supervisor *consta
 	for retry := 0; retry < streamCfg.MaxRetries; retry++ {
 		select {
 		case <-supervisor.Ctx.Done():
-			logger.Log.Info("Stopping retry for feed", "name", streamCfg.Name)
 			return
 		default:
 			// exponential backoff and jitter

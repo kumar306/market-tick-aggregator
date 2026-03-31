@@ -48,7 +48,6 @@ func (w *Worker) Run(ctx context.Context, client utils.KafkaClient) {
 	for {
 		select {
 		case <-ctx.Done():
-			logger.Log.Info("Received context shutdown. Stopping aggregator worker channel", "idx", w.ID)
 			return
 		case dispatchRec, ok := <-w.Channel:
 			if !ok {
@@ -61,7 +60,7 @@ func (w *Worker) Run(ctx context.Context, client utils.KafkaClient) {
 			case constants.FlushEvent:
 				w.FlushWindow(ctx, dispatchRec, client)
 			default:
-				logger.Log.Info("Aggregator worker event received didn't match any known event", "event", dispatchRec.Event)
+				logger.Log.Warn("Aggregator worker event received didn't match any known event", "event", dispatchRec.Event)
 			}
 		}
 	}
@@ -76,12 +75,6 @@ func (w *Worker) ProcessTick(ctx context.Context,
 	// if not present, wire it and create all metrics - from the wired registry
 	// else skip
 	// update all window metrics
-	logger.Log.Info("Received tick",
-		"worker", w.ID,
-		"bufferKey", dispatchRec.BufferKey,
-		"partition", dispatchRec.Record.Partition,
-		"offset", dispatchRec.Record.Offset)
-
 	start := time.Now().UnixMilli()
 
 	// dedupe mark occurs only after publish.
@@ -103,7 +96,6 @@ func (w *Worker) ProcessTick(ctx context.Context,
 
 	if dedupeExists {
 		metrics.Aggregator_DedupeHitsTotal.WithLabelValues(dispatchRec.Exchange, dispatchRec.Symbol).Inc()
-		logger.Log.Warn("Duplicate message detected. Skipping", "key", dedupeKey)
 		return
 	}
 
@@ -118,11 +110,6 @@ func (w *Worker) ProcessTick(ctx context.Context,
 		// wire up the state
 		// create window objects. for each window object, wire up the metrics
 		// get window objects created via a window registry
-		logger.Log.Info("Worker doesnt contain entry for bufferKey. Creating entry", "workerId", w.ID,
-			"bufferKey", dispatchRec.BufferKey,
-			"partition", dispatchRec.Record.Partition,
-			"offset", dispatchRec.Record.Offset)
-
 		windowState := &WindowState{
 			Windows:  internal.BuildWindows(w.WindowConfig),
 			Exchange: dispatchRec.Tick.Exchange,
@@ -167,11 +154,6 @@ func (w *Worker) ProcessTick(ctx context.Context,
 		kafka.Client.MarkCommitRecords(dispatchRec.Record)
 	}
 
-	logger.Log.Info("Completed update for tick",
-		"worker", w.ID,
-		"bufferKey", dispatchRec.BufferKey,
-		"partition", dispatchRec.Record.Partition,
-		"offset", dispatchRec.Record.Offset)
 }
 
 func (w *Worker) FlushWindow(ctx context.Context, flushRec *constants.DispatchRecord, client utils.KafkaClient) {
@@ -181,14 +163,11 @@ func (w *Worker) FlushWindow(ctx context.Context, flushRec *constants.DispatchRe
 	// post into kafka aggregated_ticks
 	cfg := flushRec.WindowConfig
 
-	logger.Log.Info("Preparing to flush for window", "workerId", w.ID, "ID", cfg.Id, "Duration Ms", cfg.DurationMs, "Flush Cadency Ms", cfg.FlushCadencyMs, "Flush Timestamp", time.UnixMilli(flushRec.FlushTsMs))
-
 	// per symbol window, create an aggregated tick,
 	// enrich it with its window metric information
 	// then persist to kafka
 
 	for _, windowState := range w.SymbolState {
-		logger.Log.Info("Preparing flush for worker state", "exchange", windowState.Exchange, "symbol", windowState.Symbol)
 		start := time.Now().UnixMilli()
 
 		window := windowState.Windows[cfg.Id]

@@ -85,7 +85,6 @@ func (p *Pipeline[U]) Process(rec *kgo.Record) {
 		logger.Log.Error("Error in pipeline processing for record", "error", err)
 		return
 	}
-	logger.Log.Info("Adding item to batcher add", "topic", rec.Topic, "partition", rec.Partition, "offset", rec.Offset)
 	p.Batcher.Add(batcher.BatchItem[U]{
 		Item:   u,
 		Record: rec,

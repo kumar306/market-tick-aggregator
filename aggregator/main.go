@@ -71,13 +71,12 @@ func main() {
 	)
 
 	<-ctx.Done()
-
-	logger.Log.Info("Aggregator shutting down..")
+	logger.Log.Info("Aggregator shutting down")
 }
 
 func exposeMetrics() {
 	http.Handle("/metrics", promhttp.HandlerFor(&metrics.Registry, promhttp.HandlerOpts{}))
-	logger.Log.Info("Exposed aggregator metrics endpoint at 2114", "url", ":2114/metrics")
+	logger.Log.Info("Exposed aggregator metrics endpoint", "url", ":2114/metrics")
 	err := http.ListenAndServe("0.0.0.0:2114", nil)
 	if err != nil {
 		logger.Log.Error("Aggregator metrics have stopped", "err", err)
