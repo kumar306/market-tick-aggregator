@@ -19,10 +19,20 @@ type Returns struct {
 }
 
 func (r *Returns) Update(t *generated.NormalizedTick) {
+	if math.IsNaN(t.Price) || math.IsInf(t.Price, 0) || t.Price <= 0 {
+		return
+	}
+
 	if r.PrevPrice == 0 {
 		r.PrevPrice = t.Price
 		return
 	}
+
+	if math.IsNaN(r.PrevPrice) || math.IsInf(r.PrevPrice, 0) || r.PrevPrice <= 0 {
+		r.PrevPrice = t.Price
+		return
+	}
+
 	r.SimpleReturn += (t.Price - r.PrevPrice) / r.PrevPrice
 	r.LogReturn += math.Log(t.Price / r.PrevPrice)
 	r.PrevPrice = t.Price
@@ -31,6 +41,10 @@ func (r *Returns) Update(t *generated.NormalizedTick) {
 }
 
 func (r *Returns) Apply(a *generated.AggregatedTick) {
+	if math.IsNaN(r.SimpleReturn) || math.IsInf(r.SimpleReturn, 0) || math.IsNaN(r.LogReturn) || math.IsInf(r.LogReturn, 0) {
+		return
+	}
+
 	if a.TrendMetrics == nil {
 		a.TrendMetrics = &generated.TrendMetrics{}
 	}

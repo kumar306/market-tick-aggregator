@@ -22,10 +22,18 @@ type Volatility struct {
 
 func (v *Volatility) Update(t *generated.NormalizedTick) {
 	price := t.Price
+	if math.IsNaN(price) || math.IsInf(price, 0) || price <= 0 {
+		return
+	}
 
 	if !v.init {
 		v.prevPrice = price
 		v.init = true
+		return
+	}
+
+	if math.IsNaN(v.prevPrice) || math.IsInf(v.prevPrice, 0) || v.prevPrice <= 0 {
+		v.prevPrice = price
 		return
 	}
 
@@ -47,6 +55,9 @@ func (v *Volatility) Apply(a *generated.AggregatedTick) {
 	}
 
 	volatility := math.Sqrt(v.m2 / float64(v.n-1))
+	if math.IsNaN(volatility) || math.IsInf(volatility, 0) {
+		return
+	}
 
 	if a.VolatilityMetrics == nil {
 		a.VolatilityMetrics = &generated.VolatilityMetrics{}

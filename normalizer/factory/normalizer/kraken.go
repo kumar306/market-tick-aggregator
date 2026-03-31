@@ -21,14 +21,25 @@ func (k *KrakenTickerNormalizer) Normalize(msg *constants.PipelineMessage) ([]by
 			"msg", msg.RawMessage)
 	}
 
+	eventTsMillis := msg.Ts
+	if eventTsMillis == 0 && msg.Record != nil {
+		eventTsMillis = msg.Record.Timestamp.UnixMilli()
+	}
+
 	normalizedMsg := generated.NormalizedTicker{
-		Exchange: msg.Exchange,
-		Channel:  msg.Channel,
-		Symbol:   msg.Symbol,
-		Price:    rawMessage.Data[0].Last,
-		Volume:   rawMessage.Data[0].Volume,
-		Low:      rawMessage.Data[0].Low,
-		High:     rawMessage.Data[0].High,
+		Exchange:      msg.Exchange,
+		Channel:       msg.Channel,
+		Symbol:        msg.Symbol,
+		EventTsMillis: eventTsMillis,
+		Price:         rawMessage.Data[0].Last,
+		Volume:        rawMessage.Data[0].Volume,
+		// Kraken ticker payload does not provide explicit candle open/close values.
+		// Treat the tick price as a micro-candle so downstream windows can derive
+		// proper OHLC across 5s/10s/1m windows from the live ticker stream.
+		Open:  rawMessage.Data[0].Last,
+		Close: rawMessage.Data[0].Last,
+		Low:   rawMessage.Data[0].Low,
+		High:  rawMessage.Data[0].High,
 	}
 
 	protoStream, err := proto.Marshal(&normalizedMsg)
