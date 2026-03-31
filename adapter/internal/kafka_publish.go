@@ -24,7 +24,6 @@ func PublishToKafkaLoop(wg *sync.WaitGroup,
 	for {
 		select {
 		case <-ctx.Done():
-			logger.Log.Info("Shutting down kafka publish loop", "name", name)
 			return
 		default:
 			// read from ring buffer
@@ -40,6 +39,11 @@ func PublishToKafkaLoop(wg *sync.WaitGroup,
 			if normalizeErr != nil {
 				logger.Log.Error("Failed to normalize message for feed", "name", name, "err", normalizeErr, "msg", msg)
 				metrics.Adapter_NormalizerErrors.WithLabelValues(name).Inc()
+				continue
+			}
+
+			// to filter out kraken heartbeat messages. heartbeat returns nil
+			if len(symbol) == 0 || len(normalized) == 0 {
 				continue
 			}
 

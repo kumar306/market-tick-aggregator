@@ -15,6 +15,9 @@ services:
       ZOOKEEPER_TICK_TIME: 2000
     ports:
       - "2181:2181"
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+      - zookeeper_log:/var/lib/zookeeper/log
 
   kafka:
     image: confluentinc/cp-kafka:7.4.4
@@ -108,3 +111,5 @@ services:
 volumes:
   kafka_data:
   pg_data:
+  zookeeper_data:
+  zookeeper_log:

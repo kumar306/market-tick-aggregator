@@ -1,6 +1,7 @@
 package kraken
 
 import (
+	"encoding/json"
 	"market-adapter/constants"
 	"market-adapter/feeds/utils"
 	"shared/logger"
@@ -115,12 +116,14 @@ func (k *KrakenSubscriber) Subscribe(conn *websocket.Conn) error {
 		return logger.LogAndWrap(err.Error(), err, "feed", KrakenType, "channel", k.Channel)
 	}
 
-	logger.Log.Info("Successfully subscribed to Kraken stream", "channel", k.Channel)
-
 	return nil
 }
 
 func (k *KrakenNormalizer) Normalize(raw []byte) ([]byte, []byte, error) {
+	if shouldSkipControlMessage(raw) {
+		return nil, nil, nil
+	}
+
 	return utils.Normalize(raw, SymbolField, KrakenType, k.Channel)
 }
 
@@ -141,4 +144,19 @@ func (k *KrakenFactory) CreateSubscriber(channel string, productIds []string) co
 
 func (k *KrakenFactory) CreatePinger() constants.Pinger {
 	return &KrakenPinger{}
+}
+
+func shouldSkipControlMessage(raw []byte) bool {
+	var msg map[string]interface{}
+	if err := json.Unmarshal(raw, &msg); err != nil {
+		return false
+	}
+
+	channel, _ := msg["channel"].(string)
+	if channel == "heartbeat" {
+		return true
+	}
+
+	method, _ := msg["method"].(string)
+	return method == SubscribeType
 }
