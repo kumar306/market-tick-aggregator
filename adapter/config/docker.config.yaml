@@ -1,0 +1,66 @@
+bootstrap_servers:
+  - kafka:9093
+feeds:
+  - name: binance
+    url: wss://stream.binance.com:9443/ws
+    streams:
+      - name: binance
+        channel: aggTrade
+        productIds:
+          - btcusdt
+        maxRetries: 5
+        heartBeatInterval: 15
+        pongTimeout: 25
+        kafkaTopic: binance.raw.ticks
+        ringBufferSize: 1024
+      - name: binance
+        channel: depth
+        productIds:
+          - btcusdt
+        maxRetries: 5
+        heartBeatInterval: 15
+        pongTimeout: 25
+        kafkaTopic: binance.raw.level2
+        ringBufferSize: 1024
+
+  - name: coinbase
+    url: wss://ws-feed.exchange.coinbase.com
+    streams:
+      - channel: ticker
+        productIds:
+          - BTC-USD
+        maxRetries: 5
+        heartBeatInterval: 15
+        pongTimeout: 25
+        kafkaTopic: coinbase.raw.ticks
+        ringBufferSize: 1024
+      - channel: level2_batch
+        productIds:
+          - BTC-USD
+        maxRetries: 5
+        heartBeatInterval: 15
+        pongTimeout: 25
+        kafkaTopic: coinbase.raw.level2
+        ringBufferSize: 1024
+
+  - name: kraken
+    url: wss://ws.kraken.com/v2
+    streams:
+      - name: kraken
+        channel: ticker
+        productIds:
+          - BTC/USD
+        maxRetries: 5
+        heartBeatInterval: 15
+        pongTimeout: 25
+        kafkaTopic: kraken.raw.ticks
+        ringBufferSize: 1024
+      - name: kraken
+        channel: book
+        productIds:
+          - BTC/USD
+        maxRetries: 5
+        heartBeatInterval: 15
+        pongTimeout: 25
+        kafkaTopic: kraken.raw.book
+        ringBufferSize: 1024

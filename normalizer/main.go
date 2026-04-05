@@ -33,7 +33,11 @@ func main() {
 	go exposeMetrics()
 
 	// load the consumer config
-	cfg, err := config.GetConfig(constants.ConfigFilePath)
+	cfgPath := os.Getenv("CONFIG_FILE")
+	if cfgPath == "" {
+		cfgPath = constants.ConfigFilePath
+	}
+	cfg, err := config.GetConfig(cfgPath)
 	if err != nil {
 		logger.Log.Error("Failed to load normalizer config. Stopping main()", "err", err)
 		os.Exit(1)

@@ -19,12 +19,21 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
+	"strings"
 )
 
 func corsMiddleware() gin.HandlerFunc {
-	allowedOrigins := map[string]struct{}{
-		"http://localhost:3000": {},
-		"http://127.0.0.1:3000": {},
+	allowedOrigins := map[string]struct{}{}
+	origins := os.Getenv("CORS_ALLOWED_ORIGINS")
+	if strings.TrimSpace(origins) == "" {
+		origins = "http://localhost:3000,http://127.0.0.1:3000"
+	}
+	for _, origin := range strings.Split(origins, ",") {
+		trimmed := strings.TrimSpace(origin)
+		if trimmed == "" {
+			continue
+		}
+		allowedOrigins[trimmed] = struct{}{}
 	}
 
 	return func(c *gin.Context) {
@@ -49,15 +58,20 @@ func main() {
 
 	ctx := context.Background()
 	if err := godotenv.Load(constants.EnvFile); err != nil {
-		logger.Log.Error("Error in loading env. Exitting", "error", err)
-		return
+		if os.Getenv("DATABASE_URL") == "" {
+			logger.Log.Warn("Env file not loaded and DATABASE_URL not found in process environment", "error", err)
+		}
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	// load the config
-	cfg, err := config.GetConfig(constants.ConfigFile)
+	cfgPath := os.Getenv("CONFIG_FILE")
+	if cfgPath == "" {
+		cfgPath = constants.ConfigFile
+	}
+	cfg, err := config.GetConfig(cfgPath)
 	if err != nil {
 		logger.Log.Error("Failed to load ui config. Stopping main()", "err", err)
 		os.Exit(1)

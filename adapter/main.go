@@ -37,7 +37,11 @@ func main() {
 
 	// have a map of string ("feed key") to its Config struct
 	var c *constants.Config
-	c, err := config.GetConfig(constants.ConfigFile)
+	cfgPath := os.Getenv("CONFIG_FILE")
+	if cfgPath == "" {
+		cfgPath = constants.ConfigFile
+	}
+	c, err := config.GetConfig(cfgPath)
 	// If any validation errors, return
 	if err != nil {
 		logger.Log.Error("Failed to load feed config. Stopping main()", "err", err)

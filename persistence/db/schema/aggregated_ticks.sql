@@ -1,4 +1,4 @@
-CREATE TABLE aggregated_ticks(
+CREATE TABLE IF NOT EXISTS aggregated_ticks(
 	exchange TEXT NOT NULL,
 	symbol TEXT NOT NULL,
 	window_id TEXT NOT NULL,
@@ -37,10 +37,10 @@ CREATE TABLE aggregated_ticks(
 
 -- create some partitions in advance
 
-CREATE TABLE aggregated_ticks_2026_02_07 
+CREATE TABLE IF NOT EXISTS aggregated_ticks_2026_02_07 
 PARTITION OF aggregated_ticks 
 FOR VALUES FROM ('2026-02-07 00:00:00+00') 
 TO ('2026-02-08 00:00:00+00');
 
 -- create secondary index
-CREATE INDEX idx_agg_ticks_symbol_time ON aggregated_ticks (exchange, symbol, start_ts DESC);
+CREATE INDEX IF NOT EXISTS idx_agg_ticks_symbol_time ON aggregated_ticks (exchange, symbol, start_ts DESC);

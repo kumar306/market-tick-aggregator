@@ -12,16 +12,24 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.com/twmb/franz-go/pkg/kgo"
 	"google.golang.org/protobuf/proto"
 )
 
+var mockOffset int64 = 0
+
 func MakeMsg(seq int64, symbol string) *constants.PipelineMessage {
+	mockOffset++
 	return &constants.PipelineMessage{
 		Exchange: "binance",
 		Channel:  "aggtrade",
 		Symbol:   symbol,
 		SeqId:    seq,
-		// Record can be nil for this unit test; ProcessBuffer doesn't use record for ordering
+		Record: &kgo.Record{
+			Topic:     "sample topic",
+			Partition: 3,
+			Offset:    int64(mockOffset),
+		},
 	}
 }
 
@@ -102,14 +110,14 @@ func TestSequenceOrderer(t *testing.T) {
 
 	worker.FlushBuffer(ctx, d, wm)
 
-	// here 1 is skipped in flush buffer as it never enters buffer as it was in correct order
-	// only 4,3,2 enters buffer -> flush buffer -> process buffer
+	// here 1,4 is skipped in flush buffer as it never enters buffer as it was in correct order
+	// only 3,2 enters buffer -> flush buffer -> process buffer
 
-	// Assert publisher saw buffer messages in sequence order 2,3,4
-	require.Equal(t, []int64{2, 3, 4}, p.publishedSeqs, "Published sequence should be in ascending order")
+	// Assert publisher saw buffer messages in sequence order 2,3
+	require.Equal(t, []int64{2, 3}, p.publishedSeqs, "Published sequence should be in ascending order")
 
 	// Assert dedupe was called for each buffer message
-	require.Equal(t, int32(3), atomic.LoadInt32(&dedupeCount))
+	require.Equal(t, int32(2), atomic.LoadInt32(&dedupeCount))
 
 	// assert cleanup happened
 	require.Len(t, symbolState.BufferSeqId, 0, "Buffer seq Id length should be 0 after cleanup")

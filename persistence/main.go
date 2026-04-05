@@ -23,7 +23,11 @@ import (
 func main() {
 
 	// load the config
-	cfg, err := config.GetConfig(config.ConfigFile)
+	cfgPath := os.Getenv("CONFIG_FILE")
+	if cfgPath == "" {
+		cfgPath = config.ConfigFile
+	}
+	cfg, err := config.GetConfig(cfgPath)
 	if err != nil {
 		logger.Log.Error("Failed to load persistence config. Stopping main()", "err", err)
 		os.Exit(1)

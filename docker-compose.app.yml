@@ -1,0 +1,174 @@
+services:
+  prometheus:
+    volumes:
+      - ./prometheus.app.yml:/etc/prometheus/prometheus.yml
+
+  postgres-init:
+    image: postgres:16
+    container_name: postgres_init
+    env_file:
+      - ./.env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      SCHEMA_DIR: /schema
+      DAYS_AHEAD: ${DAYS_AHEAD:-14}
+      DAYS_BACK: ${DAYS_BACK:-1}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./scripts/init-postgres-container.sh:/scripts/init-postgres-container.sh:ro
+      - ./persistence/db/schema:/schema:ro
+    command: ["bash", "/scripts/init-postgres-container.sh"]
+    restart: "no"
+
+  partition-maintainer:
+    image: postgres:16
+    container_name: partition_maintainer
+    env_file:
+      - ./.env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      DAYS_AHEAD: ${DAYS_AHEAD:-14}
+      DAYS_BACK: ${DAYS_BACK:-1}
+      INTERVAL_SECONDS: ${PARTITION_INTERVAL_SECONDS:-21600}
+    depends_on:
+      postgres-init:
+        condition: service_completed_successfully
+    volumes:
+      - ./scripts/partition-maintainer-container.sh:/scripts/partition-maintainer-container.sh:ro
+    command: ["bash", "/scripts/partition-maintainer-container.sh"]
+    restart: unless-stopped
+
+  adapter:
+    build:
+      context: .
+      dockerfile: adapter/Dockerfile
+    container_name: adapter
+    environment:
+      CONFIG_FILE: ./config/docker.config.yaml
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres-init:
+        condition: service_completed_successfully
+    ports:
+      - "2112:2112"
+    restart: unless-stopped
+
+  normalizer:
+    build:
+      context: .
+      dockerfile: normalizer/Dockerfile
+    container_name: normalizer
+    environment:
+      CONFIG_FILE: ./config/docker.config.yaml
+      REDIS_ADDR: redis:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      postgres-init:
+        condition: service_completed_successfully
+    ports:
+      - "2113:2113"
+    restart: unless-stopped
+
+  aggregator:
+    build:
+      context: .
+      dockerfile: aggregator/Dockerfile
+    container_name: aggregator
+    environment:
+      CONFIG_FILE: ./config/docker.config.yaml
+      REDIS_ADDR: redis:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      postgres-init:
+        condition: service_completed_successfully
+    ports:
+      - "2114:2114"
+    restart: unless-stopped
+
+  orderbook:
+    build:
+      context: .
+      dockerfile: orderbook/Dockerfile
+    container_name: orderbook
+    environment:
+      CONFIG_FILE: ./config/docker.config.yaml
+      REDIS_ADDR: redis:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      postgres-init:
+        condition: service_completed_successfully
+    ports:
+      - "2115:2115"
+    restart: unless-stopped
+
+  persistence:
+    build:
+      context: .
+      dockerfile: persistence/Dockerfile
+    container_name: persistence
+    env_file:
+      - ./.env
+    environment:
+      CONFIG_FILE: ./config/docker.config.yaml
+      POSTGRES_HOST: postgres
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      postgres-init:
+        condition: service_completed_successfully
+    ports:
+      - "2116:2116"
+    restart: unless-stopped
+
+  ui-backend:
+    build:
+      context: .
+      dockerfile: ui-backend/Dockerfile
+    container_name: ui-backend
+    env_file:
+      - ./.env
+    environment:
+      CONFIG_FILE: ./config/docker.config.yaml
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/marketdb
+      CORS_ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      postgres-init:
+        condition: service_completed_successfully
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+  ui:
+    build:
+      context: .
+      dockerfile: ui/Dockerfile
+    container_name: ui
+    depends_on:
+      ui-backend:
+        condition: service_started
+    ports:
+      - "3000:3000"
+    restart: unless-stopped

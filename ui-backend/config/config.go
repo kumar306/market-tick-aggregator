@@ -6,17 +6,10 @@ import (
 	"os"
 	"shared/logger"
 
-	"github.com/joho/godotenv"
 	"gopkg.in/yaml.v3"
 )
 
 func GetConfig(cfgFilePath string) (*constants.Config, error) {
-
-	loadErr := godotenv.Load(constants.EnvFile)
-	if loadErr != nil {
-		return nil, logger.LogAndWrap("Error loading .env file", loadErr)
-	}
-
 	var c constants.Config
 	yamlFile, err := os.ReadFile(cfgFilePath)
 	if err != nil {

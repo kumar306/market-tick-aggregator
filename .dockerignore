@@ -1,0 +1,10 @@
+.git
+.gitignore
+.vscode
+.VSCodeCounter
+logs
+**/node_modules
+**/.next
+**/coverage
+**/*.log
+docs/images

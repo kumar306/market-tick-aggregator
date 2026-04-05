@@ -78,8 +78,11 @@ type DLQMessage struct {
 func GetConfig(cfgFilePath string) (*Config, error) {
 
 	loadErr := godotenv.Load(EnvFile)
-	if loadErr != nil {
-		return nil, logger.LogAndWrap("Error loading .env file", loadErr)
+	if loadErr != nil &&
+		(os.Getenv("POSTGRES_USER") == "" ||
+			os.Getenv("POSTGRES_PASSWORD") == "" ||
+			os.Getenv("POSTGRES_DB") == "") {
+		logger.Log.Warn("Persistence .env file not loaded. Falling back to process environment", "error", loadErr)
 	}
 
 	var c Config

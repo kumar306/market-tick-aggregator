@@ -1,4 +1,4 @@
-CREATE TABLE orderbook_flushes (
+CREATE TABLE IF NOT EXISTS orderbook_flushes (
 	exchange TEXT NOT NULL,
 	symbol TEXT NOT NULL,
 	event_time_millis BIGINT NOT NULL,
@@ -18,7 +18,7 @@ CREATE TABLE orderbook_flushes (
 -- my foreign key here references PK of flushes table and this PK is FK + side, level
 -- and create an index on FK to find all the side, levels for a snapshot quick
 
-CREATE TABLE orderbook_flush_levels(
+CREATE TABLE IF NOT EXISTS orderbook_flush_levels(
 	exchange TEXT NOT NULL,
 	symbol TEXT NOT NULL,
 	event_time TIMESTAMPTZ NOT NULL,
@@ -31,4 +31,4 @@ CREATE TABLE orderbook_flush_levels(
 	ON DELETE CASCADE
 );
 
-CREATE INDEX idx_flushes_symbol_time ON orderbook_flush_levels (exchange, symbol, event_time DESC);
+CREATE INDEX IF NOT EXISTS idx_flushes_symbol_time ON orderbook_flush_levels (exchange, symbol, event_time DESC);

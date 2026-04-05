@@ -1,0 +1,22 @@
+batcher:
+  aggregated_ticks:
+    batch_size: 100
+    interval_ms: 30000
+  orderbook_flushes:
+    batch_size: 200
+    interval_ms: 50000
+
+kafka:
+  bootstrap_servers:
+    - kafka:9093
+  topics:
+    tick: aggregated.ticks
+    book: aggregated.book
+    dlq: persistence.dlq
+  consumer_group: persistence-group-1
+  max_buffer_records: 5000
+  backpressure:
+    queue_usage_high_threshold: 0.85
+    confirm_seconds: 7
+    poll_interval_ms: 1000
+    queue_usage_low_threshold: 0.40

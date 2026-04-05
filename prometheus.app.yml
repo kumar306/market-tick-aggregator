@@ -1,0 +1,13 @@
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  - job_name: "market-data-aggregator"
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - "adapter:2112"
+          - "normalizer:2113"
+          - "aggregator:2114"
+          - "orderbook:2115"
+          - "persistence:2116"

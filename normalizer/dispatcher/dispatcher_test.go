@@ -3,6 +3,7 @@ package dispatcher_test
 import (
 	"context"
 	"market-normalizer/dispatcher"
+	"shared/metrics"
 	"sync"
 	"testing"
 
@@ -15,6 +16,7 @@ import (
 // coinbase ticker ETH-USD all should go to one worker. all cb ticker BTC-USD goes to another worker
 func TestRouting(t *testing.T) {
 
+	metrics.InitNormalizerMetrics()
 	ctx, _ := context.WithCancel(context.Background())
 	dispatchChannel := make(chan *kgo.Record, 1000)
 	workerChannels := dispatcher.CreateWorkerChannels(8, 1000)

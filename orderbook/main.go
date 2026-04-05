@@ -22,7 +22,11 @@ import (
 
 func main() {
 	// load the config
-	cfg, err := config.GetConfig(constants.ConfigFile)
+	cfgPath := os.Getenv("CONFIG_FILE")
+	if cfgPath == "" {
+		cfgPath = constants.ConfigFile
+	}
+	cfg, err := config.GetConfig(cfgPath)
 	if err != nil {
 		logger.Log.Error("Failed to load orderbook config. Stopping main()", "err", err)
 		os.Exit(1)
