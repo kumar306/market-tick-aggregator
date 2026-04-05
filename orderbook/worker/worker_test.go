@@ -297,3 +297,34 @@ func TestFlushBookSendsAckOffsets(t *testing.T) {
 		t.Fatalf("expected flush ack to be sent")
 	}
 }
+
+func TestBestLevelsForFlushUsesActualBestPrices(t *testing.T) {
+	initMetrics()
+
+	st := &SymbolState{
+		Exchange:            "binance",
+		Symbol:              "BTCUSDT",
+		Orderbook:           book.NewOrderBook(),
+		LastCommittedOffset: map[int32]int64{},
+		LastProcessedOffset: map[int32]int64{},
+	}
+
+	st.Orderbook.Bids.Upsert(100, 1)
+	st.Orderbook.Bids.Upsert(101, 1)
+	st.Orderbook.Bids.Upsert(102, 1)
+	st.Orderbook.Asks.Upsert(103, 1)
+	st.Orderbook.Asks.Upsert(104, 1)
+
+	bestBid, bestAsk, ok := bestLevelsForFlush(st)
+	if !ok {
+		t.Fatalf("expected best levels to exist")
+	}
+
+	if bestBid.Price != 102 {
+		t.Fatalf("expected best bid price 102, got %v", bestBid.Price)
+	}
+
+	if bestAsk.Price != 103 {
+		t.Fatalf("expected best ask price 103, got %v", bestAsk.Price)
+	}
+}

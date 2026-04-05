@@ -61,6 +61,15 @@ type SymbolState struct {
 	SnapshotPending bool
 }
 
+func bestLevelsForFlush(st *SymbolState) (*book.PriceLevel, *book.PriceLevel, bool) {
+	bestBid, okBid := st.Orderbook.Bids.Best()
+	bestAsk, okAsk := st.Orderbook.Asks.Best()
+	if !okBid || !okAsk || bestBid == nil || bestAsk == nil {
+		return nil, nil, false
+	}
+	return bestBid, bestAsk, true
+}
+
 func NewWorker(id int, ctx context.Context, snapshotIntervalSec int, flushDepth int, channel chan *constants.DispatchRecord, AckChannel, updateAckChannel chan *constants.Ack) *Worker {
 	return &Worker{
 		ID:                             id,
@@ -192,8 +201,10 @@ func (w *Worker) FlushBook(flushEpoch int32) {
 			})
 		}
 
-		bestBid := bids[len(bids)-1]
-		bestAsk := asks[0]
+		bestBid, bestAsk, ok := bestLevelsForFlush(st)
+		if !ok {
+			continue
+		}
 		spread := bestAsk.Price - bestBid.Price
 
 		flushedBook := &generated.OrderbookFlush{
