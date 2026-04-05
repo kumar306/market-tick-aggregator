@@ -1,36 +1,86 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# UI
 
-## Getting Started
+The UI is a Next.js dashboard for inspecting the output of the full market data pipeline.
 
-First, run the development server:
+## Responsibilities
+
+- query historical candles, metrics, and orderbook snapshots over REST
+- subscribe to live tick and book updates over WebSocket
+- render a candlestick chart with price overlays
+- render grouped metric panels by family
+- render a live orderbook pane with depth, best bid/ask, spread, and update time
+
+## Dashboard Design
+
+The dashboard is structured around one instrument view:
+
+- top bar for exchange, symbol, and window selection
+- sidebar for metric-family toggles
+- main candlestick chart with price-like overlays
+- grouped lower panels for volume, flow, risk, and returns
+- orderbook pane on the bottom
+
+This avoids plotting unrelated units on the same axis and makes the UI easier to review during demos.
+
+## Data Flow
+
+1. React Query fetches historical slices from the UI backend.
+2. Zustand stores the merged chart-ready state.
+3. REST data seeds historical series.
+4. WebSocket updates incrementally extend or replace the latest points.
+5. The chart layer reads from the store and keeps related panels time-synchronized.
+
+This split is important to the UI architecture:
+
+- React Query owns request lifecycle and caching
+- Zustand owns the merged real-time view model
+- chart components stay focused on rendering rather than stream reconciliation
+
+## Key Areas
+
+- `src/app/`: page composition
+- `src/components/`: charts, sidebar, top bar, orderbook, layout
+- `src/store/`: UI state and market stream state
+- `src/services/`: REST and WebSocket clients
+- `src/hooks/`: query and stream wiring
+- `src/lib/metric-config.ts`: metric families, formatting, overlay rules
+
+## Rendering Approach
+
+The candlestick and metric panels are deliberately separated by semantic role:
+
+- price-like metrics such as EMA, SMA, VWAP, and TWAP are rendered as overlays on the candle chart
+- non-price metrics are grouped into lower panels by family
+- all chart panels share time navigation so the dashboard behaves like a single instrument workspace rather than a set of unrelated charts
+
+This keeps units interpretable and makes the dashboard easier to explain in demos.
+
+## Testing and Validation
+
+The UI is validated primarily through build, lint, and end-to-end behavior against the running stack.
+
+Typical checks:
+
+- `npm run lint`
+- `npm run build`
+- manual verification of REST seeding, WebSocket continuation, synchronized charts, and live orderbook updates
+
+## Running
+
+Development:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Build:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm run build
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Lint:
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm run lint
+```

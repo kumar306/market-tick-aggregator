@@ -1,17 +1,102 @@
-this module reads from aggregated ticks and aggregated book topics, batches the records, flushes to postgres via txn and commits the offsets. its a single threaded stateless process
+# Persistence
 
-to accomodate scaling, we can increase the batch size. fsync operation are expensive so batch aggressively, or increase consumer instances in the consumer group
+The persistence module is the durable sink of the pipeline. It consumes aggregated Kafka topics, batches records, writes them to Postgres inside transactions, and commits Kafka offsets only after successful writes.
 
-if db write fails, we are good as we are not committing offsets and we can replay kafka. 
-if db write succeeds and then kafka commit fails, we ensure idempotency in our postgres table to avoid inserting duplicates on replay
+## Responsibilities
 
-decided to have it as a single threaded synchronous process. 
+- consume `aggregated.ticks` and `aggregated.book`
+- convert protobuf payloads into database row models
+- batch writes for better fsync and transaction efficiency
+- commit Kafka offsets only after durable DB write
+- route malformed records to a DLQ
 
-LLD design: each of the components has a single responsiblity. 
-e.g batcher doesnt know anything about its downstream (can switch from postgres to some other db later) - it will take in slice of records and call flushFn which is an input callback and be done with its processing. does offset commit after flush fn commits txn
+## Inputs and Outputs
 
-postgres flushFn - only responsible for inserting records to postgres.
-we can have other flush fns for other DBs if we want a new sink and just wire it up
+Inputs:
 
-20/02/2026:
-1. noticed if any corruption in the record, the entire batch is stopped. rather will skip that entry upon insertion and proceed.
+- `aggregated.ticks`
+- `aggregated.book`
+
+Outputs:
+
+- Postgres tables for aggregated ticks and orderbook flushes
+- DLQ entries in `persistence.dlq` for bad records
+
+## Internal Architecture
+
+1. `main.go` loads config, initializes Kafka and Postgres, and wires the tick/book pipelines.
+2. Each pipeline has:
+   - a converter
+   - a batcher
+   - a flush callback
+   - an invalid-record predicate
+3. The batcher groups records by size or time threshold.
+4. Flush callbacks write the batch to Postgres inside a transaction.
+5. Kafka offsets are committed only after the write succeeds.
+
+## Runtime Flow
+
+Persistence is intentionally the simplest part of the pipeline:
+
+1. consume aggregated Kafka records
+2. convert them into DB row models
+3. batch them by size or time threshold
+4. write the batch in a transaction
+5. commit offsets only after the transaction succeeds
+
+That gives the service a clear durability boundary and makes replay behavior straightforward to explain.
+
+## Why This Design
+
+This module is intentionally simple and synchronous.
+
+Benefits:
+
+- clear durability boundary
+- straightforward replay behavior
+- easy reasoning about commit-after-write semantics
+- swap-friendly flush path if the backing database changes later
+
+This is also why malformed records are routed to a DLQ instead of trying to keep partially valid writes mixed into the main transactional path.
+
+## Partitioning
+
+The Postgres tables are range-partitioned by time:
+
+- `aggregated_ticks` partitioned by `start_ts`
+- `orderbook_flushes` partitioned by `event_time`
+
+Containerized deployments include bootstrap and maintainer services so the needed daily partitions exist before persistence writes begin.
+
+## Key Packages
+
+- `batcher/`: size/time-based batching
+- `converter/`: protobuf -> DB model conversion
+- `db/`: Postgres initialization and schema support
+- `db/writer/`: transactional flush logic
+- `pipeline/`: pipeline abstraction for tick/book streams
+- `kafka/`: consumer, lag metrics, DLQ, offset commit
+
+## Testing
+
+Representative tests cover:
+
+- batcher behavior
+- config loading
+- converters
+- DB initialization and writer behavior
+- pipeline operation
+- Kafka commit-map helpers
+
+The most important tests here are the durability-path tests:
+
+- batch boundaries
+- transaction write behavior
+- offset bookkeeping after success
+- invalid-record handling and DLQ routing
+
+Run:
+
+```bash
+go test ./...
+```

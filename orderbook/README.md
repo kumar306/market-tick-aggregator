@@ -1,23 +1,93 @@
-1. Plan the data structures for storing the orderbook internally - going with a skip list which comprises of layers of sorted linked lists - it gives me O(logN) insert, update, delete, min, max
-2. Compute full order book internally but display top N in the snapshot consumed by UI
-3. Plan for interval based snapshotting and recovery flow if a worker crashes
-4. Backup snapshots to redis and re apply kafka updates. Commit to kafka post snapshot so no updates are lost
-5. Compute several orderbooks segregated by exchange,symbol combinations
-6. Every update from Kafka applied to orderbook needs to result in the same deterministic state
-7. unit tests to verify correctness - application of updates to snapshot or empty book must give the same resultant final state for those applied prices. Reapplying updates should not change the state. Need to extract top N correctly when posting to downstream kafka consumed by UI.  
+# Orderbook
 
-why a skip list?
+The orderbook module consumes normalized book updates, maintains in-memory books per symbol, and periodically flushes top-of-book snapshots for persistence and UI streaming.
 
-Prefer a skip list over a balanced BST because i figure i am gonna have huge number of inserts, updates, deletes at any given second. because of that the tree will keep rebalancing to maintain logn height. AVL tree would do fixed rotations to maintain its height whereas red black trees would do its recoloring. this is a hindrance when i have multiple updates coming in per second. if the tree is being rebalanced, it has to be globally locked and would cause updates to slow down. its more complex to build. Skip list does not have rebalancing. bid and ask are O(1) here as head -> forward[0] and tail -> backward[0] and worst case is very very rare. height would be logn which ensures logn on insert, update, delete and topN
+## Responsibilities
 
-unit test scenario for skip list:
-insert ascending, insert descending, update existing, delete, min/max check, iterator order check
+- consume `normalized.book`
+- maintain deterministic book state per exchange/symbol
+- build top-N flush payloads for downstream consumers
+- persist lightweight snapshots to Redis for worker recovery
+- coordinate offset commit only after safe flush progression
 
+## Why It Exists Separately
 
-13/02/2026:
-changing the backpressure from global to per-worker to global
+Book processing has different state and performance characteristics from tick aggregation:
 
-why: symbol/exchange combinations of a partition are routed to worker X. a worker X reads many such combinations
-service should not rely on multiple partitions to be in sync. upstream should correctly order messages deterministically to partition
-this ensures message of a type are not scattered across a partition. so global backpressure would be a bottleneck.
-example if BTC-USD is a hot path, i dont want to stop ETH-USD as well. only the BTC-USD would be paused until system catches up.
+- larger and more bursty update volumes
+- per-level upsert/delete behavior
+- snapshot/recovery requirements
+- top-of-book presentation requirements for the UI
+
+Separating it keeps tick metrics and book state from interfering with each other.
+
+## Internal Architecture
+
+1. `main.go` initializes Kafka, Redis, workers, dispatcher, flush scheduler, and commit coordinator.
+2. Each worker owns many exchange/symbol books in memory.
+3. Book updates are applied to a skip-list-backed structure for efficient upsert, delete, best price, and top-N extraction.
+4. Flush epochs produce `OrderbookFlush` messages for downstream persistence and live UI use.
+5. Snapshots are periodically written to Redis and later restored if a worker restarts.
+
+## Runtime Flow
+
+For each normalized book event, the orderbook service:
+
+1. routes the event to the worker that owns that exchange/symbol book
+2. applies level inserts, updates, or deletes to the in-memory sides
+3. keeps best bid, best ask, and top-N extraction cheap by maintaining ordered book state continuously
+4. emits periodic flushes rather than writing every micro-update directly downstream
+
+This is why the module exists independently from the tick aggregator. The data model, event shape, and recovery story are materially different.
+
+## Data Structures
+
+The in-memory book uses an ordered skip list abstraction rather than a balanced BST.
+
+Why:
+
+- fast insert/update/delete
+- efficient top-N extraction
+- simpler operational behavior for a high-update book path
+
+Best bid/ask and top-N levels are derived from the maintained ordered sides rather than recomputed from scratch.
+
+## Reliability Notes
+
+- snapshots are gated against committed offsets so Redis backups do not get ahead of Kafka commit state
+- backpressure is used to pause hot partitions when worker queues saturate
+- book state is isolated per key for deterministic replay/application
+
+The snapshot/commit relationship is especially important here. Orderbooks are mutable state machines, so the system has to avoid restoring a Redis snapshot that is logically ahead of the Kafka offsets the worker has durably committed.
+
+## Key Packages
+
+- `book/`: in-memory orderbook abstraction
+- `orderedtree/`: skip list implementation
+- `worker/`: book state, flush, snapshot, recovery
+- `dispatcher/`: keyed dispatch to workers
+- `flush/`: epoch scheduler
+- `redis/`: snapshot storage and restore
+- `kafka/`: consumer, producer, coordinator
+
+## Testing
+
+Representative tests cover:
+
+- skip list ordering and top-N correctness
+- worker update application
+- snapshot gating and cleanup
+- coordinator behavior
+- dispatcher/backpressure paths
+
+The tests in this module are mostly about state correctness:
+
+- price ordering must remain correct after many inserts and deletes
+- flush metadata must reflect the true best bid and best ask
+- snapshot recovery must not move the book ahead of committed Kafka progress
+
+Run:
+
+```bash
+go test ./...
+```

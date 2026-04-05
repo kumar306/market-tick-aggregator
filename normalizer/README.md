@@ -1,16 +1,104 @@
-proto command for my reference: protoc --go_out=. .\proto\*.proto
+# Normalizer
 
-test plan:
+The normalizer converts raw exchange-specific messages into shared tick and book schemas that the rest of the pipeline can process consistently.
 
-wal tests:
-1. first need to somehow make the breaker in open state. then need to test that append works and only append happens. 
-2. need to toggle the breaker to open. then make it closed and then the replay triggers. so i need to ensure the downstream produce happened. and the file is cleared. 
-3. mock a error for the 3rd or 4th record processing out of 10 records. then need to ensure the new file contains the 4th to 10th record. 
-4. test for new message to enter the pipeline at the same time replay is happening and it is blocked until the replay is done (testing replayLock)
+## Responsibilities
 
-31/03/2026:
-uncovered a bug - burst of data for kraken book partition led to a lot of buffered records being dropped. all the records for Kraken BTC-USD were mapped to single partition and the websocket got in a burst of data
- 
-worker channel got full and since i had buffered 5000 records as per config, too many records got dropped from dispatch channel
-backpressure high threshold was at 0.8 so it took too long to kick in. 
-to address it, i'll change backpressure high threshold and low threshold to a lower values to lessen these drops occuring due to an overloaded partition -> made it high=0.4, low=0.2. increased worker queue size=2000
+- consume raw Kafka topics from the adapter
+- convert exchange-specific payloads into shared protobuf-backed message types
+- preserve ordered processing per stream key
+- apply bounded buffering and backpressure
+- protect downstream publishing with a circuit breaker and WAL fallback
+- publish normalized ticks and books into Kafka
+
+## Inputs and Outputs
+
+Inputs:
+
+- `binance.raw.ticks`
+- `binance.raw.level2`
+- `coinbase.raw.ticks`
+- `coinbase.raw.level2`
+- `kraken.raw.ticks`
+- `kraken.raw.book`
+
+Outputs:
+
+- `normalized.ticks`
+- `normalized.book`
+
+## Internal Architecture
+
+1. `main.go` loads config, initializes registries, Redis dedupe, WAL, consumer, dispatcher, workers, and offset committer.
+2. `factory/registry` wires exchange-specific converter, orderer, normalizer, and publisher strategies.
+3. The dispatcher hashes records by stream identity so related records stay on the same worker.
+4. Workers apply ordering semantics and emit normalized protobuf payloads downstream.
+5. The WAL and circuit breaker provide a degraded-but-survivable path if Kafka publishing starts failing.
+
+## Runtime Flow
+
+The normalizer is the first place where the pipeline begins to impose an internal contract.
+
+1. consume raw Kafka records
+2. identify the exchange, channel, symbol, and ordering semantics for the record
+3. route the record to a deterministic worker based on stream identity
+4. convert the raw payload into a shared tick or book message
+5. publish the normalized protobuf to downstream Kafka topics
+
+This gives the rest of the system a stable event shape without requiring the aggregator or orderbook layers to understand exchange-specific wire formats.
+
+## Why This Layer Exists
+
+Without this module, downstream services would each need to understand:
+
+- different exchange payload shapes
+- different sequence/timestamp semantics
+- different control message types
+- symbol-format differences
+- tick versus book event contracts
+
+The normalizer turns those into one internal contract so the aggregator and orderbook modules do not need exchange-specific branching everywhere.
+
+## Reliability and Control
+
+This module contains the main stream-ingestion resilience logic:
+
+- per-key ordering
+- dedupe via Redis
+- bounded worker queues
+- partition pause/resume backpressure
+- WAL-backed spillover path when downstream publish is unhealthy
+
+The normalizer is also where the project makes an explicit engineering tradeoff: it prefers controlled degradation over pretending the pipeline is infinitely elastic. If downstream publish health degrades, this layer is allowed to shed, pause, or spool work rather than letting memory grow without bound.
+
+## Key Packages
+
+- `factory/`: converter/orderer/normalizer/publisher strategies
+- `dispatcher/`: keyed dispatch to workers
+- `worker/`: ordering and downstream emission
+- `kafka/`: consumer, producer, commit loop, breaker, WAL
+- `dedupe/`: Redis-based duplicate protection
+- `backpressure/`: partition pause/resume controller
+
+## Testing
+
+Representative tests cover:
+
+- backpressure controller behavior
+- dedupe logic
+- exchange normalizer correctness
+- Kafka plumbing
+- worker processing
+
+The most valuable tests here are the ones that protect invariants:
+
+- records for the same key remain ordered
+- invalid or duplicate records do not corrupt downstream flow
+- exchange-specific converters produce the shared schema expected by later services
+- backpressure decisions happen before workers grow unbounded queues
+
+Run:
+
+```bash
+go test ./...
+```

@@ -1,0 +1,72 @@
+flowchart LR
+    subgraph Exchanges["Exchange Feeds"]
+        BIN["Binance\naggTrade + depth"]
+        CB["Coinbase\nticker + level2_batch"]
+        KR["Kraken\nticker + book"]
+    end
+
+    AD["Adapter\nWebSocket ingestion\nReconnects / heartbeats\nRaw topic publishing"]
+    KRX[("Kafka Raw Topics\nbinance.raw.*\ncoinbase.raw.*\nkraken.raw.*")]
+
+    NM["Normalizer\nSchema unification\nOrdering per key\nBackpressure + WAL + circuit breaker"]
+    KN[("Kafka Normalized Topics\nnormalized.ticks\nnormalized.book")]
+
+    AG["Aggregator\nWindow engine\nOHLC + metrics\n5s -> 24h"]
+    OB["Orderbook Engine\nBook snapshots\nIncremental updates\nDepth flushes"]
+    KA[("Kafka Aggregated Topics\naggregated.ticks\naggregated.book")]
+
+    PS["Persistence\nBatch sink\nReplay-safe writes\nDLQ on bad records"]
+    PG[("Postgres")]
+
+    UIB["UI Backend\nGin REST API\nWebSocket fanout\nKafka + Postgres reader"]
+    UI["Next.js Dashboard\nCandles\nMetric panels\nLive orderbook"]
+
+    KFD["Kafdrop"]
+    PM["Prometheus"]
+    PGA["pgAdmin"]
+
+    BIN --> AD
+    CB --> AD
+    KR --> AD
+
+    AD --> KRX
+    KRX --> NM
+    NM --> KN
+
+    KN --> AG
+    KN --> OB
+    AG --> KA
+    OB --> KA
+
+    KA --> PS
+    PS --> PG
+
+    KA --> UIB
+    PG --> UIB
+    UIB --> UI
+
+    KRX -. inspect .-> KFD
+    KN -. inspect .-> KFD
+    KA -. inspect .-> KFD
+    AD -. metrics .-> PM
+    NM -. metrics .-> PM
+    AG -. metrics .-> PM
+    OB -. metrics .-> PM
+    PS -. metrics .-> PM
+    PG -. inspect .-> PGA
+
+    classDef exchange fill:#dbeafe,stroke:#2563eb,stroke-width:2px,color:#0f172a;
+    classDef ingest fill:#e0f2fe,stroke:#0284c7,stroke-width:2px,color:#0f172a;
+    classDef transport fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#0f172a;
+    classDef compute fill:#fef3c7,stroke:#d97706,stroke-width:2px,color:#0f172a;
+    classDef storage fill:#dcfce7,stroke:#16a34a,stroke-width:2px,color:#0f172a;
+    classDef ui fill:#fae8ff,stroke:#c026d3,stroke-width:2px,color:#0f172a;
+    classDef observe fill:#f3f4f6,stroke:#6b7280,stroke-width:2px,color:#0f172a,stroke-dasharray: 6 4;
+
+    class BIN,CB,KR exchange;
+    class AD,NM ingest;
+    class KRX,KN,KA transport;
+    class AG,OB compute;
+    class PS,PG storage;
+    class UIB,UI ui;
+    class KFD,PM,PGA observe;
