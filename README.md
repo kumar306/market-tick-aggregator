@@ -231,6 +231,77 @@ This deployment path has been validated end to end with:
 docker compose -f docker-compose.yml -f docker-compose.app.yml up --build
 ```
 
+## Performance
+
+### How the numbers were measured
+
+Two separate tools:
+
+**1. Go microbenchmarks** - no infrastructure required, benchmarks the actual production code:
+
+```bash
+# Core aggregation hot-path
+go test -bench=. -benchmem -benchtime=5s ./aggregator/worker/
+
+# Individual metric implementations
+go test -bench=. -benchmem -benchtime=3s ./aggregator/internal/aggmetrics/
+```
+
+These use Go's built-in `testing` framework, which runs each function in a tight loop and divides elapsed wall time by iteration count. The code under test is the `ProcessTick` and `FlushWindow` functions. Numbers are reproducible by cloning and running the same commands.
+
+**2. Kafka load test** - requires `docker-compose up`, tests end-to-end pipeline throughput and Kafka producer ack latency:
+
+```bash
+cd loadtest
+go run . -kafka localhost:9092 -step 30s
+```
+
+Produces synthetic `NormalizedTick` proto messages into `normalized.ticks` at escalating rates (500, 1K, 2.5K, 5K, 10K ticks/sec). Records Kafka latency per message via franz-go async delivery callbacks, then sorts the collected latencies and indexes into them for p50/p95/p99.
+
+### Results (12th Gen Intel i7-1255U)
+
+**Aggregator hot-path** (`aggregator/worker/bench_test.go`):
+
+| Benchmark | ns/op | Allocs/op | Throughput |
+| --- | --- | --- | --- |
+| ProcessTick - 1 window, 10 metrics | 462 ns | 2 | ~2.2M ticks/sec per worker |
+| ProcessTick - 13 windows, 130 metric updates | 2,524 ns | 2 | ~396K ticks/sec per worker |
+| FlushWindow - apply metrics + proto serialise | 1,138 ns | 10 | - |
+
+With 16 workers (production `worker_count`): aggregate CPU capacity ~6M ticks/sec before Kafka I/O becomes the bottleneck.
+
+**Individual metric updates** (`aggregator/internal/aggmetrics/metric_bench_test.go`) results in zero heap allocations:
+
+| Metric | ns/op |
+| --- | --- |
+| VWAP | 2.3 |
+| Rolling VWAP (bucket ring buffer) | 2.4 |
+| EMA (exponential decay) | 3.0 |
+| ATR (Average True Range) | 4.3 |
+| OHLC (tumbling min/max) | 4.5 |
+| Rolling Volume (ring buffer) | 5.1 |
+
+**Kafka end-to-end latency** (`loadtest/main.go`, Docker broker on localhost):
+
+| Target rate | Achieved throughput | Avg | p50 | p95 | p99 | Errors |
+| --- | --- | --- | --- | --- | --- | --- |
+| 500 msg/s | 410/s | 8.70 ms | 8.35 ms | 15.98 ms | 24.29 ms | 0 |
+| 1,000 msg/s | 685/s | 8.76 ms | 7.63 ms | 16.76 ms | 51.25 ms | 0 |
+| 2,500 msg/s | 1,375/s | 7.82 ms | 7.53 ms | 14.15 ms | 21.28 ms | 0 |
+| 5,000 msg/s | 3,576/s | 7.09 ms | 6.97 ms | 12.33 ms | 18.05 ms | 0 |
+| 10,000 msg/s | 7,033/s | 6.91 ms | 6.93 ms | 11.94 ms | 12.71 ms | 0 |
+
+Latency = Kafka broker ack round trip (time from `Produce()` call to broker acknowledgement callback). Measured with franz-go async produce, each message timestamped individually. Zero errors and zero drops at all rates.
+
+The achieved throughput is lower than the target because `time.Sleep` on Windows has ~1 ms timer resolution, which limits the precision of the rate controller at higher rates. The latency numbers are unaffected by this - they measure per message ack time independently of the send rate.
+
+After a load test run, per service processing metrics are visible in Prometheus at `http://localhost:9090`:
+
+- `aggregator_tick_processing_duration_ms` - per-tick hot-path duration (the 2.5 µs above)
+- `aggregator_window_flush_duration_ms` - window flush + serialisation duration
+- `aggregator_dedupe_latency_seconds` - Redis dedup round-trip
+- `normalizer_commit_latency_seconds` - Kafka offset commit latency
+
 ## Testing and Validation
 
 Backend:
