@@ -9,6 +9,7 @@ COPY orderbook ./orderbook
 COPY persistence ./persistence
 COPY shared ./shared
 COPY ui-backend ./ui-backend
+COPY loadtest ./loadtest
 
 WORKDIR /src/aggregator
 RUN go build -o /out/aggregator .
