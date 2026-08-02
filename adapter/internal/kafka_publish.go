@@ -27,7 +27,7 @@ func PublishToKafkaLoop(wg *sync.WaitGroup,
 			return
 		default:
 			// read from ring buffer
-			msg, ok := ring.Pop()
+			msg, ok, _ := ring.Pop()
 			if !ok {
 				// empty buffer case
 				time.Sleep(1 * time.Millisecond)

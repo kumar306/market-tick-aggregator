@@ -27,7 +27,7 @@ func Test_RingBufferDropsOldest(t *testing.T) {
 
 	var result []int
 	for {
-		val, ok := ring.Pop()
+		val, ok, _ := ring.Pop()
 		if !ok {
 			break
 		}
@@ -83,7 +83,7 @@ func Test_RingBufferConcurrency(t *testing.T) {
 
 		outer:
 			for {
-				val, ok := ring.Pop()
+				val, ok, _ := ring.Pop()
 				if ok {
 					_ = val
 					atomic.AddUint64(&consumed, 1)

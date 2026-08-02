@@ -12,7 +12,7 @@ feeds:
         heartBeatInterval: 15
         pongTimeout: 25
         kafkaTopic: binance.raw.ticks
-        ringBufferSize: 1024
+        ringBufferSize: 16384
       - name: binance
         channel: depth
         productIds:
@@ -21,7 +21,7 @@ feeds:
         heartBeatInterval: 15
         pongTimeout: 25
         kafkaTopic: binance.raw.level2
-        ringBufferSize: 1024
+        ringBufferSize: 16384
 
   - name: coinbase
     url: wss://ws-feed.exchange.coinbase.com
@@ -33,7 +33,7 @@ feeds:
         heartBeatInterval: 15
         pongTimeout: 25
         kafkaTopic: coinbase.raw.ticks
-        ringBufferSize: 1024
+        ringBufferSize: 16384
       - channel: level2_batch
         productIds:
           - BTC-USD
@@ -41,7 +41,7 @@ feeds:
         heartBeatInterval: 15
         pongTimeout: 25
         kafkaTopic: coinbase.raw.level2
-        ringBufferSize: 1024
+        ringBufferSize: 16384
 
   - name: kraken
     url: wss://ws.kraken.com/v2
@@ -54,7 +54,7 @@ feeds:
         heartBeatInterval: 15
         pongTimeout: 25
         kafkaTopic: kraken.raw.ticks
-        ringBufferSize: 1024
+        ringBufferSize: 16384
       - name: kraken
         channel: book
         productIds:
@@ -63,7 +63,7 @@ feeds:
         heartBeatInterval: 15
         pongTimeout: 25
         kafkaTopic: kraken.raw.book
-        ringBufferSize: 1024
+        ringBufferSize: 16384
 
   # - name: bitfinex
   #   url: wss://api-pub.bitfinex.com
@@ -71,7 +71,7 @@ feeds:
   #   heartBeatInterval: 15
   #   pongTimeout: 25
   #   kafkaTopic: ticks_bitfinex
-  #   ringBufferSize: 10000
+  #   ringBufferSize: 16384
 
   # - name: bybit
   #   url: wss://stream.bybit.com/v5/public/spot
@@ -79,4 +79,4 @@ feeds:
   #   heartBeatInterval: 15
   #   pongTimeout: 25
   #   kafkaTopic: ticks_bybit
-  #   ringBufferSize: 10000
+  #   ringBufferSize: 16384
