@@ -48,7 +48,7 @@ func SendPing(conn *websocket.Conn, mu *sync.Mutex, feed string) error {
 }
 
 func Normalize(raw []byte, symbolKey, feed, channel string) ([]byte, []byte, error) {
-	var msg map[string]interface{}
+	var msg map[string]json.RawMessage
 	var symbol string
 	if err := json.Unmarshal(raw, &msg); err != nil {
 		return nil, nil, err
@@ -56,13 +56,16 @@ func Normalize(raw []byte, symbolKey, feed, channel string) ([]byte, []byte, err
 
 	// binance, coinbase case
 	if val, ok := msg[symbolKey]; ok {
-		symbol, _ = val.(string)
+		_ = json.Unmarshal(val, &symbol)
 	} else {
-		// kraken case - symbol inside data []
-		if dataArr, ok := msg["data"].([]interface{}); ok && len(dataArr) > 0 {
-			if firstObj, ok := dataArr[0].(map[string]interface{}); ok {
-				if val, ok := firstObj[symbolKey]; ok {
-					symbol, _ = val.(string)
+		if dataRaw, ok := msg["data"]; ok {
+			var dataArr []json.RawMessage
+			if err := json.Unmarshal(dataRaw, &dataArr); err == nil && len(dataArr) > 0 {
+				var firstObj map[string]json.RawMessage
+				if err := json.Unmarshal(dataArr[0], &firstObj); err == nil {
+					if val, ok := firstObj[symbolKey]; ok {
+						_ = json.Unmarshal(val, &symbol)
+					}
 				}
 			}
 		}
@@ -73,9 +76,12 @@ func Normalize(raw []byte, symbolKey, feed, channel string) ([]byte, []byte, err
 	}
 
 	// add in the root level for kafka consumer processing
-	msg[ExchangeField] = feed
-	msg[ChannelField] = channel
-	msg[symbolKey] = symbol
+	exchangeJson, _ := json.Marshal(feed)
+	channelJson, _ := json.Marshal(channel)
+	symbolJson, _ := json.Marshal(symbol)
+	msg[ExchangeField] = exchangeJson
+	msg[ChannelField] = channelJson
+	msg[symbolKey] = symbolJson
 
 	normalized, marshalErr := json.Marshal(msg)
 	if marshalErr != nil {

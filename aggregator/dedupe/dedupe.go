@@ -7,7 +7,6 @@ import (
 	"os"
 	"shared/logger"
 	"shared/metrics"
-	"strconv"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -53,10 +52,6 @@ func InitRedis(redisConfig *constants.RedisConfig) {
 		},
 	})
 
-}
-
-func ConstructDedupeKey(topic string, partition int32, offset int64) string {
-	return topic + ":" + strconv.Itoa(int(partition)) + ":" + strconv.Itoa(int(offset))
 }
 
 // set the dedupe key in redis with TTL

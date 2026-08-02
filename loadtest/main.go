@@ -149,58 +149,72 @@ func calcSummary(rate int, s *runStats) summary {
 	}
 }
 
-// runLevel produces ticks at the requested rate for stepDur, returns stats.
 func runLevel(ctx context.Context, client *kgo.Client, topic string, rate int, stepDur time.Duration) summary {
 	s := &runStats{}
 	deadline := time.Now().Add(stepDur)
 
-	// On Windows, time.Sleep resolution is ~1 ms, so we batch messages per
-	// millisecond tick for rates above 1000/s to maintain accuracy.
-	batchPerMs := 1
-	sleepInterval := time.Second / time.Duration(rate)
-	if sleepInterval < time.Millisecond {
-		batchPerMs = rate / 1000
-		if batchPerMs < 1 {
-			batchPerMs = 1
-		}
-		sleepInterval = time.Millisecond
+	// Spread across 6 goroutines to match the topic's 6 partitions — a single
+	// hardcoded Kafka key previously pinned every record to one partition,
+	// capping throughput at a single partition's ceiling. Each goroutine gets
+	// its own key suffix so the default partitioner spreads them out.
+	const numProducers = 6
+	// Coarser tick (10ms vs 1ms) so Windows' per-Sleep-call timer overshoot is
+	// a smaller fraction of the interval, instead of dominating it.
+	const tickInterval = 10 * time.Millisecond
+
+	perProducerRate := rate / numProducers
+	if perProducerRate < 1 {
+		perProducerRate = 1
+	}
+	batchPerTick := int(float64(perProducerRate) * tickInterval.Seconds())
+	if batchPerTick < 1 {
+		batchPerTick = 1
 	}
 
-	seq := int64(0)
 	const basePrice = 65_000.0
+	var seq atomic.Int64
 
-	for time.Now().Before(deadline) && ctx.Err() == nil {
-		for i := 0; i < batchPerMs; i++ {
-			seq++
-			price := basePrice + rand.Float64()*200 - 100
-			vol := 0.1 + rand.Float64()
+	var wg sync.WaitGroup
+	for p := 0; p < numProducers; p++ {
+		p := p
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			key := []byte(fmt.Sprintf("loadtest:benchmark:BTC-USD:%d", p))
+			for time.Now().Before(deadline) && ctx.Err() == nil {
+				for i := 0; i < batchPerTick; i++ {
+					n := seq.Add(1)
+					price := basePrice + rand.Float64()*200 - 100
+					vol := 0.1 + rand.Float64()
 
-			val := encodeTick(
-				"loadtest", "benchmark", "BTC-USD",
-				time.Now().UnixMilli(),
-				price, vol,
-				basePrice-50,
-				price+rand.Float64()*50-25,
-				basePrice-100,
-				basePrice+100,
-				seq,
-			)
+					val := encodeTick(
+						"loadtest", "benchmark", "BTC-USD",
+						time.Now().UnixMilli(),
+						price, vol,
+						basePrice-50,
+						price+rand.Float64()*50-25,
+						basePrice-100,
+						basePrice+100,
+						n,
+					)
 
-			rec := &kgo.Record{
-				Topic: topic,
-				Key:   []byte("loadtest:benchmark:BTC-USD"),
-				Value: val,
+					rec := &kgo.Record{
+						Topic: topic,
+						Key:   key,
+						Value: val,
+					}
+
+					sendTime := time.Now()
+					s.sent.Add(1)
+					client.Produce(ctx, rec, func(_ *kgo.Record, err error) {
+						s.observe(sendTime, err)
+					})
+				}
+				time.Sleep(tickInterval)
 			}
-
-			sendTime := time.Now()
-			s.sent.Add(1)
-			client.Produce(ctx, rec, func(_ *kgo.Record, err error) {
-				s.observe(sendTime, err)
-			})
-		}
-
-		time.Sleep(sleepInterval)
+		}()
 	}
+	wg.Wait()
 
 	// Drain in-flight records before returning.
 	flushCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -246,6 +260,7 @@ func main() {
 	client, err := kgo.NewClient(
 		kgo.SeedBrokers(*kafkaAddr),
 		kgo.RecordDeliveryTimeout(15*time.Second),
+		kgo.ProducerLinger(0),
 	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "ERROR: failed to create Kafka client: %v\n", err)

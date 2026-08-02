@@ -10,6 +10,7 @@ import (
 	"market-orderbook/kafka"
 	"market-orderbook/redis"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"shared/logger"

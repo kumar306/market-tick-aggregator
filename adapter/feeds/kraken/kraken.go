@@ -146,17 +146,24 @@ func (k *KrakenFactory) CreatePinger() constants.Pinger {
 	return &KrakenPinger{}
 }
 
+// avoid heap allocations in parsing ws message
 func shouldSkipControlMessage(raw []byte) bool {
-	var msg map[string]interface{}
+	var msg map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &msg); err != nil {
 		return false
 	}
 
-	channel, _ := msg["channel"].(string)
+	var channel string
+	if val, ok := msg["channel"]; ok {
+		_ = json.Unmarshal(val, &channel)
+	}
 	if channel == "heartbeat" {
 		return true
 	}
 
-	method, _ := msg["method"].(string)
+	var method string
+	if val, ok := msg["method"]; ok {
+		_ = json.Unmarshal(val, &method)
+	}
 	return method == SubscribeType
 }

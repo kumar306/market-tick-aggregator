@@ -12,6 +12,7 @@ import (
 	"shared/metrics"
 	"strconv"
 	"time"
+	"unsafe"
 
 	"github.com/sony/gobreaker"
 )
@@ -25,6 +26,7 @@ type Worker struct {
 	Channel      chan *constants.DispatchRecord
 	SymbolState  map[string]*WindowState
 	WindowConfig []*constants.WindowConfig
+	DedupeKeyBuf [96]byte
 }
 
 type WindowState struct {
@@ -84,7 +86,8 @@ func (w *Worker) ProcessTick(ctx context.Context,
 	// commit offsets manually after done with the record
 
 	dedupeStartTime := time.Now()
-	dedupeKey := dedupe.ConstructDedupeKey(dispatchRec.Record.Topic, dispatchRec.Record.Partition, dispatchRec.Record.Offset)
+	dedupeKey := w.buildDedupeKey(dispatchRec.Record.Topic, dispatchRec.Record.Partition, dispatchRec.Record.Offset)
+
 	dedupeExists, err := dedupe.IsDuplicate(ctx, dedupeKey)
 	if err != nil {
 		metrics.Aggregator_DedupeErrorsTotal.WithLabelValues(dispatchRec.Exchange, dispatchRec.Symbol).Inc()
@@ -145,7 +148,7 @@ func (w *Worker) ProcessTick(ctx context.Context,
 	}
 
 	// mark for dedupe and mark for commit
-	dedupeErr := dedupe.MarkForDedupe(ctx, dedupe.ConstructDedupeKey(dispatchRec.Record.Topic, dispatchRec.Record.Partition, dispatchRec.Record.Offset))
+	dedupeErr := dedupe.MarkForDedupe(ctx, dedupeKey)
 	if dedupeErr != nil {
 		metrics.Aggregator_DedupeStoreErrorsTotal.WithLabelValues(dispatchRec.Exchange, dispatchRec.Symbol).Inc()
 	}
@@ -207,4 +210,15 @@ func (w *Worker) FlushWindow(ctx context.Context, flushRec *constants.DispatchRe
 		}
 
 	}
+}
+
+// bug fix to eliminate heap allocation on dedup key creation
+func (w *Worker) buildDedupeKey(topic string, partition int32, offset int64) string {
+	b := w.DedupeKeyBuf[:0]
+	b = append(b, topic...)
+	b = append(b, ':')
+	b = strconv.AppendInt(b, int64(partition), 10)
+	b = append(b, ':')
+	b = strconv.AppendInt(b, offset, 10)
+	return unsafe.String(unsafe.SliceData(b), len(b))
 }

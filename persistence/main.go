@@ -10,6 +10,7 @@ import (
 	"market-persistence/kafka"
 	"market-persistence/pipeline"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"shared/logger"

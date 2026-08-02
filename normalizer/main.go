@@ -11,6 +11,7 @@ import (
 	"market-normalizer/kafka"
 	"market-normalizer/worker"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"shared/logger"

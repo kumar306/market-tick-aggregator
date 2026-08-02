@@ -10,6 +10,7 @@ import (
 	"market-aggregator/internal"
 	"market-aggregator/kafka"
 	"net/http"
+	_ "net/http/pprof"
 	"os/signal"
 	"syscall"
 

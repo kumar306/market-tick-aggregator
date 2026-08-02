@@ -11,6 +11,7 @@ import (
 	"market-adapter/internal"
 	"market-adapter/kafka"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"shared/logger"
