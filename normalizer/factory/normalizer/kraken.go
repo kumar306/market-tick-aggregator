@@ -67,8 +67,8 @@ func (k *KrakenBookNormalizer) Normalize(msg *constants.PipelineMessage) ([]byte
 		Channel:   msg.Channel,
 		Symbol:    msg.Symbol,
 		EventType: msg.EventType,
-		Bids:      []*generated.NormalizedBook_BookLevel{},
-		Asks:      []*generated.NormalizedBook_BookLevel{},
+		Bids:      make([]*generated.NormalizedBook_BookLevel, 0, len(rawMessage.Data[0].Bids)),
+		Asks:      make([]*generated.NormalizedBook_BookLevel, 0, len(rawMessage.Data[0].Asks)),
 	}
 
 	for _, bid := range rawMessage.Data[0].Bids {

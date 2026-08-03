@@ -5,15 +5,22 @@ import (
 	"market-normalizer/constants"
 	"market-normalizer/dedupe"
 	"market-normalizer/factory/registry"
+	"market-normalizer/kafka"
+	"market-normalizer/proto/generated"
+	"market-normalizer/utils"
 	"shared/logger"
 	"shared/metrics"
+	"strconv"
 	"time"
+
+	"google.golang.org/protobuf/proto"
 )
 
 func ProcessRecord(ctx context.Context,
 	dispatchRec *constants.DispatchRecord,
 	workerMap map[string]*constants.SymbolState,
-	workerChannel chan *constants.DispatchRecord) error {
+	workerChannel chan *constants.DispatchRecord,
+	dedupeBuf []byte) error {
 
 	// if key not in map - insert into the map and plug its strategies based on feed
 	_, exists := workerMap[dispatchRec.BufferKey]
@@ -68,7 +75,7 @@ func ProcessRecord(ctx context.Context,
 	dedupeStartTime := time.Now()
 
 	// dedupe check
-	dedupeKey := dedupe.ConstructDedupeKey(
+	dedupeKey := dedupe.ConstructDedupeKeyInto(dedupeBuf,
 		dispatchRec.Record.Topic,
 		dispatchRec.Record.Partition,
 		dispatchRec.Record.Offset)
@@ -107,7 +114,7 @@ func ProcessRecord(ctx context.Context,
 	}
 
 	// convert to a normalized schema and publish to downstream
-	ProcessBuffer(ctx, normalizedBuf, dispatchRec.BufferKey, symbolState.Normalizer, symbolState.Publisher, symbolState.Orderer)
+	ProcessBuffer(ctx, normalizedBuf, dispatchRec.BufferKey, symbolState.Normalizer, symbolState.Publisher, symbolState.Orderer, dedupeBuf)
 	return err
 }
 
@@ -116,7 +123,8 @@ func ProcessBuffer(ctx context.Context,
 	partitionKey string,
 	normalizer constants.NormalizerStrategy,
 	publisher constants.PublisherStrategy,
-	orderer constants.OrdererStrategy) {
+	orderer constants.OrdererStrategy,
+	dedupeBuf []byte) {
 
 	for _, msg := range normalizedBuffer {
 		protoStream, err := normalizer.Normalize(msg)
@@ -138,7 +146,7 @@ func ProcessBuffer(ctx context.Context,
 		metrics.Normalizer_BufferSize.WithLabelValues(msg.Exchange, msg.Channel, msg.Symbol).Dec()
 
 		// mark for dedupe
-		dedupeErr := dedupe.MarkForDedupe(ctx, dedupe.ConstructDedupeKey(msg.Record.Topic, msg.Record.Partition, msg.Record.Offset))
+		dedupeErr := dedupe.MarkForDedupe(ctx, dedupe.ConstructDedupeKeyInto(dedupeBuf, msg.Record.Topic, msg.Record.Partition, msg.Record.Offset))
 
 		if dedupeErr != nil {
 			metrics.Normalizer_DedupeStoreErrorsTotal.WithLabelValues(msg.Exchange,
@@ -151,12 +159,98 @@ func ProcessBuffer(ctx context.Context,
 	orderer.Cleanup()
 }
 
-func FlushBuffer(ctx context.Context, dispatchRec *constants.DispatchRecord, workerMap map[string]*constants.SymbolState) {
+func FlushBuffer(ctx context.Context, dispatchRec *constants.DispatchRecord, workerMap map[string]*constants.SymbolState, dedupeBuf []byte) {
 	symbolState := workerMap[dispatchRec.BufferKey]
 
 	// process buffermap in order of increasing seq/timestamp
 	// sort should happen based on orderer strategy
 	sortedBuffer := symbolState.Orderer.PrepareBufferFlush()
 
-	ProcessBuffer(ctx, sortedBuffer, dispatchRec.BufferKey, symbolState.Normalizer, symbolState.Publisher, symbolState.Orderer)
+	ProcessBuffer(ctx, sortedBuffer, dispatchRec.BufferKey, symbolState.Normalizer, symbolState.Publisher, symbolState.Orderer, dedupeBuf)
+}
+
+func ProcessSnapshotReady(ctx context.Context,
+	dispatchRec *constants.DispatchRecord,
+	workerMap map[string]*constants.SymbolState,
+	workerChannel chan *constants.DispatchRecord,
+	dedupeBuf []byte) {
+
+	symbolState, ok := workerMap[dispatchRec.BufferKey]
+	if !ok {
+		return
+	}
+
+	symbolState.SnapshotPending = false
+
+	if dispatchRec.SnapshotResult == nil {
+		logger.Log.Warn("Binance snapshot fetch failed, will retry on next message", "bufferKey", dispatchRec.BufferKey)
+		return
+	}
+
+	snapshot := dispatchRec.SnapshotResult
+	sortedBuffer := symbolState.Orderer.PrepareBufferFlush()
+
+	survivors := sortedBuffer[:0]
+	for _, m := range sortedBuffer {
+		depthMsg, ok := m.RawMessage.(*constants.BinanceDepthUpdateMsg)
+		if !ok || depthMsg.FinalUpdateID <= snapshot.LastUpdateID {
+			continue
+		}
+		survivors = append(survivors, m)
+	}
+
+	// check the first survivor and snapshot gap
+	if len(survivors) > 0 {
+		first := survivors[0].RawMessage.(*constants.BinanceDepthUpdateMsg)
+		if first.FirstUpdateID > snapshot.LastUpdateID+1 {
+			// gap between the snapshot and the buffered stream - snapshot is too stale. refetch
+			logger.Log.Warn("Binance snapshot stale relative to buffered stream, refetching",
+				"bufferKey", dispatchRec.BufferKey,
+				"snapshotLastUpdateId", snapshot.LastUpdateID,
+				"firstBufferedU", first.FirstUpdateID)
+			symbolState.SnapshotPending = true
+			go utils.FetchBinanceSnapshotAsync(dispatchRec.Exchange, dispatchRec.Channel, dispatchRec.Symbol, dispatchRec.BufferKey, workerChannel)
+			return
+		}
+	}
+
+	if snapshotProto, err := buildBinanceSnapshotProto(dispatchRec.Exchange, dispatchRec.Channel, dispatchRec.Symbol, snapshot); err != nil {
+		logger.Log.Error("Failed to marshal binance snapshot proto", "err", err)
+	} else {
+		kafka.ProduceSnapshotAsync(ctx, symbolState.Publisher.PublishTopic(), []byte(dispatchRec.BufferKey), snapshotProto)
+	}
+
+	symbolState.NeedsSnapshot = false
+	symbolState.LastSeqId = snapshot.LastUpdateID
+
+	if len(survivors) > 0 {
+		ProcessBuffer(ctx, survivors, dispatchRec.BufferKey, symbolState.Normalizer, symbolState.Publisher, symbolState.Orderer, dedupeBuf)
+	}
+
+	symbolState.Orderer.Cleanup()
+}
+
+func buildBinanceSnapshotProto(exchange, channel, symbol string, snapshot *constants.BinanceDepthSnapshot) ([]byte, error) {
+	normalizedMsg := generated.NormalizedBook{
+		Exchange:        exchange,
+		Channel:         channel,
+		Symbol:          symbol,
+		EventType:       constants.Snapshot,
+		EventTimeMillis: time.Now().UnixMilli(),
+		Bids:            make([]*generated.NormalizedBook_BookLevel, 0, len(snapshot.Bids)),
+		Asks:            make([]*generated.NormalizedBook_BookLevel, 0, len(snapshot.Asks)),
+	}
+
+	for _, bid := range snapshot.Bids {
+		price, _ := strconv.ParseFloat(bid[0], 64)
+		volume, _ := strconv.ParseFloat(bid[1], 64)
+		normalizedMsg.Bids = append(normalizedMsg.Bids, &generated.NormalizedBook_BookLevel{Price: price, Volume: volume})
+	}
+	for _, ask := range snapshot.Asks {
+		price, _ := strconv.ParseFloat(ask[0], 64)
+		volume, _ := strconv.ParseFloat(ask[1], 64)
+		normalizedMsg.Asks = append(normalizedMsg.Asks, &generated.NormalizedBook_BookLevel{Price: price, Volume: volume})
+	}
+
+	return proto.Marshal(&normalizedMsg)
 }

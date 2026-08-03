@@ -58,6 +58,25 @@ func ProduceAsync(ctx context.Context, topic string, msg *constants.PipelineMess
 	})
 }
 
+// publishes a synthetic snapshot message - e.g binance rest api snapshot that has no backing consumed Kafka record.
+// no mark commit records as there is no offset to commit for, and if this produce is lost, the next resync regenerates it.
+func ProduceSnapshotAsync(ctx context.Context, topic string, key, value []byte) {
+	record := &kgo.Record{
+		Key:   key,
+		Value: value,
+		Topic: topic,
+	}
+
+	Client.Produce(ctx, record, func(r *kgo.Record, err error) {
+		if err != nil {
+			logger.Log.Error("Produce failed for snapshot", "topic", topic, "error", err)
+			metrics.Normalizer_ProducerPublishErrorsTotal.WithLabelValues(topic).Inc()
+			return
+		}
+		metrics.Normalizer_ProducerPublishesTotal.WithLabelValues(topic).Inc()
+	})
+}
+
 func MonitorKafkaBreakerState(ctx context.Context) {
 	for {
 		select {

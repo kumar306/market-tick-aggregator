@@ -106,9 +106,10 @@ func TestSequenceOrderer(t *testing.T) {
 		BufferKey: bufferKey,
 	}
 	wm := make(map[string]*constants.SymbolState, 1)
+	dBuf := make([]byte, 0, 96)
 	wm[bufferKey] = symbolState
 
-	worker.FlushBuffer(ctx, d, wm)
+	worker.FlushBuffer(ctx, d, wm, dBuf)
 
 	// here 1,4 is skipped in flush buffer as it never enters buffer as it was in correct order
 	// only 3,2 enters buffer -> flush buffer -> process buffer

@@ -9,6 +9,7 @@ import (
 	"shared/metrics"
 	"strconv"
 	"time"
+	"unsafe"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/sony/gobreaker"
@@ -56,8 +57,15 @@ func InitRedis(redisConfig *constants.RedisConfig) {
 	logger.Log.Info("Initialised Redis Client")
 }
 
-func ConstructDedupeKey(topic string, partition int32, offset int64) string {
-	return topic + ":" + strconv.Itoa(int(partition)) + ":" + strconv.Itoa(int(offset))
+// remove heap allocs in dedupe key construction
+func ConstructDedupeKeyInto(buf []byte, topic string, partition int32, offset int64) string {
+	b := buf[:0]
+	b = append(b, topic...)
+	b = append(b, ':')
+	b = strconv.AppendInt(b, int64(partition), 10)
+	b = append(b, ':')
+	b = strconv.AppendInt(b, offset, 10)
+	return unsafe.String(unsafe.SliceData(b), len(b))
 }
 
 // set the dedupe key in redis with TTL

@@ -27,7 +27,7 @@ func PublishToKafkaLoop(wg *sync.WaitGroup,
 			return
 		default:
 			// read from ring buffer
-			msg, ok, _ := ring.Pop()
+			msg, ok, dropped := ring.Pop()
 			if !ok {
 				// empty buffer case
 				time.Sleep(1 * time.Millisecond)
@@ -48,7 +48,7 @@ func PublishToKafkaLoop(wg *sync.WaitGroup,
 			}
 
 			// publish to kafka
-			kafka.ProduceAsync(kafkaTopic, name, channel, symbol, normalized)
+			kafka.ProduceAsync(kafkaTopic, name, channel, symbol, normalized, dropped)
 		}
 	}
 }

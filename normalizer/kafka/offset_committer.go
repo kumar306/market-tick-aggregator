@@ -38,7 +38,6 @@ func OffsetCommitter(ctx context.Context, gapMillis int, topics []string) {
 				logger.Log.Error("CommitMarkedOffsets failed", "error", err)
 				metrics.Normalizer_CommitOffsetErrorsTotal.Inc()
 			} else {
-				logger.Log.Info("CommitMarkedOffsets ok", "latencyMillis", time.Since(start).Milliseconds())
 				// metrics.Normalizer_CommitOffsetsTotal.Set(client.)
 				listCtx, listCancel := context.WithTimeout(context.Background(), listOffsetsTimeout)
 				offsets, err := adm.ListCommittedOffsets(listCtx, topics...)

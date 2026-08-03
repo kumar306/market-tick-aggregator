@@ -109,7 +109,7 @@ func Test_ProduceAsync(t *testing.T) {
 	`)
 	key := []byte("ETH-USD")
 
-	kf.ProduceAsync(topicName, "coinbase", "ticker", key, val)
+	kf.ProduceAsync(topicName, "coinbase", "ticker", key, val, 0)
 	// dont buffer this produce
 	client.Flush(ctx)
 
@@ -125,10 +125,29 @@ func Test_ProduceAsync(t *testing.T) {
 			require.NoError(t, json.Unmarshal(rec.Value, &resultMap))
 			require.Equal(t, "ETH-USD", resultMap["product_id"])
 			require.Equal(t, "coinbase", resultMap["exchange"])
+			require.Empty(t, rec.Headers, "no drop marker expected when droppedBefore is 0")
 			fetched = true
 			break
 		}
 		return fetched
 	}, 10*time.Second, 200*time.Millisecond, "No message consumed within timeout")
 
+	// now verify the drop marker gets attached when droppedBefore > 0
+	kf.ProduceAsync(topicName, "coinbase", "ticker", key, val, 7)
+	client.Flush(ctx)
+
+	markerFetched := false
+	require.Eventually(t, func() bool {
+		fetches := client.PollFetches(ctx)
+		iter := fetches.RecordIter()
+		for !iter.Done() {
+			rec := iter.Next()
+			require.Len(t, rec.Headers, 1, "expected exactly one header for the drop marker")
+			require.Equal(t, kf.DroppedCountHeader, rec.Headers[0].Key)
+			require.Equal(t, "7", string(rec.Headers[0].Value))
+			markerFetched = true
+			break
+		}
+		return markerFetched
+	}, 10*time.Second, 200*time.Millisecond, "No message with drop marker consumed within timeout")
 }

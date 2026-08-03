@@ -69,14 +69,15 @@ func (b *BinanceDepthOrderer) SetSymbolState(symbolState *constants.SymbolState)
 	b.SymbolState = symbolState
 }
 
+// binance needs the new depth orderer for rest snapshot base then apply deltas
 func (b *BinanceDepthOrderer) InitOrdererState(msg *constants.PipelineMessage) {
-	utils.InitSequenceOrdererState(b.SymbolState, msg)
+	utils.InitBinanceDepthResyncState(b.SymbolState, msg)
 }
 
 func (b *BinanceDepthOrderer) Order(msg *constants.PipelineMessage,
 	bufferKey string,
 	workerChannel chan *constants.DispatchRecord) ([]*constants.PipelineMessage, error) {
-	return utils.SequenceOrderer(msg, b.SymbolState, bufferKey, workerChannel)
+	return utils.BinanceDepthOrder(msg, b.SymbolState, bufferKey, workerChannel)
 }
 
 func (b *BinanceDepthOrderer) PrepareBufferFlush() []*constants.PipelineMessage {

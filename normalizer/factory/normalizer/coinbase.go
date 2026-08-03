@@ -76,8 +76,8 @@ func (c *CoinbaseLevel2Normalizer) Normalize(msg *constants.PipelineMessage) ([]
 		Exchange:        msg.Exchange,
 		Channel:         msg.Channel,
 		Symbol:          msg.Symbol,
-		Bids:            []*generated.NormalizedBook_BookLevel{},
-		Asks:            []*generated.NormalizedBook_BookLevel{},
+		Bids:            make([]*generated.NormalizedBook_BookLevel, 0, len(rawMessage.Bids)+len(rawMessage.Changes)),
+		Asks:            make([]*generated.NormalizedBook_BookLevel, 0, len(rawMessage.Asks)+len(rawMessage.Changes)),
 		EventType:       rawMessage.Type,
 		EventTimeMillis: parsedTime.UnixMilli(),
 	}

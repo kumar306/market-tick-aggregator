@@ -34,7 +34,8 @@ func TestMarkForDedupe(t *testing.T) {
 		Timeout: time.Duration(1000) * time.Millisecond,
 	})
 
-	key := dedupe.ConstructDedupeKey("coinbase.ticks", 1, 3)
+	buf := make([]byte, 0, 96)
+	key := dedupe.ConstructDedupeKeyInto(buf, "coinbase.ticks", 1, 3)
 	dedupeErr := dedupe.MarkForDedupe(ctx, key)
 	require.NoError(t, dedupeErr)
 
@@ -69,7 +70,8 @@ func TestIsDuplicateDetection(t *testing.T) {
 	})
 	dedupe.TestingHook = nil
 
-	key := dedupe.ConstructDedupeKey("kraken.book", 0, 30)
+	buf := make([]byte, 0, 96)
+	key := dedupe.ConstructDedupeKeyInto(buf, "kraken.book", 0, 30)
 
 	dup, err := dedupe.IsDuplicate(ctx, key)
 	require.NoError(t, err)

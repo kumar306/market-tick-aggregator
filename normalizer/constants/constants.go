@@ -56,16 +56,18 @@ type EventType int
 const (
 	NewMessage EventType = iota
 	FlushBuffer
+	SnapshotReady
 )
 
 type DispatchRecord struct {
-	Event     EventType
-	Record    *kgo.Record
-	BufferKey string
-	ShardKey  uint32
-	Exchange  string
-	Channel   string
-	Symbol    string
+	Event          EventType
+	Record         *kgo.Record
+	BufferKey      string
+	ShardKey       uint32
+	Exchange       string
+	Channel        string
+	Symbol         string
+	SnapshotResult *BinanceDepthSnapshot
 }
 
 const (
@@ -86,9 +88,16 @@ const (
 	Sell                     string = "sell"
 	NormalizedTickerTopic    string = "normalized.ticks"
 	NormalizedBookTopic      string = "normalized.book"
+	DroppedCountHeader       string = "dropped-count"
 )
 
-// worker state per product id
+// rest /api/v3/depth response shape
+type BinanceDepthSnapshot struct {
+	LastUpdateID int64      `json:"lastUpdateId"`
+	Bids         [][]string `json:"bids"`
+	Asks         [][]string `json:"asks"`
+}
+
 type SymbolState struct {
 	// seq or ts ordering
 	Orderer OrdererStrategy
@@ -105,6 +114,12 @@ type SymbolState struct {
 
 	Gap       *time.Timer
 	GapActive bool
+
+	// Binance depth resync state - Binance never sends a book snapshot over
+	// the WebSocket, so every symbol starts unsynced until a REST snapshot
+	// has been fetched and spliced against the buffered live stream.
+	NeedsSnapshot   bool
+	SnapshotPending bool
 
 	// pipeline
 	Converter  ConverterStrategy

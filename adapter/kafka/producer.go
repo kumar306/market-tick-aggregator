@@ -5,6 +5,7 @@ import (
 	"os"
 	"shared/logger"
 	"shared/metrics"
+	"strconv"
 	"sync"
 	"time"
 
@@ -42,12 +43,20 @@ func Init(brokers []string) (*kgo.Client, error) {
 	return client, err
 }
 
-func ProduceAsync(topic string, name string, channel string, key, value []byte) {
+const DroppedCountHeader = "dropped-count"
+
+func ProduceAsync(topic string, name string, channel string, key, value []byte, droppedBefore uint64) {
 
 	record := &kgo.Record{
 		Key:   key,
 		Value: value,
 		Topic: topic,
+	}
+
+	if droppedBefore > 0 {
+		record.Headers = []kgo.RecordHeader{
+			{Key: DroppedCountHeader, Value: []byte(strconv.FormatUint(droppedBefore, 10))},
+		}
 	}
 
 	client.Produce(context.Background(), record, func(r *kgo.Record, err error) {

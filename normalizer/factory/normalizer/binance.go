@@ -71,8 +71,8 @@ func (b *BinanceDepthNormalizer) Normalize(msg *constants.PipelineMessage) ([]by
 		Symbol:          msg.Symbol,
 		EventTimeMillis: rawMessage.EventTime,
 		EventType:       rawMessage.EventType,
-		Bids:            []*generated.NormalizedBook_BookLevel{},
-		Asks:            []*generated.NormalizedBook_BookLevel{},
+		Bids:            make([]*generated.NormalizedBook_BookLevel, 0, len(rawMessage.Bids)),
+		Asks:            make([]*generated.NormalizedBook_BookLevel, 0, len(rawMessage.Asks)),
 	}
 
 	// add bids and asks in proto msg

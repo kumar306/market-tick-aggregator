@@ -104,6 +104,7 @@ func StartWorkerPool(ctx context.Context, channelPool []chan *constants.Dispatch
 			logger.Log.Info("Starting worker.", "worker", i)
 			// in memory map per worker
 			workerMap := make(map[string]*constants.SymbolState)
+			dedupeBuf := make([]byte, 0, 96)
 			for {
 				select {
 				case <-ctx.Done():
@@ -124,16 +125,19 @@ func StartWorkerPool(ctx context.Context, channelPool []chan *constants.Dispatch
 					case constants.FlushBuffer:
 						bufferFlushStart := time.Now()
 
-						worker.FlushBuffer(ctx, dispatchRec, workerMap)
+						worker.FlushBuffer(ctx, dispatchRec, workerMap, dedupeBuf)
 
 						bufferFlushLatency := time.Since(bufferFlushStart).Seconds()
 						metrics.Normalizer_BufferFlushLatency.WithLabelValues(strconv.Itoa(i)).Observe(bufferFlushLatency)
 						metrics.Normalizer_BufferFlushesTotal.WithLabelValues(strconv.Itoa(i)).Inc()
 
+					case constants.SnapshotReady:
+						worker.ProcessSnapshotReady(ctx, dispatchRec, workerMap, workerChannel, dedupeBuf)
+
 					case constants.NewMessage:
 						workerStartTime := time.Now()
 
-						worker.ProcessRecord(ctx, dispatchRec, workerMap, workerChannel)
+						worker.ProcessRecord(ctx, dispatchRec, workerMap, workerChannel, dedupeBuf)
 						workerLatency := time.Since(workerStartTime).Seconds()
 						metrics.Normalizer_WorkerLatencySeconds.WithLabelValues(strconv.Itoa(i)).Observe(workerLatency)
 

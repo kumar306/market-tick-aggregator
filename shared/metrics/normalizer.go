@@ -23,10 +23,11 @@ var (
 	Normalizer_DedupeLatencySeconds   *prometheus.HistogramVec
 
 	// orderer metrics
-	Normalizer_BufferSize         *prometheus.GaugeVec
-	Normalizer_BufferFlushesTotal *prometheus.CounterVec
-	Normalizer_BufferFlushLatency *prometheus.HistogramVec
-	Normalizer_DroppedTimerTotal  *prometheus.CounterVec
+	Normalizer_BufferSize           *prometheus.GaugeVec
+	Normalizer_BufferFlushesTotal   *prometheus.CounterVec
+	Normalizer_BufferFlushLatency   *prometheus.HistogramVec
+	Normalizer_DroppedTimerTotal    *prometheus.CounterVec
+	Normalizer_ResyncTriggeredTotal *prometheus.CounterVec
 
 	// publisher metrics
 	Normalizer_ProducerPublishesTotal     *prometheus.CounterVec
@@ -155,6 +156,12 @@ func InitNormalizerMetrics() {
 		Normalizer_DroppedTimerTotal = NewCounterVec(
 			"normalizer_dropped_timer_total",
 			"Number of dropped timer",
+			[]string{"exchange", "channel", "symbol"},
+		)
+
+		Normalizer_ResyncTriggeredTotal = NewCounterVec(
+			"normalizer_resync_triggered_total",
+			"Number of times a Binance depth resync (REST snapshot fetch) was triggered",
 			[]string{"exchange", "channel", "symbol"},
 		)
 
