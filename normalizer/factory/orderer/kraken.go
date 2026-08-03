@@ -67,16 +67,10 @@ func (k *KrakenBookOrderer) InitOrdererState(msg *constants.PipelineMessage) {
 	utils.InitTsOrdererState(k.SymbolState, msg)
 }
 
-// ts order here
 func (k *KrakenBookOrderer) Order(msg *constants.PipelineMessage,
 	bufferKey string,
 	workerChannel chan *constants.DispatchRecord) ([]*constants.PipelineMessage, error) {
-	// directly process the snapshot
-	if msg.EventType == constants.Snapshot {
-		return []*constants.PipelineMessage{msg}, nil
-	}
-
-	return utils.TsOrder(msg, k.SymbolState, bufferKey, workerChannel)
+	return utils.BookOrderWithResync(msg, k.SymbolState, bufferKey, workerChannel)
 }
 
 func (k *KrakenBookOrderer) PrepareBufferFlush() []*constants.PipelineMessage {

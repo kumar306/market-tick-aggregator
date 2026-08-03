@@ -55,11 +55,7 @@ func (c *CoinbaseLevel2Orderer) InitOrdererState(msg *constants.PipelineMessage)
 func (c *CoinbaseLevel2Orderer) Order(msg *constants.PipelineMessage,
 	bufferKey string,
 	workerChannel chan *constants.DispatchRecord) ([]*constants.PipelineMessage, error) {
-	if msg.EventType == constants.Snapshot {
-		return []*constants.PipelineMessage{msg}, nil
-	}
-
-	return utils.TsOrder(msg, c.SymbolState, bufferKey, workerChannel)
+	return utils.BookOrderWithResync(msg, c.SymbolState, bufferKey, workerChannel)
 }
 
 func (c *CoinbaseLevel2Orderer) PrepareBufferFlush() []*constants.PipelineMessage {

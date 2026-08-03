@@ -121,6 +121,10 @@ type SymbolState struct {
 	NeedsSnapshot   bool
 	SnapshotPending bool
 
+	// Coinbase/Kraken resync state - no sequence number here
+	// if forward gap, discard everything from the old session until a fresh snapshot arrives.
+	AwaitingSnapshot bool
+
 	// pipeline
 	Converter  ConverterStrategy
 	Normalizer NormalizerStrategy

@@ -59,6 +59,9 @@ func main() {
 	kafka.Init(c.BootstrapServers)
 	defer kafka.Close()
 
+	// start resync consumer which triggers resync requests
+	go internal.StartResyncConsumer(ctx, c.BootstrapServers)
+
 	// using this to coordinate to shutdown the supervisor goroutines
 	var wg sync.WaitGroup
 

@@ -55,6 +55,7 @@ func Connect(feed *constants.Feed, streamCfg *constants.Stream, supervisor *cons
 	// fix bug: context per attempt, not supervisor ctx. else if cancelling supervisor ctx, feed permanently dies instead of reconnecting
 	attemptCtx, attemptCancel := context.WithCancel(supervisor.Ctx)
 	defer attemptCancel()
+	RegisterResyncCancel(streamCfg.KafkaTopic, attemptCancel)
 
 	// spawn goroutines to handle message reads, heartbeats, monitor
 	supervisor.Wg.Add(1)

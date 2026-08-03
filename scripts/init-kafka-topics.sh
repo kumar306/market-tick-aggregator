@@ -15,6 +15,7 @@ TOPICS=(
   "aggregated.ticks:6:1"
   "aggregated.book:6:1"
   "persistence.dlq:6:1"
+  "resync.requests:3:1"
 )
 
 echo "Waiting for Kafka at ${BROKER}..."

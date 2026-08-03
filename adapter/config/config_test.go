@@ -22,7 +22,6 @@ import (
 // vii. incorrect information in stream/feed
 // viii. missing bootstrap servers or product ids
 func Test_GetConfig(t *testing.T) {
-	tempDir := t.TempDir()
 
 	tests := []struct {
 		name          string
@@ -348,7 +347,7 @@ feeds:
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			cfgFilePath := filepath.Join(tempDir, "config_test.yaml")
+			cfgFilePath := filepath.Join(t.TempDir(), "config_test.yaml")
 			err := os.WriteFile(cfgFilePath, []byte(tc.yamlContent), 0644)
 			if err != nil {
 				t.Fatalf("Could not write yaml to temp file for tc: %v. Error: %v", tc.name, err)
