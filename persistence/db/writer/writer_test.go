@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"market-persistence/batcher/util"
 	"market-persistence/db/model"
 	"shared/metrics"
 )
@@ -25,12 +26,20 @@ type execCall struct {
 	args []any
 }
 
-// will use a mock tx wrapper to count number of calls with sql, arg to track table insert made to tx exec
+type copyCall struct {
+	table    string
+	columns  []string
+	rowCount int
+}
+
+// will use a mock tx wrapper to count number of calls with sql, arg to track table insert made to tx exec, copy from
 // can use it to throw error at specific exec call in the case of real processing
 type mockTx struct {
 	execCalls     []execCall
 	execErrAtCall int
 	execErr       error
+	copyCalls     []copyCall
+	copyErr       error
 }
 
 func (m *mockTx) Exec(_ context.Context, sql string, args ...any) (int64, error) {
@@ -39,6 +48,21 @@ func (m *mockTx) Exec(_ context.Context, sql string, args ...any) (int64, error)
 		return 0, m.execErr
 	}
 	return 1, nil
+}
+
+func (m *mockTx) CopyFrom(_ context.Context, tableName string, columnNames []string, rowSrc util.CopyRowSource) (int64, error) {
+	if m.copyErr != nil {
+		return 0, m.copyErr
+	}
+	count := 0
+	for rowSrc.Next() {
+		if _, err := rowSrc.Values(); err != nil {
+			return 0, err
+		}
+		count++
+	}
+	m.copyCalls = append(m.copyCalls, copyCall{table: tableName, columns: columnNames, rowCount: count})
+	return int64(count), nil
 }
 
 func (m *mockTx) Commit(context.Context) error   { return nil }
@@ -79,14 +103,25 @@ func TestFlushAggregateTicksSuccess(t *testing.T) {
 		t.Fatalf("FlushAggregateTicks() error = %v, want nil", err)
 	}
 
-	if len(tx.execCalls) != 1 {
-		t.Fatalf("exec call count = %d, want 1", len(tx.execCalls))
+	// exec 1: create staging table, exec 2: insert-from-staging
+	if len(tx.execCalls) != 2 {
+		t.Fatalf("exec call count = %d, want 2 (staging DDL + insert-from-staging)", len(tx.execCalls))
 	}
-	if !strings.Contains(tx.execCalls[0].sql, "INSERT INTO aggregated_ticks") {
-		t.Fatalf("unexpected sql: %s", tx.execCalls[0].sql)
+	if !strings.Contains(tx.execCalls[0].sql, "CREATE TEMP TABLE") {
+		t.Fatalf("expected first exec to create the staging table, got: %s", tx.execCalls[0].sql)
 	}
-	if len(tx.execCalls[0].args) != 24 {
-		t.Fatalf("arg count = %d, want 24", len(tx.execCalls[0].args))
+	if !strings.Contains(tx.execCalls[1].sql, "INSERT INTO aggregated_ticks") {
+		t.Fatalf("expected second exec to insert from staging, got: %s", tx.execCalls[1].sql)
+	}
+
+	if len(tx.copyCalls) != 1 {
+		t.Fatalf("copy call count = %d, want 1", len(tx.copyCalls))
+	}
+	if tx.copyCalls[0].rowCount != 1 {
+		t.Fatalf("copied row count = %d, want 1", tx.copyCalls[0].rowCount)
+	}
+	if len(tx.copyCalls[0].columns) != 24 {
+		t.Fatalf("copy column count = %d, want 24", len(tx.copyCalls[0].columns))
 	}
 }
 
@@ -96,6 +131,18 @@ func TestFlushAggregateTicksExecError(t *testing.T) {
 	tx := &mockTx{
 		execErrAtCall: 1,
 		execErr:       errors.New("db exec failed"),
+	}
+	err := FlushAggregateTicks(context.Background(), tx, []*model.AggregatedTick{{}})
+	if err == nil {
+		t.Fatalf("FlushAggregateTicks() error = nil, want non-nil")
+	}
+}
+
+func TestFlushAggregateTicksCopyError(t *testing.T) {
+	initTestMetrics()
+
+	tx := &mockTx{
+		copyErr: errors.New("copy failed"),
 	}
 	err := FlushAggregateTicks(context.Background(), tx, []*model.AggregatedTick{{}})
 	if err == nil {

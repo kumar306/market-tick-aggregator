@@ -36,6 +36,10 @@ func (m *mockTx) Exec(context.Context, string, ...any) (int64, error) {
 	return 1, nil
 }
 
+func (m *mockTx) CopyFrom(context.Context, string, []string, util.CopyRowSource) (int64, error) {
+	return 0, nil
+}
+
 func (m *mockTx) Commit(context.Context) error {
 	m.commitCalls++
 	return m.commitErr
