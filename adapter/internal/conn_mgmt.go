@@ -56,7 +56,9 @@ func SendHeartbeat(conn *websocket.Conn,
 func MonitorConnection(
 	supervisor *constants.Supervisor,
 	streamCfg *constants.Stream,
-	ticker *time.Ticker) {
+	ticker *time.Ticker,
+	attemptCtx context.Context,
+	attemptCancel context.CancelFunc) {
 	metrics.Adapter_SupervisorGoroutines.WithLabelValues(streamCfg.Name).Inc()
 	defer supervisor.Wg.Done()
 	defer metrics.Adapter_SupervisorGoroutines.WithLabelValues(streamCfg.Name).Dec()
@@ -65,9 +67,12 @@ func MonitorConnection(
 		case <-ticker.C:
 			if time.Since(supervisor.LastPongTime) > time.Duration(streamCfg.PongTimeout)*time.Second {
 				logger.Log.Warn("Pong timeout -- cancelling the connection", "name", streamCfg.Name)
-				supervisor.Cancel()
+				attemptCancel()
 				return
 			}
+
+		case <-attemptCtx.Done():
+			return
 
 		case <-supervisor.Ctx.Done():
 			return
