@@ -145,6 +145,28 @@ func Init(ctx context.Context, cfg *constants.KafkaConfig) *kgo.Client {
 	return Client
 }
 
+// queries the broker for the live partition counts of all given topics and returns the largest
+// worker count tied to partition count as we need stable ordering across commit/transaction boundaries
+// partition number is routed to the same worker regardless of topic which is safe since offsets are tracked per (topic, partition)
+func MaxPartitionCount(ctx context.Context, topics ...string) (int, error) {
+	details, err := adm.ListTopics(ctx, topics...)
+	if err != nil {
+		return 0, err
+	}
+
+	max := 0
+	for _, topic := range topics {
+		detail, ok := details[topic]
+		if !ok || detail.Err != nil {
+			return 0, logger.LogAndWrap("Could not fetch topic metadata", detail.Err, "topic", topic)
+		}
+		if n := len(detail.Partitions); n > max {
+			max = n
+		}
+	}
+	return max, nil
+}
+
 // close the client
 func Close() {
 	if Client != nil {

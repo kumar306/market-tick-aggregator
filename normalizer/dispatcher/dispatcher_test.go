@@ -11,9 +11,11 @@ import (
 	"github.com/twmb/franz-go/pkg/kgo"
 )
 
-// test whether the dispatcher routing to worker is correct. test whether similar messages go to the same worker that is
-// send 3 coinbase ticker ETH-USD, 3 coinbase ticker BTC-USD
-// coinbase ticker ETH-USD all should go to one worker. all cb ticker BTC-USD goes to another worker
+// dispatcher must route by partition, not by symbol hash: a worker has to
+// exclusively own a partition's offset space so that marking/committing
+// offsets for that partition never interleaves across workers.
+// verify records from the same partition always land on the same worker
+// different partitions land on their own, independent workers.
 func TestRouting(t *testing.T) {
 
 	metrics.InitNormalizerMetrics()
@@ -28,40 +30,22 @@ func TestRouting(t *testing.T) {
 
 	go dispatcher.StartDispatcher(ctx, dispatchChannel, workerChannels)
 
-	rec1 := &kgo.Record{Key: []byte("ETH-USD"), Topic: "coinbase.ticker", Value: []byte("{\"exchange\":\"coinbase\", \"channel\":\"ticker\"}")}
-	rec2 := &kgo.Record{Key: []byte("ETH-USD"), Topic: "coinbase.ticker", Value: []byte("{\"exchange\":\"coinbase\", \"channel\":\"ticker\"}")}
-	rec3 := &kgo.Record{Key: []byte("ETH-USD"), Topic: "coinbase.ticker", Value: []byte("{\"exchange\":\"coinbase\", \"channel\":\"ticker\"}")}
-	rec4 := &kgo.Record{Key: []byte("BTC-USD"), Topic: "coinbase.ticker", Value: []byte("{\"exchange\":\"coinbase\", \"channel\":\"ticker\"}")}
-	rec5 := &kgo.Record{Key: []byte("BTC-USD"), Topic: "coinbase.ticker", Value: []byte("{\"exchange\":\"coinbase\", \"channel\":\"ticker\"}")}
-	rec6 := &kgo.Record{Key: []byte("BTC-USD"), Topic: "coinbase.ticker", Value: []byte("{\"exchange\":\"coinbase\", \"channel\":\"ticker\"}")}
+	value := []byte("{\"exchange\":\"coinbase\", \"channel\":\"ticker\"}")
 
-	wg.Add(1)
-	dispatchChannel <- rec1
-	wg.Add(1)
-	dispatchChannel <- rec2
-	wg.Add(1)
-	dispatchChannel <- rec3
-	wg.Add(1)
-	dispatchChannel <- rec4
-	wg.Add(1)
-	dispatchChannel <- rec5
-	wg.Add(1)
-	dispatchChannel <- rec6
+	// 3 records for ETH-USD, all on partition 1
+	for i := 0; i < 3; i++ {
+		wg.Add(1)
+		dispatchChannel <- &kgo.Record{Key: []byte("ETH-USD"), Topic: "coinbase.ticker", Partition: 1, Value: value}
+	}
+
+	// 3 records for BTC-USD, all on partition 4 - different symbol, different partition
+	for i := 0; i < 3; i++ {
+		wg.Add(1)
+		dispatchChannel <- &kgo.Record{Key: []byte("BTC-USD"), Topic: "coinbase.ticker", Partition: 4, Value: value}
+	}
 
 	wg.Wait()
 
-	var workerIdx int = -1
-
-	var count int = 0
-	var usedWorkers []int = make([]int, 0, 2)
-
-	for idx := range workerChannels {
-		if len(workerChannels[idx]) == 3 {
-			count++
-			usedWorkers = append(usedWorkers, workerIdx)
-		}
-	}
-
-	require.Equal(t, 2, count, "3 similar records should be routed to 2 separate workers")
-	t.Logf("ETH-USD routed consistently to workers %d, %d", usedWorkers[0], usedWorkers[1])
+	require.Equal(t, 3, len(workerChannels[1]), "all partition-1 records should land on worker 1, regardless of symbol")
+	require.Equal(t, 3, len(workerChannels[4]), "all partition-4 records should land on worker 4, regardless of symbol")
 }

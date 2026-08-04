@@ -68,8 +68,22 @@ func main() {
 	// create the dispatch channel
 	var dispatchChannel chan *kgo.Record = make(chan *kgo.Record, 1000)
 
+	// Worker count is derived from the live partition count across all consumed
+	// topics, not the static config value - each worker must exclusively own a
+	// stable set of partitions so offset commits never interleave across workers for the same partition.
+	numPartitions, err := kafka.MaxPartitionCount(ctx, cfg.KafkaConfig.Topics...)
+	if err != nil {
+		logger.Log.Error("Failed to fetch upstream topic partition counts. Stopping main()", "err", err)
+		os.Exit(1)
+	}
+	if numPartitions != cfg.WorkerCount {
+		logger.Log.Warn("Configured worker_count does not match live partition count; using partition count",
+			"configured_worker_count", cfg.WorkerCount,
+			"partition_count", numPartitions)
+	}
+
 	// create the worker channels
-	channelPool := dispatcher.CreateWorkerChannels(cfg.WorkerCount, cfg.WorkerQueueSize)
+	channelPool := dispatcher.CreateWorkerChannels(numPartitions, cfg.WorkerQueueSize)
 
 	// start worker pool
 	dispatcher.StartWorkerPool(ctx, channelPool)

@@ -54,8 +54,23 @@ func main() {
 	// wires up the metrics into metric registry
 	internal.InitMetricRegistry()
 
+	// Worker count is derived from the upstream topic's live partition count
+	// each worker must exclusively own a stable set of
+	// partitions so offset commits never
+	// interleave across workers for the same partition.
+	numPartitions, err := kafka.PartitionCount(ctx, cfg.KafkaConfig.TopicConfig.Upstream)
+	if err != nil {
+		logger.Log.Error("Failed to fetch upstream topic partition count. Stopping main()", "err", err)
+		os.Exit(1)
+	}
+	if numPartitions != cfg.WorkerCount {
+		logger.Log.Warn("Configured worker_count does not match live partition count; using partition count",
+			"configured_worker_count", cfg.WorkerCount,
+			"partition_count", numPartitions)
+	}
+
 	// create worker channels and workers
-	workerChannels := dispatcher.CreateWorkerChannels(cfg.WorkerCount, 1000)
+	workerChannels := dispatcher.CreateWorkerChannels(numPartitions, 1000)
 	dispatcher.StartWorkerChannels(ctx, workerChannels, cfg.WindowConfig, kafka.Client)
 
 	// start metric flush schedulers
@@ -71,7 +86,7 @@ func main() {
 
 	logger.Log.Info(
 		"Aggregator started",
-		"workers", cfg.WorkerCount,
+		"workers", numPartitions,
 		"windows", len(cfg.WindowConfig),
 	)
 

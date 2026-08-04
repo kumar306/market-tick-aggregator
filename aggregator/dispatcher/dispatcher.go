@@ -2,7 +2,6 @@ package dispatcher
 
 import (
 	"context"
-	"hash/fnv"
 	"market-aggregator/constants"
 	"market-aggregator/proto/generated"
 	"market-aggregator/utils"
@@ -36,11 +35,11 @@ func RunDispatcher(ctx context.Context, dispatchChannel chan *kgo.Record, worker
 
 			bufferKey := tick.Exchange + ":" + tick.Channel + ":" + tick.Symbol
 
-			hash := fnv.New32a()
-			hash.Write([]byte(bufferKey))
-			hashSum := hash.Sum32()
-
-			workerIdx := int(hashSum) % len(workerChannels)
+			// route by partition, not by symbol hash. a worker must exclusively own
+			// a partition's offset space otherwise two workers can mark/commit
+			// offsets for the same partition out of order and silently skip an
+			// unprocessed lower offset that a slower worker was still holding.
+			workerIdx := int(rec.Partition) % len(workerChannels)
 
 			// passing pointer to proto so we dont need to copy entire proto and its mutexes. just pass the same pointer
 			dispatchRecord := &constants.DispatchRecord{

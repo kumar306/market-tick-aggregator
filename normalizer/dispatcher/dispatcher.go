@@ -3,7 +3,6 @@ package dispatcher
 import (
 	"context"
 	"encoding/json"
-	"hash/fnv"
 	"market-normalizer/backpressure"
 	"market-normalizer/constants"
 	"market-normalizer/worker"
@@ -43,11 +42,11 @@ func StartDispatcher(ctx context.Context, dispatchChannel chan *kgo.Record, chan
 			// route to respective worker
 			dedupeKey := strings.ToLower(header.Exchange) + ":" + strings.ToLower(header.Channel) + ":" + strings.ToLower(symbol)
 
-			hash := fnv.New32a()
-			hash.Write([]byte(dedupeKey))
-			sum := hash.Sum32()
-
-			workerId := sum % uint32(len(channelPool))
+			// route by partition instead of symbol hash. worker must exclusively own
+			// a partition's offset space otherwise two workers can mark/commit
+			// offsets for the same partition out of order and silently skip an
+			// unprocessed lower offset that a slower worker was still holding.
+			workerId := uint32(rec.Partition) % uint32(len(channelPool))
 
 			// let dispatcher monitor worker queue metrics similar to orderbook
 			usage := float64(len(channelPool[workerId])) / float64(cap(channelPool[workerId]))

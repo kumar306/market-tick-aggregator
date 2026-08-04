@@ -66,6 +66,21 @@ func Init(ctx context.Context, cfg *constants.KafkaConfig) {
 	})
 }
 
+// queries the broker for topic's live partition count. worker
+// count must be derived from this at startup (not read from static config)
+// so that each worker owns a stable, exclusive set of partitions
+func PartitionCount(ctx context.Context, topic string) (int, error) {
+	details, err := adm.ListTopics(ctx, topic)
+	if err != nil {
+		return 0, err
+	}
+	detail, ok := details[topic]
+	if !ok || detail.Err != nil {
+		return 0, logger.LogAndWrap("Could not fetch topic metadata", detail.Err, "topic", topic)
+	}
+	return len(detail.Partitions), nil
+}
+
 func Close() {
 	// flush all buffered records before i call client.close
 	flushCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
