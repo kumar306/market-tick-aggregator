@@ -59,7 +59,7 @@ func Connect(feed *constants.Feed, streamCfg *constants.Stream, supervisor *cons
 
 	// spawn goroutines to handle message reads, heartbeats, monitor
 	supervisor.Wg.Add(1)
-	go ReadMessages(conn, attemptCtx, supervisor.Wg, streamHandler.Ring)
+	go ReadMessages(conn, attemptCtx, attemptCancel, supervisor.Wg, streamHandler.Ring)
 
 	supervisor.Wg.Add(1)
 	go PublishToKafkaLoop(supervisor.Wg, feed.Name, streamCfg.Channel, streamCfg.KafkaTopic, attemptCtx, streamHandler.Normalizer, streamHandler.Ring)
@@ -68,7 +68,7 @@ func Connect(feed *constants.Feed, streamCfg *constants.Stream, supervisor *cons
 	defer ticker.Stop()
 
 	supervisor.Wg.Add(1)
-	go SendHeartbeat(conn, attemptCtx, supervisor.Wg, streamHandler, ticker, feed.Name)
+	go SendHeartbeat(conn, attemptCtx, attemptCancel, supervisor.Wg, streamHandler, ticker, feed.Name)
 
 	supervisor.Wg.Add(1)
 	go MonitorConnection(supervisor, streamCfg, ticker, attemptCtx, attemptCancel)

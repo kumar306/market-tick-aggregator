@@ -12,7 +12,7 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-func ReadMessages(conn *websocket.Conn, ctx context.Context, wg *sync.WaitGroup, ring *ring.SpscDropOldestRing[[]byte]) {
+func ReadMessages(conn *websocket.Conn, ctx context.Context, cancel context.CancelFunc, wg *sync.WaitGroup, ring *ring.SpscDropOldestRing[[]byte]) {
 	name := ring.Name
 	metrics.Adapter_SupervisorGoroutines.WithLabelValues(name).Inc()
 	defer wg.Done()
@@ -25,6 +25,7 @@ func ReadMessages(conn *websocket.Conn, ctx context.Context, wg *sync.WaitGroup,
 			_, msg, err := conn.ReadMessage()
 			if err != nil {
 				logger.Log.Error("Failed to read message for feed", "name", name, "err", err)
+				cancel()
 				continue
 			}
 
@@ -36,6 +37,7 @@ func ReadMessages(conn *websocket.Conn, ctx context.Context, wg *sync.WaitGroup,
 
 func SendHeartbeat(conn *websocket.Conn,
 	ctx context.Context,
+	cancel context.CancelFunc,
 	wg *sync.WaitGroup,
 	handler *constants.StreamHandler,
 	ticker *time.Ticker,
@@ -46,7 +48,11 @@ func SendHeartbeat(conn *websocket.Conn,
 	for {
 		select {
 		case <-ticker.C:
-			handler.Pinger.Ping(conn, handler.Mu)
+			if err := handler.Pinger.Ping(conn, handler.Mu); err != nil {
+				logger.Log.Error("Failed to send heartbeat ping, triggering reconnect", "name", name, "err", err)
+				cancel()
+				return
+			}
 		case <-ctx.Done():
 			return
 		}
