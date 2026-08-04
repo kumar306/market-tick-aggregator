@@ -3,7 +3,6 @@ package worker
 import (
 	"context"
 	"market-aggregator/constants"
-	"market-aggregator/dedupe"
 	"market-aggregator/internal"
 	"market-aggregator/kafka"
 	"market-aggregator/proto/generated"
@@ -11,22 +10,21 @@ import (
 	"shared/logger"
 	"shared/metrics"
 	"strconv"
+	"sync/atomic"
 	"time"
-	"unsafe"
 
-	"github.com/sony/gobreaker"
+	"github.com/twmb/franz-go/pkg/kgo"
+	"google.golang.org/protobuf/proto"
 )
 
 var WorkerTestingHook func()
 
-// make worker a struct so it has its state within instead of passing state like a parameter
-// and let the worker have process and flush function
 type Worker struct {
 	ID           int
-	Channel      chan *constants.DispatchRecord
+	FlushChannel chan *constants.DispatchRecord
 	SymbolState  map[string]*WindowState
 	WindowConfig []*constants.WindowConfig
-	DedupeKeyBuf [96]byte
+	TxnFailed    atomic.Bool
 }
 
 type WindowState struct {
@@ -36,91 +34,104 @@ type WindowState struct {
 	Windows  map[string]*constants.Window
 }
 
-func NewWorker(id int, ch chan *constants.DispatchRecord, cfg []*constants.WindowConfig) *Worker {
-	symbolState := make(map[string]*WindowState)
+func NewWorker(id int, flushCh chan *constants.DispatchRecord, cfg []*constants.WindowConfig) *Worker {
 	return &Worker{
 		ID:           id,
-		Channel:      ch,
-		SymbolState:  symbolState,
+		FlushChannel: flushCh,
+		SymbolState:  make(map[string]*WindowState),
 		WindowConfig: cfg,
 	}
 }
 
-func (w *Worker) Run(ctx context.Context, client utils.KafkaClient) {
+// owns the worker's transaction lifecycle.
+// ticks, window flushes and the commit interval boundary are all serialized in 1 goroutine.
+// no concurrent kgo session produce/begin/end, which is forbidden
+func (w *Worker) Run(ctx context.Context, session *kgo.GroupTransactSession, commitInterval time.Duration) {
+	defer session.Close()
+
+	if err := session.Begin(); err != nil {
+		logger.Log.Error("Failed to begin initial transaction", "worker", w.ID, "err", err)
+		return
+	}
+
+	commitTicker := time.NewTicker(commitInterval)
+	defer commitTicker.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
+			w.endTransaction(context.Background(), session)
 			return
-		case dispatchRec, ok := <-w.Channel:
+
+		case flushRec, ok := <-w.FlushChannel:
 			if !ok {
-				logger.Log.Error("The worker channel is closed", "workerIdx", w.ID)
 				return
 			}
-			switch dispatchRec.Event {
-			case constants.ProcessEvent:
-				w.ProcessTick(ctx, dispatchRec)
-			case constants.FlushEvent:
-				w.FlushWindow(ctx, dispatchRec, client)
-			default:
-				logger.Log.Warn("Aggregator worker event received didn't match any known event", "event", dispatchRec.Event)
+			w.FlushWindow(flushRec, session)
+
+		case <-commitTicker.C:
+			w.endTransaction(ctx, session)
+			if err := session.Begin(); err != nil {
+				logger.Log.Error("Failed to begin next transaction", "worker", w.ID, "err", err)
+				return
 			}
+
+		default:
+			pollCtx, cancel := context.WithTimeout(ctx, 200*time.Millisecond)
+			fetches := session.PollFetches(pollCtx)
+			cancel()
+
+			if fetches.IsClientClosed() {
+				return
+			}
+
+			fetches.EachRecord(func(rec *kgo.Record) {
+				w.ProcessTick(rec)
+			})
+
+			fetches.EachError(func(topic string, partition int32, err error) {
+				logger.Log.Error("Fetch error", "worker", w.ID, "topic", topic, "partition", partition, "err", err)
+			})
 		}
 	}
 }
 
-// before processing it, check if exists in redis
-// publish and then mark dedupe
-// mark committed records and then commit offsets
+// endTransaction commits everything produced (window flushes), everything consumed (ticks) since the last boundary atomically.
+// if any produce in this cycle failed, the whole cycle aborts instead.
+// abort - nothing in this cycle was ever visible.
+// commit - entire cycle is visible.
+func (w *Worker) endTransaction(ctx context.Context, session *kgo.GroupTransactSession) {
+	commit := kgo.TryCommit
+	if w.TxnFailed.Swap(false) {
+		commit = kgo.TryAbort
+		logger.Log.Warn("Aborting transaction due to a produce failure this cycle", "worker", w.ID)
+	}
 
-func (w *Worker) ProcessTick(ctx context.Context,
-	dispatchRec *constants.DispatchRecord) {
-	// if not present, wire it and create all metrics - from the wired registry
-	// else skip
-	// update all window metrics
+	if _, err := session.End(ctx, commit); err != nil {
+		logger.Log.Error("Transaction end failed", "worker", w.ID, "err", err)
+	}
+}
+
+func (w *Worker) ProcessTick(rec *kgo.Record) {
 	start := time.Now().UnixMilli()
 
-	// dedupe mark occurs only after publish.
-	// one record will be used to flush for all windows. as soon as its applied, if we mark for dedupe, then if service crashed, its data loss for us
-	// but we know metrics converge and they are not source of truth. they are constructed
-	// its better if immediately dup check, then apply to windows and store in redis. as only metrics are persisted down and not actual record
-	// commit offsets manually after done with the record
-
-	dedupeStartTime := time.Now()
-	dedupeKey := w.buildDedupeKey(dispatchRec.Record.Topic, dispatchRec.Record.Partition, dispatchRec.Record.Offset)
-
-	dedupeExists, err := dedupe.IsDuplicate(ctx, dedupeKey)
-	if err != nil {
-		metrics.Aggregator_DedupeErrorsTotal.WithLabelValues(dispatchRec.Exchange, dispatchRec.Symbol).Inc()
-		logger.Log.Error("Error in worker dedupe check", "err", err, "key", dedupeKey)
+	tick := &generated.NormalizedTick{}
+	if err := proto.Unmarshal(rec.Value, tick); err != nil {
+		logger.Log.Error("Error in unmarshalling proto to normalized tick", "error", err)
 		return
 	}
 
-	metrics.Aggregator_DedupeChecksTotal.WithLabelValues(dispatchRec.Exchange, dispatchRec.Symbol).Inc()
+	bufferKey := tick.Exchange + ":" + tick.Channel + ":" + tick.Symbol
 
-	if dedupeExists {
-		metrics.Aggregator_DedupeHitsTotal.WithLabelValues(dispatchRec.Exchange, dispatchRec.Symbol).Inc()
-		return
-	}
-
-	dedupeLatency := time.Since(dedupeStartTime).Seconds()
-	metrics.Aggregator_DedupeLatencySeconds.WithLabelValues(
-		dispatchRec.Exchange,
-		dispatchRec.Symbol).Observe(dedupeLatency)
-
-	workerState := w.SymbolState
-	_, ok := workerState[dispatchRec.BufferKey]
+	windowState, ok := w.SymbolState[bufferKey]
 	if !ok {
-		// wire up the state
-		// create window objects. for each window object, wire up the metrics
-		// get window objects created via a window registry
-		windowState := &WindowState{
+		windowState = &WindowState{
 			Windows:  internal.BuildWindows(w.WindowConfig),
-			Exchange: dispatchRec.Tick.Exchange,
-			Channel:  dispatchRec.Tick.Channel,
-			Symbol:   dispatchRec.Tick.Symbol,
+			Exchange: tick.Exchange,
+			Channel:  tick.Channel,
+			Symbol:   tick.Symbol,
 		}
-
-		w.SymbolState[dispatchRec.BufferKey] = windowState
+		w.SymbolState[bufferKey] = windowState
 
 		metrics.Aggregator_WindowsPerSymbol.
 			WithLabelValues(strconv.Itoa(w.ID), windowState.Exchange, windowState.Channel, windowState.Symbol).
@@ -130,9 +141,7 @@ func (w *Worker) ProcessTick(ctx context.Context,
 			Set(float64(len(w.SymbolState)))
 	}
 
-	tick := dispatchRec.Tick
-
-	for _, window := range w.SymbolState[dispatchRec.BufferKey].Windows {
+	for _, window := range windowState.Windows {
 		for _, metric := range window.Metrics {
 			metric.Update(tick)
 		}
@@ -143,32 +152,13 @@ func (w *Worker) ProcessTick(ctx context.Context,
 		WithLabelValues(strconv.Itoa(w.ID)).
 		Observe(float64(processingTime))
 
-	if nil != WorkerTestingHook {
+	if WorkerTestingHook != nil {
 		WorkerTestingHook()
 	}
-
-	// mark for dedupe and mark for commit
-	dedupeErr := dedupe.MarkForDedupe(ctx, dedupeKey)
-	if dedupeErr != nil {
-		metrics.Aggregator_DedupeStoreErrorsTotal.WithLabelValues(dispatchRec.Exchange, dispatchRec.Symbol).Inc()
-	}
-
-	if kafka.Client != nil {
-		kafka.Client.MarkCommitRecords(dispatchRec.Record)
-	}
-
 }
 
-func (w *Worker) FlushWindow(ctx context.Context, flushRec *constants.DispatchRecord, client utils.KafkaClient) {
-	// get the worker state - get those windows having particular ID
-	// flushing for a particular window ID
-	// call apply
-	// post into kafka aggregated_ticks
+func (w *Worker) FlushWindow(flushRec *constants.DispatchRecord, client utils.KafkaClient) {
 	cfg := flushRec.WindowConfig
-
-	// per symbol window, create an aggregated tick,
-	// enrich it with its window metric information
-	// then persist to kafka
 
 	for _, windowState := range w.SymbolState {
 		start := time.Now().UnixMilli()
@@ -188,37 +178,23 @@ func (w *Worker) FlushWindow(ctx context.Context, flushRec *constants.DispatchRe
 		aggregatedTick.StartTsMs = flushRec.FlushTsMs - cfg.DurationMs
 
 		for _, metric := range window.Metrics {
-
 			metric.Apply(aggregatedTick)
-
 			// all metrics should implement reset
 			// rolling metrics have no-op for Reset()
 			// tumbling metrics are reset here
 			metric.Reset()
 		}
 
-		if kafka.KafkaBreaker.State() == gobreaker.StateOpen {
-			logger.Log.Warn("Circuit breaker is open. Dropping the aggregate", "exchange", windowState.Exchange, "symbol", windowState.Symbol)
-			metrics.Aggregator_AggregatesDroppedTotal.WithLabelValues(strconv.Itoa(w.ID)).Inc()
-		} else {
-			kafka.PublishAggregate(aggregatedTick, client)
-			processingTime := time.Now().UnixMilli() - start
-			metrics.Aggregator_WindowFlushDurationMs.WithLabelValues(
-				aggregatedTick.WindowId, strconv.Itoa(w.ID)).
-				Observe(float64(processingTime))
-			metrics.Aggregator_AggregatesProducedTotal.WithLabelValues(strconv.Itoa(w.ID)).Inc()
-		}
+		kafka.PublishAggregate(client, aggregatedTick, func() { w.TxnFailed.Store(true) })
 
+		processingTime := time.Now().UnixMilli() - start
+		metrics.Aggregator_WindowFlushDurationMs.WithLabelValues(
+			aggregatedTick.WindowId, strconv.Itoa(w.ID)).
+			Observe(float64(processingTime))
+		metrics.Aggregator_AggregatesProducedTotal.WithLabelValues(strconv.Itoa(w.ID)).Inc()
 	}
 }
 
-// bug fix to eliminate heap allocation on dedup key creation
-func (w *Worker) buildDedupeKey(topic string, partition int32, offset int64) string {
-	b := w.DedupeKeyBuf[:0]
-	b = append(b, topic...)
-	b = append(b, ':')
-	b = strconv.AppendInt(b, int64(partition), 10)
-	b = append(b, ':')
-	b = strconv.AppendInt(b, offset, 10)
-	return unsafe.String(unsafe.SliceData(b), len(b))
+func (w *Worker) GetTxnFailed() bool {
+	return w.TxnFailed.Load()
 }

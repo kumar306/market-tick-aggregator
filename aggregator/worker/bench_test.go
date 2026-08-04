@@ -4,18 +4,15 @@ import (
 	"context"
 	"market-aggregator/constants"
 	"market-aggregator/internal"
-	"market-aggregator/kafka"
 	"market-aggregator/proto/generated"
 	"market-aggregator/worker"
 	"shared/metrics"
 	"testing"
 
-	"github.com/sony/gobreaker"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"google.golang.org/protobuf/proto"
 )
 
-// nopClient satisfies utils.KafkaClient with zero overhead: no logs, no I/O.
 type nopClient struct{}
 
 func (nopClient) Produce(_ context.Context, _ *kgo.Record, _ func(*kgo.Record, error)) {}
@@ -23,13 +20,6 @@ func (nopClient) Produce(_ context.Context, _ *kgo.Record, _ func(*kgo.Record, e
 func init() {
 	metrics.InitAggregatorMetrics()
 	internal.InitMetricRegistry()
-	// FlushWindow checks kafka.KafkaBreaker.State(); keep the breaker always closed.
-	kafka.KafkaBreaker = gobreaker.NewCircuitBreaker(gobreaker.Settings{
-		Name:        "bench-cb",
-		ReadyToTrip: func(counts gobreaker.Counts) bool { return false },
-	})
-	kafka.DownstreamTopic = "aggregated.ticks"
-	kafka.ProducerErrors = make(chan error, 65536)
 }
 
 // benchWindowCfg mirrors the 13 time windows in production (aggregator/config/config.yaml).
@@ -49,82 +39,56 @@ var benchWindowCfg = []*constants.WindowConfig{
 	{Id: "24h", DurationMs: 86_400_000, FlushCadencyMs: 3_600_000, BucketSizeMs: 900_000},
 }
 
-func newBenchWorker(cfg []*constants.WindowConfig) (*worker.Worker, *constants.DispatchRecord) {
+func newBenchWorker(cfg []*constants.WindowConfig) (*worker.Worker, *kgo.Record) {
 	w := worker.NewWorker(0, make(chan *constants.DispatchRecord, 1), cfg)
 	tick := &generated.NormalizedTick{
-		Exchange:      "binance",
-		Channel:       "aggTrade",
-		Symbol:        "BTCUSDT",
-		Price:         65_000.0,
-		Volume:        0.5,
-		EventTsMillis: 1_700_000_000_000,
-		Open:          64_500.0,
-		Close:         65_000.0,
-		Low:           64_400.0,
-		High:          65_200.0,
-		SeqId:         1,
+		Exchange: "binance", Channel: "aggTrade", Symbol: "BTCUSDT",
+		Price: 65_000.0, Volume: 0.5, EventTsMillis: 1_700_000_000_000,
+		Open: 64_500.0, Close: 65_000.0, Low: 64_400.0, High: 65_200.0, SeqId: 1,
 	}
 	val, _ := proto.Marshal(tick)
-	rec := &kgo.Record{
-		Key:   []byte("binance:aggTrade:BTCUSDT"),
-		Topic: "normalized.ticks",
-		Value: val,
-	}
-	dr := &constants.DispatchRecord{
-		Event:     constants.ProcessEvent,
-		Tick:      tick,
-		Record:    rec,
-		Exchange:  "binance",
-		Symbol:    "BTCUSDT",
-		BufferKey: "binance:aggTrade:BTCUSDT",
-		WorkerIdx: 0,
-	}
-	return w, dr
+	rec := &kgo.Record{Key: []byte("binance:aggTrade:BTCUSDT"), Topic: "normalized.ticks", Value: val}
+	return w, rec
 }
 
 // BenchmarkProcessTick_1Window measures updating all 10 financial metrics across one time window.
 func BenchmarkProcessTick_1Window(b *testing.B) {
-	w, dr := newBenchWorker(benchWindowCfg[:1])
-	ctx := context.Background()
-	w.ProcessTick(ctx, dr) // warm-up: initialise symbol state before timing
+	w, rec := newBenchWorker(benchWindowCfg[:1])
+	w.ProcessTick(rec) // warm-up: initialise symbol state before timing
 	b.ResetTimer()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		w.ProcessTick(ctx, dr)
+		w.ProcessTick(rec)
 	}
 }
 
 // BenchmarkProcessTick_13Windows is the production hot-path: 10 financial metrics
 // (OHLC, VWAP, EMA, ATR, …) updated across all 13 time windows per tick.
 func BenchmarkProcessTick_13Windows(b *testing.B) {
-	w, dr := newBenchWorker(benchWindowCfg)
-	ctx := context.Background()
-	w.ProcessTick(ctx, dr) // warm-up
+	w, rec := newBenchWorker(benchWindowCfg)
+	w.ProcessTick(rec) // warm-up
 	b.ResetTimer()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		w.ProcessTick(ctx, dr)
+		w.ProcessTick(rec)
 	}
 }
 
 // BenchmarkFlushWindow measures computing, serialising, and producing one window's aggregated metrics.
 func BenchmarkFlushWindow(b *testing.B) {
 	cfg := benchWindowCfg[:1]
-	w, dr := newBenchWorker(cfg)
-	ctx := context.Background()
-	// Pre-fill price history so metrics are non-trivial.
+	w, rec := newBenchWorker(cfg)
 	for i := 0; i < 100; i++ {
-		w.ProcessTick(ctx, dr)
+		w.ProcessTick(rec)
 	}
 	flushRec := &constants.DispatchRecord{
 		Event:        constants.FlushEvent,
 		WindowConfig: cfg[0],
-		WorkerIdx:    0,
 		FlushTsMs:    1_700_000_005_000,
 	}
 	b.ResetTimer()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		w.FlushWindow(ctx, flushRec, nopClient{})
+		w.FlushWindow(flushRec, nopClient{})
 	}
 }

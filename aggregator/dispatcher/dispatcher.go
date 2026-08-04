@@ -1,74 +1,12 @@
 package dispatcher
 
 import (
-	"context"
 	"market-aggregator/constants"
-	"market-aggregator/proto/generated"
-	"market-aggregator/utils"
-	"market-aggregator/worker"
-	"shared/logger"
-	"shared/metrics"
-	"strconv"
-
-	"github.com/twmb/franz-go/pkg/kgo"
-	"google.golang.org/protobuf/proto"
 )
 
-var DispatchTestingHook func()
-
-func RunDispatcher(ctx context.Context, dispatchChannel chan *kgo.Record, workerChannels []chan *constants.DispatchRecord) {
-	// goroutine reads from the dispatch channel, shards it and routes it to respective worker
-	for {
-		select {
-		case rec, ok := <-dispatchChannel:
-			if !ok {
-				logger.Log.Error("The dispatch channel is closed")
-				return
-			}
-
-			tick := &generated.NormalizedTick{}
-			// rec - read the info, parse top level - and send it to the worker channel
-			if err := proto.Unmarshal(rec.Value, tick); err != nil {
-				logger.Log.Error("Error in unmarshalling proto to normalized tick", "error", err)
-				continue
-			}
-
-			bufferKey := tick.Exchange + ":" + tick.Channel + ":" + tick.Symbol
-
-			// route by partition, not by symbol hash. a worker must exclusively own
-			// a partition's offset space otherwise two workers can mark/commit
-			// offsets for the same partition out of order and silently skip an
-			// unprocessed lower offset that a slower worker was still holding.
-			workerIdx := int(rec.Partition) % len(workerChannels)
-
-			// passing pointer to proto so we dont need to copy entire proto and its mutexes. just pass the same pointer
-			dispatchRecord := &constants.DispatchRecord{
-				Event:     constants.ProcessEvent,
-				Tick:      tick,
-				Record:    rec,
-				BufferKey: bufferKey,
-				WorkerIdx: workerIdx,
-			}
-
-			select {
-			case workerChannels[workerIdx] <- dispatchRecord:
-				metrics.Aggregator_TicksIngestedTotal.WithLabelValues(strconv.Itoa(workerIdx)).Inc()
-			default:
-				logger.Log.Warn("Dropping record as the worker channel is blocking", "worker", workerIdx)
-				metrics.Aggregator_TicksDroppedTotal.WithLabelValues(strconv.Itoa(workerIdx)).Inc()
-			}
-
-			// injected only in testing to signal done
-			if DispatchTestingHook != nil {
-				DispatchTestingHook()
-			}
-
-		case <-ctx.Done():
-			return
-		}
-	}
-}
-
+// used only for flush-event fan-out by flush schedulers.
+// ticks no longer flow through a shared dispatcher.
+// each worker consumes its own assigned partitions directly via its own GroupTransactSession.
 func CreateWorkerChannels(workerCount int, chanSize int) []chan *constants.DispatchRecord {
 	var workerChannels []chan *constants.DispatchRecord
 
@@ -78,15 +16,4 @@ func CreateWorkerChannels(workerCount int, chanSize int) []chan *constants.Dispa
 	}
 
 	return workerChannels
-}
-
-func StartWorkerChannels(ctx context.Context, workerChannels []chan *constants.DispatchRecord, cfg []*constants.WindowConfig, client utils.KafkaClient) {
-	for idx, ch := range workerChannels {
-		go startWorker(ctx, idx, ch, cfg, client)
-	}
-}
-
-func startWorker(ctx context.Context, idx int, ch chan *constants.DispatchRecord, cfg []*constants.WindowConfig, client utils.KafkaClient) {
-	worker := worker.NewWorker(idx, ch, cfg)
-	worker.Run(ctx, client)
 }

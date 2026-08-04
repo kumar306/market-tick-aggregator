@@ -4,22 +4,22 @@ import (
 	"context"
 	"market-aggregator/config"
 	"market-aggregator/constants"
-	"market-aggregator/dedupe"
 	"market-aggregator/dispatcher"
 	"market-aggregator/flush"
 	"market-aggregator/internal"
 	"market-aggregator/kafka"
+	"market-aggregator/worker"
 	"net/http"
 	_ "net/http/pprof"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"os"
 	"shared/logger"
 	"shared/metrics"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/twmb/franz-go/pkg/kgo"
 )
 
 func main() {
@@ -42,14 +42,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	dedupe.InitRedis(cfg.RedisConfig)
-
-	// init kafka client
-	kafka.Init(ctx, cfg.KafkaConfig)
-	defer kafka.Close()
-
-	// breaker monitoring init
-	go kafka.MonitorKafkaBreaker(ctx)
+	kafka.DownstreamTopic = cfg.KafkaConfig.TopicConfig.Downstream
 
 	// wires up the metrics into metric registry
 	internal.InitMetricRegistry()
@@ -58,7 +51,7 @@ func main() {
 	// each worker must exclusively own a stable set of
 	// partitions so offset commits never
 	// interleave across workers for the same partition.
-	numPartitions, err := kafka.PartitionCount(ctx, cfg.KafkaConfig.TopicConfig.Upstream)
+	numPartitions, err := kafka.PartitionCount(ctx, cfg.KafkaConfig, cfg.KafkaConfig.TopicConfig.Upstream)
 	if err != nil {
 		logger.Log.Error("Failed to fetch upstream topic partition count. Stopping main()", "err", err)
 		os.Exit(1)
@@ -70,19 +63,21 @@ func main() {
 	}
 
 	// create worker channels and workers
-	workerChannels := dispatcher.CreateWorkerChannels(numPartitions, 1000)
-	dispatcher.StartWorkerChannels(ctx, workerChannels, cfg.WindowConfig, kafka.Client)
+	flushChannels := dispatcher.CreateWorkerChannels(numPartitions, 1000)
+	commitInterval := time.Duration(cfg.KafkaConfig.CommitOffsetIntervalMillis) * time.Millisecond
+
+	for i := 0; i < numPartitions; i++ {
+		session, err := kafka.NewWorkerSession(ctx, cfg.KafkaConfig, i)
+		if err != nil {
+			logger.Log.Error("Failed to create worker session. Stopping main()", "worker", i, "err", err)
+			os.Exit(1)
+		}
+		w := worker.NewWorker(i, flushChannels[i], cfg.WindowConfig)
+		go w.Run(ctx, session, commitInterval)
+	}
 
 	// start metric flush schedulers
-	flush.StartFlushSchedulers(ctx, workerChannels, cfg.WindowConfig)
-
-	// start dispatcher
-	dispatchCh := make(chan *kgo.Record, 1000)
-	go dispatcher.RunDispatcher(ctx, dispatchCh, workerChannels)
-
-	// start offset committer and kafka consumer
-	go kafka.OffsetCommitter(ctx, cfg.KafkaConfig.CommitOffsetIntervalMillis)
-	go kafka.StartConsumer(ctx, dispatchCh)
+	flush.StartFlushSchedulers(ctx, flushChannels, cfg.WindowConfig)
 
 	logger.Log.Info(
 		"Aggregator started",
