@@ -1,3 +1,4 @@
+// rolling_vwap.go
 package aggmetrics
 
 import (
@@ -11,65 +12,57 @@ type VWAPBucket struct {
 }
 
 type RollingVWAP struct {
-	buckets        []VWAPBucket
-	idx            int64
-	bucketSizeMs   int64
-	lastBucketTsMs int64
-	totalSumPV     float64
-	totalSumV      float64
+	Buckets        []VWAPBucket
+	Idx            int64
+	BucketSizeMs   int64
+	LastBucketTsMs int64
+	TotalSumPV     float64
+	TotalSumV      float64
 }
 
 func NewRollingVWAP(cfg *constants.WindowConfig) constants.Metric {
-
 	if cfg.BucketSizeMs <= 0 {
 		panic("Invalid bucket size configuration")
 	}
 
 	bucketsSize := cfg.DurationMs / cfg.BucketSizeMs
-
 	if bucketsSize <= 0 {
 		panic("Invalid bucket configuration")
 	}
 
 	return &RollingVWAP{
-		buckets:        make([]VWAPBucket, bucketsSize),
-		idx:            0,
-		bucketSizeMs:   cfg.BucketSizeMs,
-		lastBucketTsMs: 0,
+		Buckets:        make([]VWAPBucket, bucketsSize),
+		Idx:            0,
+		BucketSizeMs:   cfg.BucketSizeMs,
+		LastBucketTsMs: 0,
 	}
 }
 
 func (r *RollingVWAP) Update(t *generated.NormalizedTick) {
 	now := t.EventTsMillis
-	if r.lastBucketTsMs == 0 {
-		r.lastBucketTsMs = now
+	if r.LastBucketTsMs == 0 {
+		r.LastBucketTsMs = now
 	}
 
-	elapsed := now - r.lastBucketTsMs
+	elapsed := now - r.LastBucketTsMs
 
-	// advance buckets if bucket size crossed
-	if elapsed >= r.bucketSizeMs {
-		steps := elapsed / r.bucketSizeMs
+	if elapsed >= r.BucketSizeMs {
+		steps := elapsed / r.BucketSizeMs
 		for i := int64(0); i < steps; i++ {
-			r.idx = (r.idx + 1) % int64(len(r.buckets))
-
-			// maintain a rolling total and subtract oldest buckets value
-			// to prevent O(n) on every apply
-			r.totalSumPV -= r.buckets[r.idx].SumPV
-			r.totalSumV -= r.buckets[r.idx].SumV
-
-			r.buckets[r.idx] = VWAPBucket{}
+			r.Idx = (r.Idx + 1) % int64(len(r.Buckets))
+			r.TotalSumPV -= r.Buckets[r.Idx].SumPV
+			r.TotalSumV -= r.Buckets[r.Idx].SumV
+			r.Buckets[r.Idx] = VWAPBucket{}
 		}
-
-		r.lastBucketTsMs += steps * r.bucketSizeMs
+		r.LastBucketTsMs += steps * r.BucketSizeMs
 	}
 
-	b := &r.buckets[r.idx]
+	b := &r.Buckets[r.Idx]
 	b.SumPV += t.Price * t.Volume
 	b.SumV += t.Volume
 
-	r.totalSumPV += t.Price * t.Volume
-	r.totalSumV += t.Volume
+	r.TotalSumPV += t.Price * t.Volume
+	r.TotalSumV += t.Volume
 }
 
 func (r *RollingVWAP) Apply(target *generated.AggregatedTick) {
@@ -78,8 +71,8 @@ func (r *RollingVWAP) Apply(target *generated.AggregatedTick) {
 	}
 
 	vwap := 0.0
-	if r.totalSumV > 0 {
-		vwap = r.totalSumPV / r.totalSumV
+	if r.TotalSumV > 0 {
+		vwap = r.TotalSumPV / r.TotalSumV
 	}
 
 	target.PriceMetrics.RollingVwap = vwap
@@ -90,5 +83,5 @@ func (r *RollingVWAP) Reset() {
 }
 
 func (r *RollingVWAP) GetValue() float64 {
-	return r.totalSumPV / r.totalSumV
+	return r.TotalSumPV / r.TotalSumV
 }

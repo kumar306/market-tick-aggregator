@@ -40,7 +40,7 @@ var benchWindowCfg = []*constants.WindowConfig{
 }
 
 func newBenchWorker(cfg []*constants.WindowConfig) (*worker.Worker, *kgo.Record) {
-	w := worker.NewWorker(0, make(chan *constants.DispatchRecord, 1), cfg)
+	w := worker.NewWorker(0, make(chan *constants.DispatchRecord, 1), cfg, nil)
 	tick := &generated.NormalizedTick{
 		Exchange: "binance", Channel: "aggTrade", Symbol: "BTCUSDT",
 		Price: 65_000.0, Volume: 0.5, EventTsMillis: 1_700_000_000_000,

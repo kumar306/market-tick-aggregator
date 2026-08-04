@@ -24,6 +24,7 @@ type Worker struct {
 	FlushChannel chan *constants.DispatchRecord
 	SymbolState  map[string]*WindowState
 	WindowConfig []*constants.WindowConfig
+	Checkpoints  map[string]map[constants.MetricName]constants.Metric
 	TxnFailed    atomic.Bool
 }
 
@@ -34,12 +35,13 @@ type WindowState struct {
 	Windows  map[string]*constants.Window
 }
 
-func NewWorker(id int, flushCh chan *constants.DispatchRecord, cfg []*constants.WindowConfig) *Worker {
+func NewWorker(id int, flushCh chan *constants.DispatchRecord, cfg []*constants.WindowConfig, checkpoints map[string]map[constants.MetricName]constants.Metric) *Worker {
 	return &Worker{
 		ID:           id,
 		FlushChannel: flushCh,
 		SymbolState:  make(map[string]*WindowState),
 		WindowConfig: cfg,
+		Checkpoints:  checkpoints,
 	}
 }
 
@@ -101,6 +103,8 @@ func (w *Worker) Run(ctx context.Context, session *kgo.GroupTransactSession, com
 // abort - nothing in this cycle was ever visible.
 // commit - entire cycle is visible.
 func (w *Worker) endTransaction(ctx context.Context, session *kgo.GroupTransactSession) {
+	w.checkpointWindows(session)
+
 	commit := kgo.TryCommit
 	if w.TxnFailed.Swap(false) {
 		commit = kgo.TryAbort
@@ -109,6 +113,15 @@ func (w *Worker) endTransaction(ctx context.Context, session *kgo.GroupTransactS
 
 	if _, err := session.End(ctx, commit); err != nil {
 		logger.Log.Error("Transaction end failed", "worker", w.ID, "err", err)
+	}
+}
+
+// publish checkpoint for each bufferkey + windowId at the txn boundary
+func (w *Worker) checkpointWindows(session *kgo.GroupTransactSession) {
+	for bufferKey, windowState := range w.SymbolState {
+		for windowId, window := range windowState.Windows {
+			kafka.PublishCheckpoint(session, bufferKey, windowId, window.Metrics, func() { w.TxnFailed.Store(true) })
+		}
 	}
 }
 
@@ -131,6 +144,16 @@ func (w *Worker) ProcessTick(rec *kgo.Record) {
 			Channel:  tick.Channel,
 			Symbol:   tick.Symbol,
 		}
+
+		// rehydrate from the last checkpoint, if exists
+		// this protects a long-duration window's accumulated state from a crash that
+		// happens after its contributing ticks' offsets were already committed
+		for windowId, window := range windowState.Windows {
+			if checkpointed, found := w.Checkpoints[bufferKey+":"+windowId]; found {
+				window.Metrics = checkpointed
+			}
+		}
+
 		w.SymbolState[bufferKey] = windowState
 
 		metrics.Aggregator_WindowsPerSymbol.

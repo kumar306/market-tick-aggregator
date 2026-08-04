@@ -12,11 +12,11 @@ import (
 // use log returns as the value taken in as its easier to compare across symbols instead of taking raw price value
 
 type Volatility struct {
-	n         int64
-	m2        float64
-	mean      float64
-	init      bool
-	prevPrice float64
+	N         int64
+	M2        float64
+	Mean      float64
+	Init      bool
+	PrevPrice float64
 }
 
 func (v *Volatility) Update(t *generated.NormalizedTick) {
@@ -25,34 +25,34 @@ func (v *Volatility) Update(t *generated.NormalizedTick) {
 		return
 	}
 
-	if !v.init {
-		v.prevPrice = price
-		v.init = true
+	if !v.Init {
+		v.PrevPrice = price
+		v.Init = true
 		return
 	}
 
-	if math.IsNaN(v.prevPrice) || math.IsInf(v.prevPrice, 0) || v.prevPrice <= 0 {
-		v.prevPrice = price
+	if math.IsNaN(v.PrevPrice) || math.IsInf(v.PrevPrice, 0) || v.PrevPrice <= 0 {
+		v.PrevPrice = price
 		return
 	}
 
-	ret := math.Log(t.Price / v.prevPrice)
-	v.prevPrice = price
+	ret := math.Log(t.Price / v.PrevPrice)
+	v.PrevPrice = price
 
-	v.n++
-	delta := ret - v.mean
-	v.mean += delta / float64(v.n)
-	delta2 := ret - v.mean
-	v.m2 += delta * delta2
+	v.N++
+	delta := ret - v.Mean
+	v.Mean += delta / float64(v.N)
+	delta2 := ret - v.Mean
+	v.M2 += delta * delta2
 }
 
 func (v *Volatility) Apply(a *generated.AggregatedTick) {
 	// return if n < 2 as doing  /n-1
-	if v.n < 2 {
+	if v.N < 2 {
 		return
 	}
 
-	volatility := math.Sqrt(v.m2 / float64(v.n-1))
+	volatility := math.Sqrt(v.M2 / float64(v.N-1))
 	if math.IsNaN(volatility) || math.IsInf(volatility, 0) {
 		return
 	}
@@ -65,18 +65,18 @@ func (v *Volatility) Apply(a *generated.AggregatedTick) {
 }
 
 func (v *Volatility) Reset() {
-	v.n = 0
-	v.mean = 0
-	v.init = false
-	v.m2 = 0
-	v.prevPrice = 0
+	v.N = 0
+	v.Mean = 0
+	v.Init = false
+	v.M2 = 0
+	v.PrevPrice = 0
 }
 
 func (v *Volatility) GetValue() float64 {
-	if v.n < 2 {
+	if v.N < 2 {
 		// for testing purpose. this is not invoked in normal flow
-		v.n = 2
+		v.N = 2
 	}
 
-	return math.Sqrt(v.m2 / float64(v.n-1))
+	return math.Sqrt(v.M2 / float64(v.N-1))
 }

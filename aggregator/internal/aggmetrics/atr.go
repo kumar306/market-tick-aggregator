@@ -16,36 +16,36 @@ import (
 // alpha*tr + (1-alpha)*ATR - which is decayed rolling
 
 type ATR struct {
-	value     float64
-	alpha     float64
-	prevClose float64
-	init      bool
+	Value     float64
+	Alpha     float64
+	PrevClose float64
+	Init      bool
 }
 
 // use between 10-20. 10 is more reactive, 20 is more smooth
 func NewATR(cfg *constants.WindowConfig) *ATR {
 	alpha := 1.0 / float64(14)
 	return &ATR{
-		alpha: alpha,
+		Alpha: alpha,
 	}
 }
 
 func (atr *ATR) Update(t *generated.NormalizedTick) {
-	if !atr.init {
-		atr.value = t.High - t.Low
-		atr.prevClose = t.Close
-		atr.init = true
+	if !atr.Init {
+		atr.Value = t.High - t.Low
+		atr.PrevClose = t.Close
+		atr.Init = true
 		return
 	}
 
 	// calc true range
 	tr := math.Max(t.High-t.Low, math.Max(
-		math.Abs(t.High-atr.prevClose),
-		math.Abs(t.Low-atr.prevClose),
+		math.Abs(t.High-atr.PrevClose),
+		math.Abs(t.Low-atr.PrevClose),
 	))
 
-	atr.prevClose = t.Close
-	atr.value = atr.alpha*tr + (1-atr.alpha)*atr.value
+	atr.PrevClose = t.Close
+	atr.Value = atr.Alpha*tr + (1-atr.Alpha)*atr.Value
 }
 
 func (atr *ATR) Apply(a *generated.AggregatedTick) {
@@ -53,7 +53,7 @@ func (atr *ATR) Apply(a *generated.AggregatedTick) {
 		a.VolatilityMetrics = &generated.VolatilityMetrics{}
 	}
 
-	a.VolatilityMetrics.Atr = atr.value
+	a.VolatilityMetrics.Atr = atr.Value
 }
 
 // no-op as decayed rolling
@@ -62,5 +62,5 @@ func (atr *ATR) Reset() {
 }
 
 func (atr *ATR) GetValue() float64 {
-	return atr.value
+	return atr.Value
 }

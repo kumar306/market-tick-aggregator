@@ -25,7 +25,7 @@ func Test_WindowMetricsCreation(t *testing.T) {
 		{Id: "5s", DurationMs: 5000, FlushCadencyMs: 1000, BucketSizeMs: 500},
 	}
 
-	w := worker.NewWorker(1, make(chan *constants.DispatchRecord, 10), cfg)
+	w := worker.NewWorker(1, make(chan *constants.DispatchRecord, 10), cfg, nil)
 
 	bufferKey := "coinbase:ticker:ETH-USD"
 
@@ -77,7 +77,7 @@ func TestWorkerFlush(t *testing.T) {
 		{Id: "5s", DurationMs: 5000, FlushCadencyMs: 1000, BucketSizeMs: 1000},
 	}
 
-	w := worker.NewWorker(1, make(chan *constants.DispatchRecord, 10), cfg)
+	w := worker.NewWorker(1, make(chan *constants.DispatchRecord, 10), cfg, nil)
 
 	bufferKey := "coinbase:ticker:ETH-USD"
 	mockProto := &generated.NormalizedTick{
@@ -128,7 +128,7 @@ func TestFlushWindow_ProduceFailureAbortsTransaction(t *testing.T) {
 	cfg := []*constants.WindowConfig{
 		{Id: "5s", DurationMs: 5000, FlushCadencyMs: 1000, BucketSizeMs: 1000},
 	}
-	w := worker.NewWorker(1, make(chan *constants.DispatchRecord, 10), cfg)
+	w := worker.NewWorker(1, make(chan *constants.DispatchRecord, 10), cfg, nil)
 
 	bufferKey := "coinbase:ticker:ETH-USD"
 	mockProto := &generated.NormalizedTick{Exchange: "coinbase", Channel: "ticker", Symbol: "ETH-USD"}

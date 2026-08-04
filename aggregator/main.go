@@ -63,6 +63,9 @@ func main() {
 			"partition_count", numPartitions)
 	}
 
+	// get the existing agg state
+	checkpoints := kafka.LoadCheckpoints(ctx, cfg.KafkaConfig)
+
 	// create worker channels and workers
 	flushChannels := make([]chan *constants.DispatchRecord, numPartitions)
 	for i := range flushChannels {
@@ -77,7 +80,7 @@ func main() {
 			logger.Log.Error("Failed to create worker session. Stopping main()", "worker", i, "err", err)
 			os.Exit(1)
 		}
-		w := worker.NewWorker(i, flushChannels[i], cfg.WindowConfig)
+		w := worker.NewWorker(i, flushChannels[i], cfg.WindowConfig, checkpoints)
 		go w.Run(ctx, session, commitInterval)
 	}
 

@@ -16,6 +16,7 @@ TOPICS=(
   "aggregated.book:6:1"
   "persistence.dlq:6:1"
   "resync.requests:3:1"
+  "aggregator.window.checkpoints:6:1:cleanup.policy=compact"
 )
 
 echo "Waiting for Kafka at ${BROKER}..."
@@ -32,14 +33,19 @@ if ! kafka-topics --bootstrap-server "${BROKER}" --list >/dev/null 2>&1; then
   exit 1
 fi
 
+# support compaction in kafka topic
 for spec in "${TOPICS[@]}"; do
-  IFS=':' read -r topic partitions replication_factor <<<"${spec}"
-  kafka-topics --bootstrap-server "${BROKER}" \
+  IFS=':' read -r topic partitions replication_factor topic_config <<<"${spec}"
+  cmd=(kafka-topics --bootstrap-server "${BROKER}" \
     --create \
     --if-not-exists \
     --topic "${topic}" \
     --partitions "${partitions}" \
-    --replication-factor "${replication_factor}"
+    --replication-factor "${replication_factor}")
+  if [[ -n "${topic_config:-}" ]]; then
+    cmd+=(--config "${topic_config}")
+  fi
+  "${cmd[@]}"
 done
 
 echo "Kafka topics available:"
