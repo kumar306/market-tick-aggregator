@@ -45,6 +45,11 @@ type RedisConfig struct {
 	CBTimeoutMillis int     `yaml:"cb_timeout_millis"`
 }
 
+// to fix import cycle - has same signature as groupTransactSession
+type Producer interface {
+	Produce(ctx context.Context, r *kgo.Record, promise func(*kgo.Record, error))
+}
+
 type Header struct {
 	Exchange string `json:"exchange"`
 	Channel  string `json:"channel"`
@@ -170,7 +175,7 @@ type OrdererStrategy interface {
 
 // publishes to downstream topic based on channel type
 type PublisherStrategy interface {
-	Publish(ctx context.Context, raw []byte, partitionKey string, msg *PipelineMessage)
+	Publish(ctx context.Context, raw []byte, partitionKey string, msg *PipelineMessage, producer Producer, onFailure func())
 	// fetch its publish topic
 	PublishTopic() string
 }

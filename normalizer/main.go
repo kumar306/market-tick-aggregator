@@ -5,10 +5,9 @@ import (
 	"market-normalizer/backpressure"
 	"market-normalizer/config"
 	"market-normalizer/constants"
-	"market-normalizer/dedupe"
-	"market-normalizer/dispatcher"
 	"market-normalizer/factory/registry"
 	"market-normalizer/kafka"
+	"market-normalizer/resync"
 	"market-normalizer/worker"
 	"net/http"
 	_ "net/http/pprof"
@@ -17,23 +16,17 @@ import (
 	"shared/logger"
 	"shared/metrics"
 	"syscall"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/twmb/franz-go/pkg/kgo"
 )
 
-// TODO:
-// viii. create a bg goroutine to commit the marked offsets - use a ticker.C
-
 func main() {
-
 	logger.Log.Info("Normalizer starting...")
 
 	metrics.InitNormalizerMetrics()
-
 	go exposeMetrics()
 
-	// load the consumer config
 	cfgPath := os.Getenv("CONFIG_FILE")
 	if cfgPath == "" {
 		cfgPath = constants.ConfigFilePath
@@ -44,34 +37,16 @@ func main() {
 		os.Exit(1)
 	}
 
-	_, err = kafka.NewWAL(cfg.KafkaConfig)
-	if err != nil {
-		logger.Log.Error("Failed to initialise WAL. Stopping main()", "err", err)
-		os.Exit(1)
-	}
-
 	InitPipelineRegistries()
-
-	// init redis for dedupe in pipeline
-	dedupe.InitRedis(cfg.RedisConfig)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// consumer init
-	client := kafka.Init(ctx, cfg.KafkaConfig)
-	defer kafka.Close()
+	go kafka.KafkaConsumerMetrics(ctx, cfg.KafkaConfig)
 
-	// detect consumer lag for backpressure alert
-	go kafka.KafkaConsumerMetrics(ctx, cfg.KafkaConfig.Topics)
+	resync.InitResyncProducer(cfg.KafkaConfig)
 
-	// create the dispatch channel
-	var dispatchChannel chan *kgo.Record = make(chan *kgo.Record, 1000)
-
-	// Worker count is derived from the live partition count across all consumed
-	// topics, not the static config value - each worker must exclusively own a
-	// stable set of partitions so offset commits never interleave across workers for the same partition.
-	numPartitions, err := kafka.MaxPartitionCount(ctx, cfg.KafkaConfig.Topics...)
+	numPartitions, err := kafka.MaxPartitionCount(ctx, cfg.KafkaConfig, cfg.KafkaConfig.Topics...)
 	if err != nil {
 		logger.Log.Error("Failed to fetch upstream topic partition counts. Stopping main()", "err", err)
 		os.Exit(1)
@@ -82,40 +57,31 @@ func main() {
 			"partition_count", numPartitions)
 	}
 
-	// create the worker channels
-	channelPool := dispatcher.CreateWorkerChannels(numPartitions, cfg.WorkerQueueSize)
+	eventChannels := make([]chan *constants.DispatchRecord, numPartitions)
+	for i := range eventChannels {
+		eventChannels[i] = make(chan *constants.DispatchRecord, cfg.WorkerQueueSize)
+	}
 
-	// start worker pool
-	dispatcher.StartWorkerPool(ctx, channelPool)
+	commitInterval := time.Duration(cfg.KafkaConfig.CommitOffsetIntervalMillis) * time.Millisecond
 
-	// init backpressure state
-	backpressure.InitBackpressureController(kafka.Client, cfg.KafkaConfig.BackpressureConfig, int64(cfg.WorkerQueueSize))
-
-	// setup dispatcher
-	go dispatcher.StartDispatcher(ctx, dispatchChannel, channelPool)
-
-	// start offset committer
-	go kafka.OffsetCommitter(ctx, cfg.KafkaConfig.CommitOffsetIntervalMillis, cfg.KafkaConfig.Topics)
-
-	// kafka publish circuit breaker
-	go kafka.MonitorKafkaBreakerState(ctx)
-
-	// start the consumer loop
-	go kafka.ConsumerLoop(ctx, client, dispatchChannel)
-
-	// metrics goroutine for worker ingestion
-	go worker.StartWorkerMetrics(ctx, channelPool)
+	for i := 0; i < numPartitions; i++ {
+		session, err := kafka.NewWorkerSession(ctx, cfg.KafkaConfig, i)
+		if err != nil {
+			logger.Log.Error("Failed to create worker session. Stopping main()", "worker", i, "err", err)
+			os.Exit(1)
+		}
+		bp := backpressure.NewController(i, session.Client(), cfg.KafkaConfig.BackpressureConfig, int64(cfg.WorkerQueueSize))
+		w := worker.NewWorker(i, eventChannels[i], bp)
+		go w.Run(ctx, session, commitInterval)
+	}
 
 	logger.Log.Info("Started normalizer service successfully..")
 
-	// wait until SIGTERM
 	<-ctx.Done()
-
 	logger.Log.Info("Received interrupt.. shutting down")
 }
 
 func InitPipelineRegistries() {
-	// init all pipeline registries
 	registry.InitConverterRegistry()
 	registry.InitOrdererRegistry()
 	registry.InitNormalizerRegistry()

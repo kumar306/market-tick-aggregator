@@ -2,8 +2,9 @@ package worker
 
 import (
 	"context"
+	"encoding/json"
+	"market-normalizer/backpressure"
 	"market-normalizer/constants"
-	"market-normalizer/dedupe"
 	"market-normalizer/factory/registry"
 	"market-normalizer/kafka"
 	"market-normalizer/proto/generated"
@@ -11,110 +12,180 @@ import (
 	"shared/logger"
 	"shared/metrics"
 	"strconv"
+	"strings"
+	"sync/atomic"
 	"time"
 
+	"github.com/twmb/franz-go/pkg/kgo"
 	"google.golang.org/protobuf/proto"
 )
 
-func ProcessRecord(ctx context.Context,
-	dispatchRec *constants.DispatchRecord,
-	workerMap map[string]*constants.SymbolState,
-	workerChannel chan *constants.DispatchRecord,
-	dedupeBuf []byte) error {
+type Worker struct {
+	ID           int
+	EventChannel chan *constants.DispatchRecord
+	WorkerMap    map[string]*constants.SymbolState
+	Backpressure *backpressure.Controller
+	txnFailed    atomic.Bool
+}
 
-	// if key not in map - insert into the map and plug its strategies based on feed
-	_, exists := workerMap[dispatchRec.BufferKey]
+func NewWorker(id int, eventCh chan *constants.DispatchRecord, bp *backpressure.Controller) *Worker {
+	return &Worker{
+		ID:           id,
+		EventChannel: eventCh,
+		WorkerMap:    make(map[string]*constants.SymbolState),
+		Backpressure: bp,
+	}
+}
+
+// Run owns the worker's whole transaction lifecycle. Consuming, buffer
+// flushes (gap timers), Binance snapshot results, and the commit-interval
+// boundary are all serialized through this one select loop -- exactly one
+// goroutine ever touches this session.
+func (w *Worker) Run(ctx context.Context, session *kgo.GroupTransactSession, commitInterval time.Duration) {
+	defer session.Close()
+
+	if err := session.Begin(); err != nil {
+		logger.Log.Error("Failed to begin initial transaction", "worker", w.ID, "err", err)
+		return
+	}
+
+	commitTicker := time.NewTicker(commitInterval)
+	defer commitTicker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			w.endTransaction(context.Background(), session)
+			return
+
+		case dispatchRec, ok := <-w.EventChannel:
+			if !ok {
+				return
+			}
+			switch dispatchRec.Event {
+			case constants.FlushBuffer:
+				// posted from orderer
+				w.FlushBuffer(ctx, dispatchRec, session)
+			case constants.SnapshotReady:
+				// posted after fetching rest snapshot
+				w.ProcessSnapshotReady(ctx, dispatchRec, session)
+			}
+
+		case <-commitTicker.C:
+			w.endTransaction(ctx, session)
+			if err := session.Begin(); err != nil {
+				logger.Log.Error("Failed to begin next transaction", "worker", w.ID, "err", err)
+				return
+			}
+
+		default:
+			pollCtx, cancel := context.WithTimeout(ctx, 200*time.Millisecond)
+			fetches := session.PollFetches(pollCtx)
+			cancel()
+
+			if fetches.IsClientClosed() {
+				return
+			}
+
+			fetches.EachRecord(func(rec *kgo.Record) {
+				if w.Backpressure != nil {
+					w.Backpressure.OnEnqueue(rec.Topic, rec.Partition)
+				}
+				if err := w.ProcessRecord(ctx, rec, session); err != nil {
+					logger.Log.Error("Error processing record", "worker", w.ID, "err", err)
+				}
+				if w.Backpressure != nil {
+					w.Backpressure.OnDequeue()
+				}
+			})
+
+			fetches.EachError(func(topic string, partition int32, err error) {
+				logger.Log.Error("Fetch error", "worker", w.ID, "topic", topic, "partition", partition, "err", err)
+			})
+		}
+	}
+}
+
+// TxnFailed reports whether the current cycle has a produce failure pending
+// abort. Exposed for tests; production code shouldn't need to read this.
+func (w *Worker) TxnFailed() bool {
+	return w.txnFailed.Load()
+}
+
+func (w *Worker) endTransaction(ctx context.Context, session *kgo.GroupTransactSession) {
+	commit := kgo.TryCommit
+	if w.txnFailed.Swap(false) {
+		commit = kgo.TryAbort
+		logger.Log.Warn("Aborting transaction due to a produce failure this cycle", "worker", w.ID)
+	}
+	if _, err := session.End(ctx, commit); err != nil {
+		logger.Log.Error("Transaction end failed", "worker", w.ID, "err", err)
+	}
+}
+
+func (w *Worker) ProcessRecord(ctx context.Context, rec *kgo.Record, producer constants.Producer) error {
+	var header constants.Header
+	if err := json.Unmarshal(rec.Value, &header); err != nil {
+		logger.Log.Error("Error in unmarshalling record header fields", "error", err)
+		return err
+	}
+
+	symbol := string(rec.Key)
+	bufferKey := strings.ToLower(header.Exchange) + ":" + strings.ToLower(header.Channel) + ":" + strings.ToLower(symbol)
+
+	_, exists := w.WorkerMap[bufferKey]
 	if !exists {
-		converter, err := registry.GetRegisteredConverter(dispatchRec.Exchange, dispatchRec.Channel)
+		converter, err := registry.GetRegisteredConverter(header.Exchange, header.Channel)
 		if err != nil {
 			return logger.LogAndWrap("Error when fetching registered converter to worker", err)
 		}
-
-		orderer, err := registry.GetRegisteredOrderer(dispatchRec.Exchange, dispatchRec.Channel)
+		orderer, err := registry.GetRegisteredOrderer(header.Exchange, header.Channel)
 		if err != nil {
 			return logger.LogAndWrap("Error when fetching registered orderer to worker", err)
 		}
-
-		normalizer, err := registry.GetRegisteredNormalizer(dispatchRec.Exchange, dispatchRec.Channel)
+		normalizer, err := registry.GetRegisteredNormalizer(header.Exchange, header.Channel)
 		if err != nil {
 			return logger.LogAndWrap("Error when fetching registered normalizer to worker", err)
 		}
-
-		publisher, err := registry.GetRegisteredPublisher(dispatchRec.Channel)
+		publisher, err := registry.GetRegisteredPublisher(header.Channel)
 		if err != nil {
 			return logger.LogAndWrap("Error when fetching registered publisher to worker", err)
 		}
 
-		// creating the symbol state per bufferkey on init insertion
-		workerMap[dispatchRec.BufferKey] = &constants.SymbolState{
+		w.WorkerMap[bufferKey] = &constants.SymbolState{
 			Orderer:    orderer,
 			Converter:  converter,
 			Normalizer: normalizer,
 			Publisher:  publisher,
 		}
 
-		logger.Log.Info("Inserted entry for key in worker", "id", dispatchRec.ShardKey, "bufferKey", dispatchRec.BufferKey)
+		logger.Log.Info("Inserted entry for key in worker", "id", w.ID, "bufferKey", bufferKey)
 	}
 
-	symbolState := workerMap[dispatchRec.BufferKey]
+	symbolState := w.WorkerMap[bufferKey]
 
-	// conversion
-	normalizedMsg, err := symbolState.Converter.Convert(dispatchRec.Record.Value)
+	normalizedMsg, err := symbolState.Converter.Convert(rec.Value)
 	if err != nil {
-		return logger.LogAndWrap("Error in worker converter stage", err, "exchange", dispatchRec.Exchange, "channel", dispatchRec.Channel)
+		return logger.LogAndWrap("Error in worker converter stage", err, "exchange", header.Exchange, "channel", header.Channel)
 	}
 
-	// worker insertion scenario
 	if !exists {
 		symbolState.Orderer.SetSymbolState(symbolState)
 		symbolState.Orderer.InitOrdererState(normalizedMsg)
-		logger.Log.Info("Set symbol state for key", "bufferKey", dispatchRec.BufferKey)
-		exists = true
+		logger.Log.Info("Set symbol state for key", "bufferKey", bufferKey)
 	}
 
-	dedupeStartTime := time.Now()
+	// carried through for the drop-marker check and resync signalling
+	normalizedMsg.Record = rec
 
-	// dedupe check
-	dedupeKey := dedupe.ConstructDedupeKeyInto(dedupeBuf,
-		dispatchRec.Record.Topic,
-		dispatchRec.Record.Partition,
-		dispatchRec.Record.Offset)
-
-	dedupeExists, err := dedupe.IsDuplicate(ctx, dedupeKey)
-	if err != nil {
-		metrics.Normalizer_DedupeErrorsTotal.WithLabelValues(dispatchRec.Exchange, dispatchRec.Channel, dispatchRec.Symbol).Inc()
-		return logger.LogAndWrap("Error in worker dedupe check", err, "key", dedupeKey)
-	}
-
-	metrics.Normalizer_DedupeChecksTotal.WithLabelValues(dispatchRec.Exchange, dispatchRec.Channel, dispatchRec.Symbol).Inc()
-
-	if dedupeExists {
-		metrics.Normalizer_DedupeHitsTotal.WithLabelValues(dispatchRec.Exchange, dispatchRec.Channel, dispatchRec.Symbol).Inc()
-		logger.Log.Warn("Duplicate message detected. Skipping", "key", dedupeKey)
-		return nil
-	}
-
-	dedupeLatency := time.Since(dedupeStartTime).Seconds()
-	metrics.Normalizer_DedupeLatencySeconds.WithLabelValues(
-		dispatchRec.Exchange,
-		dispatchRec.Channel,
-		dispatchRec.Symbol).Observe(dedupeLatency)
-
-	// include the original record so it can be marked for commit in the publisher
-	normalizedMsg.Record = dispatchRec.Record
-
-	normalizedBuf, err := symbolState.Orderer.Order(normalizedMsg, dispatchRec.BufferKey, workerChannel)
-
+	normalizedBuf, err := symbolState.Orderer.Order(normalizedMsg, bufferKey, w.EventChannel)
 	if len(normalizedBuf) == 0 {
-		// message added in the buffer case
-		metrics.Normalizer_BufferSize.WithLabelValues(dispatchRec.Exchange,
-			dispatchRec.Channel,
-			dispatchRec.Symbol).Inc()
+		metrics.Normalizer_BufferSize.WithLabelValues(header.Exchange, header.Channel, symbol).Inc()
 		return nil
 	}
 
-	// convert to a normalized schema and publish to downstream
-	ProcessBuffer(ctx, normalizedBuf, dispatchRec.BufferKey, symbolState.Normalizer, symbolState.Publisher, symbolState.Orderer, dedupeBuf)
+	onFailure := func() { w.txnFailed.Store(true) }
+	ProcessBuffer(ctx, normalizedBuf, bufferKey, symbolState.Normalizer, symbolState.Publisher, symbolState.Orderer, producer, onFailure)
 	return err
 }
 
@@ -124,7 +195,8 @@ func ProcessBuffer(ctx context.Context,
 	normalizer constants.NormalizerStrategy,
 	publisher constants.PublisherStrategy,
 	orderer constants.OrdererStrategy,
-	dedupeBuf []byte) {
+	producer constants.Producer,
+	onFailure func()) {
 
 	for _, msg := range normalizedBuffer {
 		protoStream, err := normalizer.Normalize(msg)
@@ -136,46 +208,27 @@ func ProcessBuffer(ctx context.Context,
 
 		metrics.Normalizer_NormalizedMessagesTotal.WithLabelValues(msg.Exchange, msg.Channel, msg.Symbol).Inc()
 
-		publisher.Publish(ctx, protoStream, partitionKey, msg)
+		publisher.Publish(ctx, protoStream, partitionKey, msg, producer, onFailure)
 
-		// ack and update symbol state - by update strategy of orderer
-		// if worker crashes mid flush, it will resume from crash point
 		orderer.Ack(msg)
 
-		// dec count after ack as map entry is deleted
 		metrics.Normalizer_BufferSize.WithLabelValues(msg.Exchange, msg.Channel, msg.Symbol).Dec()
-
-		// mark for dedupe
-		dedupeErr := dedupe.MarkForDedupe(ctx, dedupe.ConstructDedupeKeyInto(dedupeBuf, msg.Record.Topic, msg.Record.Partition, msg.Record.Offset))
-
-		if dedupeErr != nil {
-			metrics.Normalizer_DedupeStoreErrorsTotal.WithLabelValues(msg.Exchange,
-				msg.Channel,
-				msg.Symbol).Inc()
-		}
 	}
 
-	// final buffer internals cleanup
 	orderer.Cleanup()
 }
 
-func FlushBuffer(ctx context.Context, dispatchRec *constants.DispatchRecord, workerMap map[string]*constants.SymbolState, dedupeBuf []byte) {
-	symbolState := workerMap[dispatchRec.BufferKey]
+func (w *Worker) FlushBuffer(ctx context.Context, dispatchRec *constants.DispatchRecord, producer constants.Producer) {
+	symbolState := w.WorkerMap[dispatchRec.BufferKey]
 
-	// process buffermap in order of increasing seq/timestamp
-	// sort should happen based on orderer strategy
 	sortedBuffer := symbolState.Orderer.PrepareBufferFlush()
 
-	ProcessBuffer(ctx, sortedBuffer, dispatchRec.BufferKey, symbolState.Normalizer, symbolState.Publisher, symbolState.Orderer, dedupeBuf)
+	onFailure := func() { w.txnFailed.Store(true) }
+	ProcessBuffer(ctx, sortedBuffer, dispatchRec.BufferKey, symbolState.Normalizer, symbolState.Publisher, symbolState.Orderer, producer, onFailure)
 }
 
-func ProcessSnapshotReady(ctx context.Context,
-	dispatchRec *constants.DispatchRecord,
-	workerMap map[string]*constants.SymbolState,
-	workerChannel chan *constants.DispatchRecord,
-	dedupeBuf []byte) {
-
-	symbolState, ok := workerMap[dispatchRec.BufferKey]
+func (w *Worker) ProcessSnapshotReady(ctx context.Context, dispatchRec *constants.DispatchRecord, producer constants.Producer) {
+	symbolState, ok := w.WorkerMap[dispatchRec.BufferKey]
 	if !ok {
 		return
 	}
@@ -199,17 +252,15 @@ func ProcessSnapshotReady(ctx context.Context,
 		survivors = append(survivors, m)
 	}
 
-	// check the first survivor and snapshot gap
 	if len(survivors) > 0 {
 		first := survivors[0].RawMessage.(*constants.BinanceDepthUpdateMsg)
 		if first.FirstUpdateID > snapshot.LastUpdateID+1 {
-			// gap between the snapshot and the buffered stream - snapshot is too stale. refetch
 			logger.Log.Warn("Binance snapshot stale relative to buffered stream, refetching",
 				"bufferKey", dispatchRec.BufferKey,
 				"snapshotLastUpdateId", snapshot.LastUpdateID,
 				"firstBufferedU", first.FirstUpdateID)
 			symbolState.SnapshotPending = true
-			go utils.FetchBinanceSnapshotAsync(dispatchRec.Exchange, dispatchRec.Channel, dispatchRec.Symbol, dispatchRec.BufferKey, workerChannel)
+			go utils.FetchBinanceSnapshotAsync(dispatchRec.Exchange, dispatchRec.Channel, dispatchRec.Symbol, dispatchRec.BufferKey, w.EventChannel)
 			return
 		}
 	}
@@ -217,14 +268,15 @@ func ProcessSnapshotReady(ctx context.Context,
 	if snapshotProto, err := buildBinanceSnapshotProto(dispatchRec.Exchange, dispatchRec.Channel, dispatchRec.Symbol, snapshot); err != nil {
 		logger.Log.Error("Failed to marshal binance snapshot proto", "err", err)
 	} else {
-		kafka.ProduceSnapshotAsync(ctx, symbolState.Publisher.PublishTopic(), []byte(dispatchRec.BufferKey), snapshotProto)
+		kafka.ProduceSnapshotAsync(producer, symbolState.Publisher.PublishTopic(), []byte(dispatchRec.BufferKey), snapshotProto)
 	}
 
 	symbolState.NeedsSnapshot = false
 	symbolState.LastSeqId = snapshot.LastUpdateID
 
 	if len(survivors) > 0 {
-		ProcessBuffer(ctx, survivors, dispatchRec.BufferKey, symbolState.Normalizer, symbolState.Publisher, symbolState.Orderer, dedupeBuf)
+		onFailure := func() { w.txnFailed.Store(true) }
+		ProcessBuffer(ctx, survivors, dispatchRec.BufferKey, symbolState.Normalizer, symbolState.Publisher, symbolState.Orderer, producer, onFailure)
 	}
 
 	symbolState.Orderer.Cleanup()

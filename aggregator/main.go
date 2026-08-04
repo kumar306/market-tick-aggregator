@@ -4,7 +4,6 @@ import (
 	"context"
 	"market-aggregator/config"
 	"market-aggregator/constants"
-	"market-aggregator/dispatcher"
 	"market-aggregator/flush"
 	"market-aggregator/internal"
 	"market-aggregator/kafka"
@@ -47,6 +46,8 @@ func main() {
 	// wires up the metrics into metric registry
 	internal.InitMetricRegistry()
 
+	go kafka.KafkaConsumerMetrics(ctx, cfg.KafkaConfig)
+
 	// Worker count is derived from the upstream topic's live partition count
 	// each worker must exclusively own a stable set of
 	// partitions so offset commits never
@@ -63,7 +64,11 @@ func main() {
 	}
 
 	// create worker channels and workers
-	flushChannels := dispatcher.CreateWorkerChannels(numPartitions, 1000)
+	flushChannels := make([]chan *constants.DispatchRecord, numPartitions)
+	for i := range flushChannels {
+		flushChannels[i] = make(chan *constants.DispatchRecord, 1000)
+	}
+
 	commitInterval := time.Duration(cfg.KafkaConfig.CommitOffsetIntervalMillis) * time.Millisecond
 
 	for i := 0; i < numPartitions; i++ {

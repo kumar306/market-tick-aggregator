@@ -2,8 +2,6 @@ package kafkatest
 
 import (
 	"context"
-	"market-normalizer/constants"
-	"market-normalizer/kafka"
 	"testing"
 	"time"
 
@@ -13,7 +11,10 @@ import (
 	"github.com/twmb/franz-go/pkg/kgo"
 )
 
-// func to init kafka produce client out of testcontainers
+// InitKafkaContainer starts a real Kafka container and creates the given
+// topics. The returned client is a plain admin/produce client, not tied to
+// any worker session -- callers that need to consume or produce test data
+// build their own client from kafkaContainer.Brokers(ctx).
 func InitKafkaContainer(t *testing.T, topics []string) (*kgo.Client, *kf.KafkaContainer) {
 	ctx := context.Background()
 
@@ -22,34 +23,16 @@ func InitKafkaContainer(t *testing.T, topics []string) (*kgo.Client, *kf.KafkaCo
 		kf.WithClusterID("123"))
 	require.NoError(t, err)
 
-	if err != nil {
-		t.Fatalf("Error in starting the kafka container: %v", err)
-	}
-
 	brokers, err := kafkaContainer.Brokers(ctx)
 	if err != nil || len(brokers) == 0 {
 		t.Fatalf("Error in fetching broker connections: %v", err)
 	}
 
-	// topics := []string{"binance.raw.ticks", "binance.raw.level2", "coinbase.raw.ticks",
-	// 	"coinbase.raw.level2", "kraken.raw.ticks", "kraken.raw.book"}
-
-	cfg := &constants.KafkaConfig{
-		Brokers:               brokers,
-		Topics:                topics,
-		ConsumerGroup:         "normalizer-group-1",
-		MaxBufferRecords:      5000,
-		CBTimeoutMillis:       1000,
-		CBConsecutiveFailures: 2,
-		CBReqCount:            0,
-	}
-
-	client := kafka.Init(ctx, cfg)
+	client, err := kgo.NewClient(kgo.SeedBrokers(brokers...))
 	if err != nil || client == nil {
-		t.Fatalf("Error in init kafka producer client: %v", err)
+		t.Fatalf("Error in init kafka client: %v", err)
 	}
 
-	// create the topic with partitions and replication factor via kadm
 	adm := kadm.NewClient(client)
 
 	numPartitions := int32(3)
@@ -60,9 +43,6 @@ func InitKafkaContainer(t *testing.T, topics []string) (*kgo.Client, *kf.KafkaCo
 		t.Fatalf("Error in creating the test topic: %v", err)
 	}
 
-	// make sure client can consume from the topics - else timeout on poll
-	client.AddConsumeTopics(topics...)
-
 	deadline := time.Now().Add(10 * time.Second)
 	for {
 		metadata, _ := adm.Metadata(ctx, topics...)
@@ -71,7 +51,6 @@ func InitKafkaContainer(t *testing.T, topics []string) (*kgo.Client, *kf.KafkaCo
 			t.Logf("Client ready to consume from topics")
 			break
 		}
-
 		if time.Now().After(deadline) {
 			t.Fatalf("Client timed out waiting for topic metadata")
 		}

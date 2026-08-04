@@ -3,12 +3,10 @@ package utils_test
 import (
 	"context"
 	"market-normalizer/constants"
-	"market-normalizer/dedupe"
 	"market-normalizer/factory/orderer"
 	"market-normalizer/proto/generated"
 	"market-normalizer/worker"
 	"shared/metrics"
-	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -33,28 +31,22 @@ func MakeMsg(seq int64, symbol string) *constants.PipelineMessage {
 	}
 }
 
-type MockNormalizer struct {
-	// optionally record calls
-}
+type MockNormalizer struct{}
 
 func (m *MockNormalizer) Normalize(msg *constants.PipelineMessage) ([]byte, error) {
-	// return a simple object that Publisher will accept; use a lightweight struct
 	tick := &generated.NormalizedTicker{Symbol: msg.Symbol, SeqId: msg.SeqId}
-	stream, err := proto.Marshal(tick)
-	return stream, err
+	return proto.Marshal(tick)
 }
 
 type MockPublisher struct {
 	publishedSeqs []int64
 }
 
-func (m *MockPublisher) Publish(ctx context.Context, raw []byte, partitionKey string, msg *constants.PipelineMessage) {
+func (m *MockPublisher) Publish(ctx context.Context, raw []byte, partitionKey string, msg *constants.PipelineMessage, producer constants.Producer, onFailure func()) {
 	var tick generated.NormalizedTicker
-	err := proto.Unmarshal(raw, &tick)
-	if err != nil {
+	if err := proto.Unmarshal(raw, &tick); err != nil {
 		return
 	}
-
 	m.publishedSeqs = append(m.publishedSeqs, tick.SeqId)
 }
 
@@ -62,22 +54,16 @@ func (m *MockPublisher) PublishTopic() string {
 	return "test-topic"
 }
 
+type noopProducer struct{}
+
+func (noopProducer) Produce(ctx context.Context, r *kgo.Record, promise func(*kgo.Record, error)) {}
+
 func TestSequenceOrderer(t *testing.T) {
 	metrics.InitNormalizerMetrics()
 
-	var dedupeCount int32
-	dedupe.TestingHook = func() error {
-		atomic.AddInt32(&dedupeCount, 1)
-		return nil
-	}
-	// ensure hook reset after test
-	defer func() { dedupe.TestingHook = nil }()
-
 	orderer := &orderer.BinanceAggTradeOrderer{}
 
-	// call process buffer
-	// before that need to have a few messages in the buffer
-	ctx, _ := context.WithCancel(context.Background())
+	ctx := context.Background()
 	p := &MockPublisher{}
 	n := &MockNormalizer{}
 	symbolState := &constants.SymbolState{
@@ -102,25 +88,14 @@ func TestSequenceOrderer(t *testing.T) {
 	m2 := MakeMsg(2, "btcusdt")
 	orderer.Order(m2, bufferKey, tempChan)
 
-	d := &constants.DispatchRecord{
-		BufferKey: bufferKey,
-	}
-	wm := make(map[string]*constants.SymbolState, 1)
-	dBuf := make([]byte, 0, 96)
-	wm[bufferKey] = symbolState
+	w := worker.NewWorker(1, tempChan, nil)
+	w.WorkerMap[bufferKey] = symbolState
 
-	worker.FlushBuffer(ctx, d, wm, dBuf)
+	w.FlushBuffer(ctx, &constants.DispatchRecord{BufferKey: bufferKey}, noopProducer{})
 
 	// here 1,4 is skipped in flush buffer as it never enters buffer as it was in correct order
 	// only 3,2 enters buffer -> flush buffer -> process buffer
 
-	// Assert publisher saw buffer messages in sequence order 2,3
 	require.Equal(t, []int64{2, 3}, p.publishedSeqs, "Published sequence should be in ascending order")
-
-	// Assert dedupe was called for each buffer message
-	require.Equal(t, int32(2), atomic.LoadInt32(&dedupeCount))
-
-	// assert cleanup happened
 	require.Len(t, symbolState.BufferSeqId, 0, "Buffer seq Id length should be 0 after cleanup")
-
 }

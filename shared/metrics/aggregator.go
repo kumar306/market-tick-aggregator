@@ -32,7 +32,9 @@ var (
 	Aggregator_CommitOffsetsTotal       *prometheus.GaugeVec
 	Aggregator_CommitOffsetErrorsTotal  prometheus.Counter
 	Aggregator_CommitLatencySeconds     prometheus.Histogram
-	aggregatorMetricsOnce               sync.Once
+	Aggregator_ConsumerLag              *prometheus.GaugeVec
+
+	aggregatorMetricsOnce sync.Once
 )
 
 func InitAggregatorMetrics() {
@@ -178,6 +180,12 @@ func InitAggregatorMetrics() {
 			"normalizer_commit_latency_seconds",
 			"Commit latency in seconds",
 			prometheus.ExponentialBuckets(0.001, 2, 12),
+		)
+
+		Aggregator_ConsumerLag = NewGaugeVec(
+			"aggregator_consumer_lag",
+			"Consumer group lag per topic/partition",
+			[]string{"topic", "partition"},
 		)
 	})
 }
