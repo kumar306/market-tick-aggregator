@@ -11,6 +11,7 @@ import (
 	"market-normalizer/utils"
 	"shared/logger"
 	"shared/metrics"
+	"shared/polldeadline"
 	"strconv"
 	"sync/atomic"
 	"time"
@@ -27,6 +28,7 @@ type Worker struct {
 	Backpressure *backpressure.Controller
 	bufferKeyBuf []byte
 	txnFailed    atomic.Bool
+	poll         *polldeadline.PollDeadline
 }
 
 func NewWorker(id int, eventCh chan *constants.DispatchRecord, bp *backpressure.Controller) *Worker {
@@ -36,6 +38,7 @@ func NewWorker(id int, eventCh chan *constants.DispatchRecord, bp *backpressure.
 		WorkerMap:    make(map[string]*constants.SymbolState),
 		bufferKeyBuf: make([]byte, 0, 128),
 		Backpressure: bp,
+		poll:         polldeadline.New(),
 	}
 }
 
@@ -81,9 +84,10 @@ func (w *Worker) Run(ctx context.Context, session *kgo.GroupTransactSession, com
 			}
 
 		default:
-			pollCtx, cancel := context.WithTimeout(ctx, 200*time.Millisecond)
+			// same fix as normalizer to avoid heap allocs per fetch on ctx.withTimeout
+			// subbed with custom pollDeadline
+			pollCtx := w.poll.Reset(200 * time.Millisecond)
 			fetches := session.PollFetches(pollCtx)
-			cancel()
 
 			if fetches.IsClientClosed() {
 				return

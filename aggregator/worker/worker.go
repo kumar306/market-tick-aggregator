@@ -9,6 +9,7 @@ import (
 	"market-aggregator/utils"
 	"shared/logger"
 	"shared/metrics"
+	"shared/polldeadline"
 	"strconv"
 	"sync/atomic"
 	"time"
@@ -27,6 +28,7 @@ type Worker struct {
 	Checkpoints  map[string]map[constants.MetricName]constants.Metric
 	TxnFailed    atomic.Bool
 	tickScratch  *generated.NormalizedTick
+	poll         *polldeadline.PollDeadline
 }
 
 type WindowState struct {
@@ -44,6 +46,7 @@ func NewWorker(id int, flushCh chan *constants.DispatchRecord, cfg []*constants.
 		WindowConfig: cfg,
 		Checkpoints:  checkpoints,
 		tickScratch:  &generated.NormalizedTick{},
+		poll:         polldeadline.New(),
 	}
 }
 
@@ -81,9 +84,9 @@ func (w *Worker) Run(ctx context.Context, session *kgo.GroupTransactSession, com
 			}
 
 		default:
-			pollCtx, cancel := context.WithTimeout(ctx, 200*time.Millisecond)
+			// replace ctx.withTimeout with a custom pollDeadline which doesnt allocate heap memory on each fetch
+			pollCtx := w.poll.Reset(200 * time.Millisecond)
 			fetches := session.PollFetches(pollCtx)
-			cancel()
 
 			if fetches.IsClientClosed() {
 				return
