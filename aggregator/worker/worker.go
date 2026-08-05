@@ -26,6 +26,7 @@ type Worker struct {
 	WindowConfig []*constants.WindowConfig
 	Checkpoints  map[string]map[constants.MetricName]constants.Metric
 	TxnFailed    atomic.Bool
+	tickScratch  *generated.NormalizedTick
 }
 
 type WindowState struct {
@@ -42,6 +43,7 @@ func NewWorker(id int, flushCh chan *constants.DispatchRecord, cfg []*constants.
 		SymbolState:  make(map[string]*WindowState),
 		WindowConfig: cfg,
 		Checkpoints:  checkpoints,
+		tickScratch:  &generated.NormalizedTick{},
 	}
 }
 
@@ -128,7 +130,9 @@ func (w *Worker) checkpointWindows(session *kgo.GroupTransactSession) {
 func (w *Worker) ProcessTick(rec *kgo.Record) {
 	start := time.Now().UnixMilli()
 
-	tick := &generated.NormalizedTick{}
+	// use a scratch object rather than allocating heap memory on every tick
+	tick := w.tickScratch
+	tick.Reset()
 	if err := proto.Unmarshal(rec.Value, tick); err != nil {
 		logger.Log.Error("Error in unmarshalling proto to normalized tick", "error", err)
 		return

@@ -12,9 +12,9 @@ import (
 	"shared/logger"
 	"shared/metrics"
 	"strconv"
-	"strings"
 	"sync/atomic"
 	"time"
+	"unsafe"
 
 	"github.com/twmb/franz-go/pkg/kgo"
 	"google.golang.org/protobuf/proto"
@@ -25,6 +25,7 @@ type Worker struct {
 	EventChannel chan *constants.DispatchRecord
 	WorkerMap    map[string]*constants.SymbolState
 	Backpressure *backpressure.Controller
+	bufferKeyBuf []byte
 	txnFailed    atomic.Bool
 }
 
@@ -33,6 +34,7 @@ func NewWorker(id int, eventCh chan *constants.DispatchRecord, bp *backpressure.
 		ID:           id,
 		EventChannel: eventCh,
 		WorkerMap:    make(map[string]*constants.SymbolState),
+		bufferKeyBuf: make([]byte, 0, 128),
 		Backpressure: bp,
 	}
 }
@@ -130,11 +132,24 @@ func (w *Worker) ProcessRecord(ctx context.Context, rec *kgo.Record, producer co
 		return err
 	}
 
-	symbol := string(rec.Key)
-	bufferKey := strings.ToLower(header.Exchange) + ":" + strings.ToLower(header.Channel) + ":" + strings.ToLower(symbol)
+	// minimize heap allocs
+	buf := w.bufferKeyBuf[:0]
+	buf = appendLowerASCII(buf, []byte(header.Exchange))
+	buf = append(buf, ':')
+	buf = appendLowerASCII(buf, []byte(header.Channel))
+	buf = append(buf, ':')
+	buf = appendLowerASCII(buf, rec.Key)
+	w.bufferKeyBuf = buf
 
-	_, exists := w.WorkerMap[bufferKey]
+	// safe because its not retained after map lkp
+	lookupKey := unsafe.String(unsafe.SliceData(buf), len(buf))
+
+	symbolState, exists := w.WorkerMap[lookupKey]
 	if !exists {
+
+		// only 1 heap alloc per new symbol, not hot path
+		bufferKey := string(buf)
+
 		converter, err := registry.GetRegisteredConverter(header.Exchange, header.Channel)
 		if err != nil {
 			return logger.LogAndWrap("Error when fetching registered converter to worker", err)
@@ -152,17 +167,22 @@ func (w *Worker) ProcessRecord(ctx context.Context, rec *kgo.Record, producer co
 			return logger.LogAndWrap("Error when fetching registered publisher to worker", err)
 		}
 
-		w.WorkerMap[bufferKey] = &constants.SymbolState{
+		symbolState = &constants.SymbolState{
+			BufferKey:  bufferKey,
+			Exchange:   header.Exchange,
+			Channel:    header.Channel,
+			Symbol:     string(rec.Key),
 			Orderer:    orderer,
 			Converter:  converter,
 			Normalizer: normalizer,
 			Publisher:  publisher,
 		}
+		w.WorkerMap[bufferKey] = symbolState
 
 		logger.Log.Info("Inserted entry for key in worker", "id", w.ID, "bufferKey", bufferKey)
 	}
 
-	symbolState := w.WorkerMap[bufferKey]
+	bufferKey := symbolState.BufferKey
 
 	normalizedMsg, err := symbolState.Converter.Convert(rec.Value)
 	if err != nil {
@@ -180,7 +200,7 @@ func (w *Worker) ProcessRecord(ctx context.Context, rec *kgo.Record, producer co
 
 	normalizedBuf, err := symbolState.Orderer.Order(normalizedMsg, bufferKey, w.EventChannel)
 	if len(normalizedBuf) == 0 {
-		metrics.Normalizer_BufferSize.WithLabelValues(header.Exchange, header.Channel, symbol).Inc()
+		metrics.Normalizer_BufferSize.WithLabelValues(header.Exchange, header.Channel, symbolState.Symbol).Inc()
 		return nil
 	}
 
@@ -305,4 +325,14 @@ func buildBinanceSnapshotProto(exchange, channel, symbol string, snapshot *const
 	}
 
 	return proto.Marshal(&normalizedMsg)
+}
+
+func appendLowerASCII(dst, src []byte) []byte {
+	for _, c := range src {
+		if c >= 'A' && c <= 'Z' {
+			c += 'a' - 'A'
+		}
+		dst = append(dst, c)
+	}
+	return dst
 }

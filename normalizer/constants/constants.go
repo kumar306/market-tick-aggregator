@@ -136,6 +136,12 @@ type SymbolState struct {
 	Publisher  PublisherStrategy
 
 	LastSeenTs int64
+
+	// cache these rather than heap alloc at hot path pertick
+	BufferKey string
+	Exchange  string
+	Channel   string
+	Symbol    string
 }
 
 // uniform message type in pipeline
