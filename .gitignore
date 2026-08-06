@@ -6,4 +6,15 @@ logs*
 ui/node_modules
 next-env.d.ts
 .next
+**/*.pprof
 **/*.prof
+**/*.exe
+# Local .terraform directories
+.terraform/
+
+# Delete or ignore all tfstate files
+*.tfstate
+*.tfstate.*
+
+# Crash logs
+crash.log
