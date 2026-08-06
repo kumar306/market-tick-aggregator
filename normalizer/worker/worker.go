@@ -22,13 +22,14 @@ import (
 )
 
 type Worker struct {
-	ID           int
-	EventChannel chan *constants.DispatchRecord
-	WorkerMap    map[string]*constants.SymbolState
-	Backpressure *backpressure.Controller
-	bufferKeyBuf []byte
-	txnFailed    atomic.Bool
-	poll         *polldeadline.PollDeadline
+	EventChannel  chan *constants.DispatchRecord
+	WorkerMap     map[string]*constants.SymbolState
+	Backpressure  *backpressure.Controller
+	bufferKeyBuf  []byte
+	poll          *polldeadline.PollDeadline
+	headerScratch constants.Header
+	ID            int
+	txnFailed     atomic.Bool
 }
 
 func NewWorker(id int, eventCh chan *constants.DispatchRecord, bp *backpressure.Controller) *Worker {
@@ -130,8 +131,10 @@ func (w *Worker) endTransaction(ctx context.Context, session *kgo.GroupTransactS
 }
 
 func (w *Worker) ProcessRecord(ctx context.Context, rec *kgo.Record, producer constants.Producer) error {
-	var header constants.Header
-	if err := json.Unmarshal(rec.Value, &header); err != nil {
+	// keep scratch object instead of passing pointer to interface which heap allocates it
+	header := &w.headerScratch
+	*header = constants.Header{}
+	if err := json.Unmarshal(rec.Value, header); err != nil {
 		logger.Log.Error("Error in unmarshalling record header fields", "error", err)
 		return err
 	}

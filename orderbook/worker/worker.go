@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"sync/atomic"
 	"time"
+	"unsafe"
 
 	"google.golang.org/protobuf/proto"
 )
@@ -43,9 +44,11 @@ type Worker struct {
 	// ack channel for distributed commit coordinator
 	AckChannel       chan *constants.Ack
 	UpdateAckChannel chan *constants.Ack
+	bufferKeyBuf     []byte
 }
 
 type SymbolState struct {
+	BufferKey       string
 	Exchange        string
 	Symbol          string
 	TimestampMillis int64
@@ -83,6 +86,7 @@ func NewWorker(id int, ctx context.Context, snapshotIntervalSec int, flushDepth 
 		AckChannel:                     AckChannel,
 		UpdateAckChannel:               updateAckChannel,
 		FlushDepth:                     flushDepth,
+		bufferKeyBuf:                   make([]byte, 0, 128),
 	}
 }
 
@@ -134,15 +138,22 @@ func (w *Worker) Run() {
 }
 
 func (w *Worker) ProcessBookUpdate(rec *constants.DispatchRecord) {
-	bufferKey := rec.Exchange + ":" + rec.Symbol
+	// minimize heap allocs
+	buf := w.bufferKeyBuf[:0]
+	buf = appendLowerASCII(buf, []byte(rec.Exchange))
+	buf = append(buf, ':')
+	buf = appendLowerASCII(buf, []byte(rec.Symbol))
+	w.bufferKeyBuf = buf
 
-	state, exists := w.OrderbookStateMap[bufferKey]
+	lookupKey := unsafe.String(unsafe.SliceData(buf), len(buf))
+
+	state, exists := w.OrderbookStateMap[lookupKey]
 	if !exists {
 		// if the worker doesnt have an order book for the incoming symbol in memory,
 		// create a empty order book
-		logger.Log.Info("State doesnt exist for key in worker. Restoring or creating state", "worker", w.ID, "key", bufferKey)
+		logger.Log.Info("State doesnt exist for key in worker. Restoring or creating state", "worker", w.ID, "key", lookupKey)
 		state = w.RestoreOrCreateState(rec.Exchange, rec.Symbol)
-		w.OrderbookStateMap[bufferKey] = state
+		w.OrderbookStateMap[lookupKey] = state
 	}
 
 	// apply the latest update to state
@@ -567,4 +578,14 @@ func (w *Worker) RunSnapshotPrepareScheduler() {
 			}
 		}
 	}
+}
+
+func appendLowerASCII(dst, src []byte) []byte {
+	for _, c := range src {
+		if c >= 'A' && c <= 'Z' {
+			c += 'a' - 'A'
+		}
+		dst = append(dst, c)
+	}
+	return dst
 }

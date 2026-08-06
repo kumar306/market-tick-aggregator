@@ -81,11 +81,12 @@ type Metric interface {
 
 type MetricName string
 
+// reorder for faster gc scan - pointers first
 type Window struct {
+	Metrics        map[MetricName]Metric
 	Id             string
 	DurationMs     int64
 	FlushCadencyMs int64
-	Metrics        map[MetricName]Metric
 	LastFlushTsMs  int64
 }
 

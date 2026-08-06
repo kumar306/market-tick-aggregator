@@ -103,12 +103,10 @@ type BinanceDepthSnapshot struct {
 	Asks         [][]string `json:"asks"`
 }
 
+// reorder for faster gc scan
 type SymbolState struct {
 	// seq or ts ordering
 	Orderer OrdererStrategy
-
-	// seq ordering
-	LastSeqId int64
 	// buffer map of sequence id to record
 	BufferSeqMap map[int64]*PipelineMessage
 	BufferSeqId  []int64
@@ -117,7 +115,18 @@ type SymbolState struct {
 	BufferTimeMap map[int64][]*PipelineMessage
 	BufferTime    []int64
 
-	Gap       *time.Timer
+	Gap *time.Timer
+	// pipeline
+	Converter  ConverterStrategy
+	Normalizer NormalizerStrategy
+	Publisher  PublisherStrategy
+
+	// cache these rather than heap alloc at hot path pertick
+	BufferKey string
+	Exchange  string
+	Channel   string
+	Symbol    string
+
 	GapActive bool
 
 	// Binance depth resync state - Binance never sends a book snapshot over
@@ -130,18 +139,10 @@ type SymbolState struct {
 	// if forward gap, discard everything from the old session until a fresh snapshot arrives.
 	AwaitingSnapshot bool
 
-	// pipeline
-	Converter  ConverterStrategy
-	Normalizer NormalizerStrategy
-	Publisher  PublisherStrategy
+	// seq ordering
+	LastSeqId int64
 
 	LastSeenTs int64
-
-	// cache these rather than heap alloc at hot path pertick
-	BufferKey string
-	Exchange  string
-	Channel   string
-	Symbol    string
 }
 
 // uniform message type in pipeline

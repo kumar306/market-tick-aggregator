@@ -8,13 +8,16 @@ import (
 // per feed ring buffer
 // producer pushes websocket messages to ring buffer
 // consumer reads and publishes to kafka topic
+// add 7 byte padding after head to prevent false sharing between head and tail - move to different cache lines
 type SpscDropOldestRing[T any] struct {
 	Buf      []T
+	Name     string
 	Mask     uint64
 	Capacity uint64
 	Head     uint64
+	_        [7]uint64 // pad to a full 64-byte cache line, isolating Head from Tail below
 	Tail     uint64
-	Name     string
+	_        [7]uint64
 }
 
 // using bitwise AND instead of modulo operator for wrapping

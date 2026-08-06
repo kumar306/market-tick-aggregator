@@ -20,15 +20,17 @@ import (
 
 var WorkerTestingHook func()
 
+// reorder field for faster gc scan
 type Worker struct {
-	ID           int
 	FlushChannel chan *constants.DispatchRecord
 	SymbolState  map[string]*WindowState
 	WindowConfig []*constants.WindowConfig
 	Checkpoints  map[string]map[constants.MetricName]constants.Metric
-	TxnFailed    atomic.Bool
 	tickScratch  *generated.NormalizedTick
 	poll         *polldeadline.PollDeadline
+	idLabel      string
+	ID           int
+	TxnFailed    atomic.Bool
 }
 
 type WindowState struct {
@@ -46,6 +48,7 @@ func NewWorker(id int, flushCh chan *constants.DispatchRecord, cfg []*constants.
 		WindowConfig: cfg,
 		Checkpoints:  checkpoints,
 		tickScratch:  &generated.NormalizedTick{},
+		idLabel:      strconv.Itoa(id),
 		poll:         polldeadline.New(),
 	}
 }
@@ -164,10 +167,10 @@ func (w *Worker) ProcessTick(rec *kgo.Record) {
 		w.SymbolState[bufferKey] = windowState
 
 		metrics.Aggregator_WindowsPerSymbol.
-			WithLabelValues(strconv.Itoa(w.ID), windowState.Exchange, windowState.Channel, windowState.Symbol).
+			WithLabelValues(w.idLabel, windowState.Exchange, windowState.Channel, windowState.Symbol).
 			Set(float64(len(windowState.Windows)))
 		metrics.Aggregator_SymbolsPerWorker.
-			WithLabelValues(strconv.Itoa(w.ID)).
+			WithLabelValues(w.idLabel).
 			Set(float64(len(w.SymbolState)))
 	}
 
@@ -179,7 +182,7 @@ func (w *Worker) ProcessTick(rec *kgo.Record) {
 
 	processingTime := time.Now().UnixMilli() - start
 	metrics.Aggregator_TickProcessingDurationMs.
-		WithLabelValues(strconv.Itoa(w.ID)).
+		WithLabelValues(w.idLabel).
 		Observe(float64(processingTime))
 
 	if WorkerTestingHook != nil {
@@ -219,9 +222,9 @@ func (w *Worker) FlushWindow(flushRec *constants.DispatchRecord, client utils.Ka
 
 		processingTime := time.Now().UnixMilli() - start
 		metrics.Aggregator_WindowFlushDurationMs.WithLabelValues(
-			aggregatedTick.WindowId, strconv.Itoa(w.ID)).
+			aggregatedTick.WindowId, w.idLabel).
 			Observe(float64(processingTime))
-		metrics.Aggregator_AggregatesProducedTotal.WithLabelValues(strconv.Itoa(w.ID)).Inc()
+		metrics.Aggregator_AggregatesProducedTotal.WithLabelValues(w.idLabel).Inc()
 	}
 }
 
