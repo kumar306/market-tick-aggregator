@@ -35,6 +35,21 @@ import (
 	"google.golang.org/protobuf/encoding/protowire"
 )
 
+// for a better load test
+var symbolPool = []struct {
+	Exchange, Channel, Symbol string
+	BasePrice                 float64
+}{
+	{"binance", "aggTrade", "BTCUSDT", 65_000.0},
+	{"binance", "aggTrade", "ETHUSDT", 3_400.0},
+	{"binance", "depth", "BTCUSDT", 65_000.0},
+	{"coinbase", "ticker", "BTC-USD", 65_000.0},
+	{"coinbase", "ticker", "ETH-USD", 3_400.0},
+	{"coinbase", "level2", "BTC-USD", 65_000.0},
+	{"kraken", "ticker", "BTC/USD", 65_000.0},
+	{"kraken", "book", "ETH/USD", 3_400.0},
+}
+
 // encodeTick manually encodes a NormalizedTick protobuf message using the wire
 // format defined in normalizer/proto/normalized_ticker.proto.
 // Field numbers: exchange=1, channel=2, symbol=3, event_ts_millis=4,
@@ -176,41 +191,36 @@ func runLevel(ctx context.Context, client *kgo.Client, topic string, rate int, s
 
 	var wg sync.WaitGroup
 	for p := 0; p < numProducers; p++ {
-		p := p
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			key := []byte(fmt.Sprintf("loadtest:benchmark:BTC-USD:%d", p))
 			for time.Now().Before(deadline) && ctx.Err() == nil {
 				for i := 0; i < batchPerTick; i++ {
 					n := seq.Add(1)
-					price := basePrice + rand.Float64()*200 - 100
+					sym := symbolPool[int(n)%len(symbolPool)]
+					price := sym.BasePrice + rand.Float64()*200 - 100
 					vol := 0.1 + rand.Float64()
 
 					val := encodeTick(
-						"loadtest", "benchmark", "BTC-USD",
+						sym.Exchange, sym.Channel, sym.Symbol,
 						time.Now().UnixMilli(),
 						price, vol,
-						basePrice-50,
+						sym.BasePrice-50,
 						price+rand.Float64()*50-25,
-						basePrice-100,
-						basePrice+100,
+						sym.BasePrice-100,
+						sym.BasePrice+100,
 						n,
 					)
 
-					rec := &kgo.Record{
-						Topic: topic,
-						Key:   key,
-						Value: val,
-					}
+					key := []byte(sym.Exchange + ":" + sym.Channel + ":" + sym.Symbol)
 
+					rec := &kgo.Record{Topic: topic, Key: key, Value: val}
 					sendTime := time.Now()
 					s.sent.Add(1)
 					client.Produce(ctx, rec, func(_ *kgo.Record, err error) {
 						s.observe(sendTime, err)
 					})
 				}
-				time.Sleep(tickInterval)
 			}
 		}()
 	}

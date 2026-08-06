@@ -176,26 +176,41 @@ func TestFlushOrderbookSuccess(t *testing.T) {
 		t.Fatalf("FlushOrderbook() error = %v, want nil", err)
 	}
 
-	if len(tx.execCalls) != 3 {
-		t.Fatalf("exec call count = %d, want 3 (1 parent + 2 level)", len(tx.execCalls))
+	// exec 1: create staging_orderbook_flushes, exec 2: create staging_orderbook_flush_levels,
+	// exec 3: insert-from-staging orderbook_flushes, exec 4: insert-from-staging orderbook_flush_levels
+	if len(tx.execCalls) != 4 {
+		t.Fatalf("exec call count = %d, want 4 (2 staging DDLs + 2 insert-from-staging)", len(tx.execCalls))
 	}
-	if !strings.Contains(tx.execCalls[0].sql, "INSERT INTO orderbook_flushes") {
-		t.Fatalf("unexpected parent insert sql")
+	if !strings.Contains(tx.execCalls[0].sql, "CREATE TEMP TABLE") || !strings.Contains(tx.execCalls[0].sql, "staging_orderbook_flushes") {
+		t.Fatalf("expected first exec to create the flushes staging table, got: %s", tx.execCalls[0].sql)
 	}
-	if !strings.Contains(tx.execCalls[1].sql, "INSERT INTO orderbook_flush_levels") {
-		t.Fatalf("unexpected level insert sql")
+	if !strings.Contains(tx.execCalls[1].sql, "CREATE TEMP TABLE") || !strings.Contains(tx.execCalls[1].sql, "staging_orderbook_flush_levels") {
+		t.Fatalf("expected second exec to create the levels staging table, got: %s", tx.execCalls[1].sql)
 	}
-	if !strings.Contains(tx.execCalls[2].sql, "INSERT INTO orderbook_flush_levels") {
-		t.Fatalf("unexpected level insert sql")
+	if !strings.Contains(tx.execCalls[2].sql, "INSERT INTO orderbook_flushes") {
+		t.Fatalf("expected third exec to insert flushes from staging, got: %s", tx.execCalls[2].sql)
+	}
+	if !strings.Contains(tx.execCalls[3].sql, "INSERT INTO orderbook_flush_levels") {
+		t.Fatalf("expected fourth exec to insert levels from staging, got: %s", tx.execCalls[3].sql)
+	}
+
+	if len(tx.copyCalls) != 2 {
+		t.Fatalf("copy call count = %d, want 2", len(tx.copyCalls))
+	}
+	if tx.copyCalls[0].table != "staging_orderbook_flushes" || tx.copyCalls[0].rowCount != 1 {
+		t.Fatalf("unexpected flushes copy call: %+v", tx.copyCalls[0])
+	}
+	if tx.copyCalls[1].table != "staging_orderbook_flush_levels" || tx.copyCalls[1].rowCount != 2 {
+		t.Fatalf("unexpected levels copy call: %+v", tx.copyCalls[1])
 	}
 }
 
-func TestFlushOrderbookParentInsertError(t *testing.T) {
+func TestFlushOrderbookExecError(t *testing.T) {
 	initTestMetrics()
 
 	tx := &mockTx{
 		execErrAtCall: 1,
-		execErr:       errors.New("parent insert failed"),
+		execErr:       errors.New("staging ddl failed"),
 	}
 	err := FlushOrderbook(context.Background(), tx, []*model.OrderbookFlush{{
 		FlushRow: &model.OrderbookFlushRow{},
@@ -205,12 +220,11 @@ func TestFlushOrderbookParentInsertError(t *testing.T) {
 	}
 }
 
-func TestFlushOrderbookLevelInsertError(t *testing.T) {
+func TestFlushOrderbookCopyError(t *testing.T) {
 	initTestMetrics()
 
 	tx := &mockTx{
-		execErrAtCall: 2,
-		execErr:       errors.New("level insert failed"),
+		copyErr: errors.New("copy failed"),
 	}
 	err := FlushOrderbook(context.Background(), tx, []*model.OrderbookFlush{{
 		FlushRow: &model.OrderbookFlushRow{},
