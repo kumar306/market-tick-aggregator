@@ -16,21 +16,29 @@ import (
 	"syscall"
 	"time"
 
+	"strings"
+
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
-	"strings"
 )
 
 func corsMiddleware() gin.HandlerFunc {
-	allowedOrigins := map[string]struct{}{}
 	origins := os.Getenv("CORS_ALLOWED_ORIGINS")
 	if strings.TrimSpace(origins) == "" {
 		origins = "http://localhost:3000,http://127.0.0.1:3000"
 	}
+
+	// bug fix to allow all origins if CORS_ALLOWED_ORIGINS="*"
+	allowAll := false
+	allowedOrigins := map[string]struct{}{}
 	for _, origin := range strings.Split(origins, ",") {
 		trimmed := strings.TrimSpace(origin)
 		if trimmed == "" {
+			continue
+		}
+		if trimmed == "*" {
+			allowAll = true
 			continue
 		}
 		allowedOrigins[trimmed] = struct{}{}
@@ -38,7 +46,8 @@ func corsMiddleware() gin.HandlerFunc {
 
 	return func(c *gin.Context) {
 		origin := c.GetHeader("Origin")
-		if _, ok := allowedOrigins[origin]; ok {
+		_, explicitlyAllowed := allowedOrigins[origin]
+		if allowAll || explicitlyAllowed {
 			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
 			c.Writer.Header().Set("Vary", "Origin")
 			c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
