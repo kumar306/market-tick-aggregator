@@ -18,3 +18,12 @@ next-env.d.ts
 
 # Crash logs
 crash.log
+
+# k8s secret manifests
+infra/k8s/*secret*.yaml
+
+# Terraform variable files
+*.tfvars
+
+# generated, environment-specific configs (rebuilt via sed, go stale across cluster recreates)
+infra/k8s/config

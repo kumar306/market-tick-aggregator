@@ -7,5 +7,5 @@ variable "cluster_name" {
 variable "image_tag" {
    description = "Tag applied to each pushed image. Increase version after each push"
    type = string
-   default = "v1"
+   default = "v6"
 }

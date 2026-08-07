@@ -1,0 +1,43 @@
+#  initially, create a configmap of the sql, init postgres container so the configmap can be mounted as a volume 
+#  pod reads the volume data and creates the tables, partitions
+
+#  kubectl create configmap postgres-init-files \
+#   --from-file=persistence/db/schema/aggregated_ticks.sql \
+#   --from-file=persistence/db/schema/orderbook_flushes.sql \
+#   --from-file=scripts/init-postgres-container.sh
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: postgres-init
+  namespace: default
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: postgres-init
+        image: postgres:16
+        command: ["bash", "/scripts/init-postgres-container.sh"]
+        env:
+          - name: POSTGRES_HOST
+            valueFrom: { secretKeyRef: { name: db-credentials, key: POSTGRES_HOST } } 
+          - name: POSTGRES_PORT
+            valueFrom: { secretKeyRef: { name: db-credentials, key: POSTGRES_PORT } }
+          - name: POSTGRES_USER
+            valueFrom: { secretKeyRef: { name: db-credentials, key: POSTGRES_USER } }
+          - name: POSTGRES_PASSWORD
+            valueFrom: { secretKeyRef: { name: db-credentials, key: POSTGRES_PASSWORD } }
+          - name: POSTGRES_DB
+            valueFrom: { secretKeyRef: { name: db-credentials, key: POSTGRES_DB } }
+          - name: SCHEMA_DIR
+            value: "/scripts"
+        volumeMounts:
+          - name: init-files
+            mountPath: /scripts
+      volumes:
+        - name: init-files
+          configMap:
+            name: postgres-init-files

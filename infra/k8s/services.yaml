@@ -1,0 +1,276 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: adapter
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: adapter }
+  template:
+    metadata:
+      labels: { app: adapter }
+    spec:
+      serviceAccountName: kafka-client
+      containers:
+        - name: adapter
+          image: 399400614342.dkr.ecr.us-east-1.amazonaws.com/market-tick-adapter:v5
+          env:
+            - name: CONFIG_FILE
+              value: "./config/docker.config.yaml"
+          ports:
+            - containerPort: 2112
+          resources:
+          # requests 0.1vcpu, 16 MB RAM to place the pod, cpu throttles if goes over 0.5 vcpu, and OOM pod killed if ram exceeds 32 MB
+            requests: { cpu: "100m", memory: "128Mi" }
+            limits: { cpu: "500m", memory: "256Mi" }
+          volumeMounts:
+            - name: config
+              mountPath: /app/adapter/config/docker.config.yaml
+              subPath: config.yaml
+      volumes:
+        - name: config
+          configMap: { name: adapter-config }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: normalizer
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: normalizer }
+  template:
+    metadata:
+      labels: { app: normalizer }
+    spec:
+      serviceAccountName: kafka-client
+      containers:
+        - name: normalizer
+          image: 399400614342.dkr.ecr.us-east-1.amazonaws.com/market-tick-normalizer:v5
+          env:
+            - name: CONFIG_FILE
+              value: ./config/docker.config.yaml
+            - name: REDIS_ADDR  
+              valueFrom: { secretKeyRef: { name: db-credentials, key: REDIS_ADDR } }
+            - name: REDIS_PASSWORD
+              valueFrom: { secretKeyRef: { name: db-credentials, key: REDIS_PASSWORD } }
+          ports:
+            - containerPort: 2113
+          resources:
+          # requests: 0.2 vcpu, 32 MB RAM, max: 1 vcpu, max: 64 MB RAM
+            requests: { cpu: "200m", memory: "256Mi" }
+            limits: { cpu: "1", memory: "512Mi" }
+          volumeMounts:
+            - name: config
+              mountPath: /app/normalizer/config/docker.config.yaml
+              subPath: config.yaml
+      volumes:
+        - name: config
+          configMap: { name: normalizer-config }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aggregator
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: aggregator }
+  template:
+    metadata:
+      labels: { app: aggregator }
+    spec:
+      serviceAccountName: kafka-client
+      containers:
+        - name: aggregator
+          image: 399400614342.dkr.ecr.us-east-1.amazonaws.com/market-tick-aggregator:v5
+          env:
+            - name: CONFIG_FILE
+              value: "./config/docker.config.yaml"
+            - name: REDIS_ADDR
+              valueFrom: { secretKeyRef: { name: db-credentials, key: REDIS_ADDR } }
+            - name: REDIS_PASSWORD
+              valueFrom: { secretKeyRef: { name: db-credentials, key: REDIS_PASSWORD } }
+          ports:
+            - containerPort: 2114
+          resources:
+          # same as normalizer
+            requests: { cpu: "200m", memory: "256Mi" }
+            limits: { cpu: "1", memory: "512Mi" }
+          volumeMounts:
+            - name: config
+              mountPath: /app/aggregator/config/docker.config.yaml
+              subPath: config.yaml
+      volumes:
+        - name: config
+          configMap: { name: aggregator-config }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orderbook
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: orderbook }
+  template:
+    metadata:
+      labels: { app: orderbook }
+    spec:
+      serviceAccountName: kafka-client
+      containers:
+        - name: orderbook
+          image: 399400614342.dkr.ecr.us-east-1.amazonaws.com/market-tick-orderbook:v5
+          env:
+            - name: CONFIG_FILE
+              value: "./config/docker.config.yaml"
+            - name: REDIS_ADDR
+              valueFrom: { secretKeyRef: { name: db-credentials, key: REDIS_ADDR } }
+            - name: REDIS_PASSWORD
+              valueFrom: { secretKeyRef: { name: db-credentials, key: REDIS_PASSWORD } }
+          ports:
+            - containerPort: 2115
+          resources:
+          # same as above
+            requests: { cpu: "200m", memory: "256Mi" }
+            limits: { cpu: "1", memory: "512Mi" }
+          volumeMounts:
+            - name: config
+              mountPath: /app/orderbook/config/docker.config.yaml
+              subPath: config.yaml
+      volumes:
+        - name: config
+          configMap: { name: orderbook-config }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: persistence
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: persistence }
+  template:
+    metadata:
+      labels: { app: persistence }
+    spec:
+      serviceAccountName: kafka-client
+      containers:
+        - name: persistence
+          image: 399400614342.dkr.ecr.us-east-1.amazonaws.com/market-tick-persistence:v5
+          env:
+            - name: CONFIG_FILE
+              value: "./config/docker.config.yaml"
+            - name: POSTGRES_HOST
+              valueFrom: { secretKeyRef: { name: db-credentials, key: POSTGRES_HOST } }
+            - name: POSTGRES_PORT
+              valueFrom: { secretKeyRef: { name: db-credentials, key: POSTGRES_PORT } }
+            - name: POSTGRES_USER
+              valueFrom: { secretKeyRef: { name: db-credentials, key: POSTGRES_USER } }
+            - name: POSTGRES_PASSWORD
+              valueFrom: { secretKeyRef: { name: db-credentials, key: POSTGRES_PASSWORD } }
+            - name: POSTGRES_DB
+              valueFrom: { secretKeyRef: { name: db-credentials, key: POSTGRES_DB } }
+          ports:
+            - containerPort: 2116
+          resources:
+            requests: { cpu: "200m", memory: "256Mi" }
+            limits: { cpu: "1", memory: "512Mi" }
+          volumeMounts:
+            - name: config
+              mountPath: /app/persistence/config/docker.config.yaml
+              subPath: config.yaml
+      volumes:
+        - name: config
+          configMap: { name: persistence-config }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ui-backend
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: ui-backend }
+  template:
+    metadata:
+      labels: { app: ui-backend }
+    spec:
+      serviceAccountName: kafka-client
+      containers:
+        - name: ui-backend
+          image: 399400614342.dkr.ecr.us-east-1.amazonaws.com/market-tick-ui-backend:v5
+          env:
+            - name: CONFIG_FILE
+              value: "./config/docker.config.yaml"
+            - name: DATABASE_URL
+              valueFrom: { secretKeyRef: { name: db-credentials, key: DATABASE_URL } }
+            - name: CORS_ALLOWED_ORIGINS
+              value: "*"
+          ports:
+            - containerPort: 8080
+          resources:
+            requests: { cpu: "100m", memory: "128Mi" }
+            limits: { cpu: "500m", memory: "256Mi" }
+          volumeMounts:
+            - name: config
+              mountPath: /app/ui-backend/config/docker.config.yaml
+              subPath: config.yaml
+      volumes:
+        - name: config
+          configMap: { name: ui-backend-config }
+---
+# lb for ui-backend to be hit from UI
+apiVersion: v1
+kind: Service
+metadata:
+  name: ui-backend
+  namespace: default
+spec:
+  type: LoadBalancer
+  selector: { app: ui-backend }
+  loadBalancerSourceRanges: ["106.51.179.89/32"]
+  ports:
+    - port: 8080
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ui
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: ui }
+  template:
+    metadata:
+      labels: { app: ui }
+    spec:
+      containers:
+        - name: ui
+          image: 399400614342.dkr.ecr.us-east-1.amazonaws.com/market-tick-ui:v5
+          ports:
+            - containerPort: 3000
+          resources:
+            requests: { cpu: "100m", memory: "128Mi" }
+            limits: { cpu: "500m", memory: "256Mi" }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ui
+  namespace: default
+spec:
+  type: LoadBalancer
+  selector: { app: ui }
+  loadBalancerSourceRanges: ["106.51.179.89/32"]
+  ports:
+    - port: 3000
+      targetPort: 3000
