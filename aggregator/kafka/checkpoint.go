@@ -7,6 +7,7 @@ import (
 	"market-aggregator/constants"
 	"market-aggregator/utils"
 	"os"
+	"shared/kafkaauth"
 	"shared/logger"
 	"time"
 
@@ -55,11 +56,20 @@ func LoadCheckpoints(ctx context.Context, cfg *constants.KafkaConfig) map[string
 	loadCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
-	client, err := kgo.NewClient(
+	authOpts, authErr := kafkaauth.IAMOpts(ctx)
+	if authErr != nil {
+		logger.Log.Error("Error building MSK IAM auth", "error", authErr)
+		os.Exit(1)
+	}
+
+	opts := append([]kgo.Opt{
 		kgo.SeedBrokers(cfg.BootstrapServers...),
 		kgo.ConsumeTopics(CheckpointTopic),
 		kgo.WithLogger(kgo.BasicLogger(os.Stdout, kgo.LogLevelWarn, nil)),
-	)
+	}, authOpts...)
+
+	client, err := kgo.NewClient(opts...)
+
 	if err != nil {
 		logger.Log.Warn("Failed to create checkpoint loader client, starting with empty window state", "err", err)
 		return result

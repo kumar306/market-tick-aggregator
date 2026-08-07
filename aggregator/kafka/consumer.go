@@ -21,7 +21,7 @@ var DownstreamTopic string
 // partition assignment to each session.
 func PartitionCount(ctx context.Context, cfg *constants.KafkaConfig, topic string) (int, error) {
 
-	authOpts, authErr := kafkaauth.IAMOpts(context.Background())
+	authOpts, authErr := kafkaauth.IAMOpts(ctx)
 	if authErr != nil {
 		logger.Log.Error("Error building MSK IAM auth", "error", authErr)
 		os.Exit(1)

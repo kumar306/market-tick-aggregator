@@ -3,6 +3,8 @@ package internal
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"shared/kafkaauth"
 	"shared/logger"
 
 	"github.com/twmb/franz-go/pkg/kgo"
@@ -18,12 +20,22 @@ type resyncRequest struct {
 // consumer listens for resync requests from normalizer and forces a reconnect for the requested stream
 // cancel's that stream's attemptCtx which triggers reconnect and gives back fresh snapshot
 func StartResyncConsumer(ctx context.Context, brokers []string) {
-	client, err := kgo.NewClient(
+
+	authOpts, authErr := kafkaauth.IAMOpts(ctx)
+	if authErr != nil {
+		logger.Log.Error("Error building MSK IAM auth", "error", authErr)
+		os.Exit(1)
+	}
+
+	opts := append([]kgo.Opt{
 		kgo.SeedBrokers(brokers...),
 		kgo.ConsumeTopics(ResyncRequestsTopic),
 		kgo.ConsumerGroup("adapter-resync-group"),
 		kgo.AutoCommitMarks(),
-	)
+	}, authOpts...)
+
+	client, err := kgo.NewClient(opts...)
+
 	if err != nil {
 		logger.Log.Error("Failed to start resync consumer, resync requests will be ignored", "err", err)
 		return

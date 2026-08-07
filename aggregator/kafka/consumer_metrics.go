@@ -4,6 +4,7 @@ import (
 	"context"
 	"market-aggregator/constants"
 	"os"
+	"shared/kafkaauth"
 	"shared/logger"
 	"shared/metrics"
 	"strconv"
@@ -15,10 +16,19 @@ import (
 
 // same as normalizer - refer the same func in normalizer for doc
 func KafkaConsumerMetrics(ctx context.Context, cfg *constants.KafkaConfig) {
-	client, err := kgo.NewClient(
+	authOpts, authErr := kafkaauth.IAMOpts(ctx)
+	if authErr != nil {
+		logger.Log.Error("Error building MSK IAM auth", "error", authErr)
+		os.Exit(1)
+	}
+
+	opts := append([]kgo.Opt{
 		kgo.SeedBrokers(cfg.BootstrapServers...),
 		kgo.WithLogger(kgo.BasicLogger(os.Stdout, kgo.LogLevelWarn, nil)),
-	)
+	}, authOpts...)
+
+	client, err := kgo.NewClient(opts...)
+
 	if err != nil {
 		logger.Log.Error("Failed to create kafka client for consumer metrics", "err", err)
 		return

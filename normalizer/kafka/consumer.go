@@ -17,7 +17,7 @@ import (
 // sessions to create.
 func MaxPartitionCount(ctx context.Context, cfg *constants.KafkaConfig, topics ...string) (int, error) {
 
-	authOpts, authErr := kafkaauth.IAMOpts(context.Background())
+	authOpts, authErr := kafkaauth.IAMOpts(ctx)
 	if authErr != nil {
 		logger.Log.Error("Error building MSK IAM auth", "error", authErr)
 		os.Exit(1)

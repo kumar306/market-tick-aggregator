@@ -4,6 +4,7 @@ import (
 	"context"
 	"market-normalizer/constants"
 	"os"
+	"shared/kafkaauth"
 	"shared/logger"
 	"shared/metrics"
 	"strconv"
@@ -17,10 +18,20 @@ import (
 // independent of  transactional session - its read-only monitoring.
 // one call covers the whole service's lag across every worker/partition combined
 func KafkaConsumerMetrics(ctx context.Context, cfg *constants.KafkaConfig) {
-	client, err := kgo.NewClient(
+
+	authOpts, authErr := kafkaauth.IAMOpts(ctx)
+	if authErr != nil {
+		logger.Log.Error("Error building MSK IAM auth", "error", authErr)
+		os.Exit(1)
+	}
+
+	opts := append([]kgo.Opt{
 		kgo.SeedBrokers(cfg.Brokers...),
 		kgo.WithLogger(kgo.BasicLogger(os.Stdout, kgo.LogLevelWarn, nil)),
-	)
+	}, authOpts...)
+
+	client, err := kgo.NewClient(opts...)
+
 	if err != nil {
 		logger.Log.Error("Failed to create kafka client for consumer metrics", "err", err)
 		return

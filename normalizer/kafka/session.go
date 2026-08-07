@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"market-normalizer/constants"
 	"os"
+	"shared/kafkaauth"
 	"time"
 
 	"github.com/twmb/franz-go/pkg/kgo"
@@ -18,17 +19,19 @@ import (
 func NewWorkerSession(ctx context.Context, cfg *constants.KafkaConfig, workerIdx int) (*kgo.GroupTransactSession, error) {
 	transactionalID := fmt.Sprintf("%s-worker-%d", cfg.ConsumerGroup, workerIdx)
 
-	session, err := kgo.NewGroupTransactSession(
+	authOpts, _ := kafkaauth.IAMOpts(ctx)
+	opts := append([]kgo.Opt{
 		kgo.SeedBrokers(cfg.Brokers...),
 		kgo.ConsumeTopics(cfg.Topics...),
 		kgo.ConsumerGroup(cfg.ConsumerGroup),
-		kgo.RequireStableFetchOffsets(),
 		kgo.TransactionalID(transactionalID),
-		kgo.TransactionTimeout(10*time.Second),
+		kgo.TransactionTimeout(10 * time.Second),
 		kgo.FetchIsolationLevel(kgo.ReadCommitted()),
 		kgo.MaxBufferedRecords(cfg.MaxBufferRecords),
 		kgo.WithLogger(kgo.BasicLogger(os.Stdout, kgo.LogLevelWarn, nil)),
-	)
+	}, authOpts...)
+
+	session, err := kgo.NewGroupTransactSession(opts...)
 	if err != nil {
 		return nil, err
 	}

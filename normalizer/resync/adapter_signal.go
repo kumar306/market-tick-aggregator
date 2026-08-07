@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"market-normalizer/constants"
 	"os"
+	"shared/kafkaauth"
 	"shared/logger"
 
 	"github.com/twmb/franz-go/pkg/kgo"
@@ -25,10 +26,20 @@ type ResyncRequest struct {
 // adapter reconnects once more than strictly necessary -- so they deliberately
 // don't ride on any worker's transactional session.
 func InitResyncProducer(cfg *constants.KafkaConfig) error {
-	c, err := kgo.NewClient(
+
+	authOpts, authErr := kafkaauth.IAMOpts(context.Background())
+	if authErr != nil {
+		logger.Log.Error("Error building MSK IAM auth", "error", authErr)
+		os.Exit(1)
+	}
+
+	opts := append([]kgo.Opt{
 		kgo.SeedBrokers(cfg.Brokers...),
 		kgo.WithLogger(kgo.BasicLogger(os.Stdout, kgo.LogLevelWarn, nil)),
-	)
+	}, authOpts...)
+
+	c, err := kgo.NewClient(opts...)
+
 	if err != nil {
 		return err
 	}

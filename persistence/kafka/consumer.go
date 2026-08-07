@@ -34,7 +34,7 @@ var (
 func Init(ctx context.Context, cfg *config.KafkaConfig) {
 	once.Do(func() {
 
-		authOpts, authErr := kafkaauth.IAMOpts(context.Background())
+		authOpts, authErr := kafkaauth.IAMOpts(ctx)
 		if authErr != nil {
 			logger.Log.Error("Error building MSK IAM auth", "error", authErr)
 			os.Exit(1)
