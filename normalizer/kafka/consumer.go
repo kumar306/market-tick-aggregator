@@ -4,6 +4,7 @@ import (
 	"context"
 	"market-normalizer/constants"
 	"os"
+	"shared/kafkaauth"
 	"shared/logger"
 
 	"github.com/twmb/franz-go/pkg/kadm"
@@ -15,10 +16,19 @@ import (
 // its own. main.go uses this once at startup to decide how many worker
 // sessions to create.
 func MaxPartitionCount(ctx context.Context, cfg *constants.KafkaConfig, topics ...string) (int, error) {
-	client, err := kgo.NewClient(
+
+	authOpts, authErr := kafkaauth.IAMOpts(context.Background())
+	if authErr != nil {
+		logger.Log.Error("Error building MSK IAM auth", "error", authErr)
+		os.Exit(1)
+	}
+
+	opts := append([]kgo.Opt{
 		kgo.SeedBrokers(cfg.Brokers...),
 		kgo.WithLogger(kgo.BasicLogger(os.Stdout, kgo.LogLevelWarn, nil)),
-	)
+	}, authOpts...)
+
+	client, err := kgo.NewClient(opts...)
 	if err != nil {
 		return 0, err
 	}

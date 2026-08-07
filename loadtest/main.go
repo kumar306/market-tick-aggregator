@@ -25,6 +25,7 @@ import (
 	"math/rand"
 	"os"
 	"os/signal"
+	"shared/kafkaauth"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -255,23 +256,31 @@ func main() {
 	kafkaAddr := flag.String("kafka", envOr("KAFKA_ADDR", "localhost:9092"), "Kafka bootstrap address")
 	topic := flag.String("topic", "normalized.ticks", "Kafka topic to produce into")
 	stepDur := flag.Duration("step", 30*time.Second, "Duration to sustain each rate level")
+	createTopics := flag.Bool("create-topics", false, "Create all pipeline topics on the cluster, then exit")
+
 	flag.Parse()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	fmt.Println("┌──────────────────────────────────────────────────┐")
-	fmt.Println("│   Market Tick Aggregator — Pipeline Load Test    │")
-	fmt.Println("└──────────────────────────────────────────────────┘")
+	authOpts, err := kafkaauth.IAMOpts(ctx)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR: failed to build MSK IAM auth: %v\n", err)
+		os.Exit(1)
+	}
+
+	opts := append([]kgo.Opt{
+		kgo.SeedBrokers(*kafkaAddr),
+		kgo.RecordDeliveryTimeout(15 * time.Second),
+		kgo.ProducerLinger(0),
+	}, authOpts...)
+
+	fmt.Println("Market Tick Aggregator — Pipeline Load Test")
 	fmt.Printf("Kafka broker  : %s\n", *kafkaAddr)
 	fmt.Printf("Topic         : %s\n", *topic)
 	fmt.Printf("Step duration : %s\n\n", *stepDur)
 
-	client, err := kgo.NewClient(
-		kgo.SeedBrokers(*kafkaAddr),
-		kgo.RecordDeliveryTimeout(15*time.Second),
-		kgo.ProducerLinger(0),
-	)
+	client, err := kgo.NewClient(opts...)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "ERROR: failed to create Kafka client: %v\n", err)
 		os.Exit(1)
@@ -286,6 +295,17 @@ func main() {
 	}
 	pingCancel()
 	fmt.Println("Connected to Kafka.\n")
+
+	// msk serverless will never create the topics automatically
+	// we need to create the topics as part of a batch job inside the pod which is inside the private subnet as msk serverless
+	if *createTopics {
+		if err := bootstrapTopics(ctx, client); err != nil {
+			fmt.Fprintf(os.Stderr, "ERROR: failed to create topics: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("Topics created.")
+		return
+	}
 
 	rates := []int{500, 1_000, 2_500, 5_000, 10_000}
 	var results []summary

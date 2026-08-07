@@ -1,0 +1,23 @@
+# loadtest batch job
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: bootstrap-topics
+  namespace: default
+spec: 
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      # kafka-client account which allows IRSA to inject OIDC token in our loadtest pod
+      # which exchanges token with STS, validates and dials MSK serverless via TLS and sigv4 payload of temp credentials
+      serviceAccountName: kafka-client
+      restartPolicy: Never
+      containers:
+        - name: bootstrap-topics
+          image: 399400614342.dkr.ecr.us-east-1.amazonaws.com/market-tick-loadtest:v2
+          command: ["./loadtest"]
+          args: ["-create-topics"]
+          env:
+            - name: KAFKA_ADDR
+              value: "boot-f9mq3sb9.c3.kafka-serverless.us-east-1.amazonaws.com:9098"

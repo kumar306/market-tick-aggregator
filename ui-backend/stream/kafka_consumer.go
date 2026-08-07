@@ -7,6 +7,7 @@ import (
 	"market-ui-backend/constants"
 	"market-ui-backend/proto/generated"
 	"os"
+	"shared/kafkaauth"
 	"shared/logger"
 	"sync"
 
@@ -23,14 +24,23 @@ var (
 
 func Init(ctx context.Context, cfg *constants.KafkaConfig) {
 	once.Do(func() {
-		// auto commit is enabled here
-		client, err := kgo.NewClient(
+
+		authOpts, authErr := kafkaauth.IAMOpts(context.Background())
+		if authErr != nil {
+			logger.Log.Error("Error building MSK IAM auth", "error", authErr)
+			os.Exit(1)
+		}
+
+		opts := append([]kgo.Opt{
 			kgo.SeedBrokers(cfg.BootstrapServers...),
 			kgo.ConsumeTopics(cfg.TopicConfig.Ticks, cfg.TopicConfig.Book),
 			kgo.ConsumerGroup(cfg.ConsumerGroup),
 			kgo.MaxBufferedRecords(cfg.MaxBufferRecords),
 			// kgo.WithLogger(kgo.BasicLogger(os.Stdout, kgo.LogLevelDebug, nil)),
-		)
+		}, authOpts...)
+
+		// auto commit is enabled here
+		client, err := kgo.NewClient(opts...)
 		Client = client
 		if err != nil || client == nil {
 			logger.Log.Error("Error in creating kafka consumer. Returning", "error", err)

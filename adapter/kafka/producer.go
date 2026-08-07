@@ -3,6 +3,7 @@ package kafka
 import (
 	"context"
 	"os"
+	"shared/kafkaauth"
 	"shared/logger"
 	"shared/metrics"
 	"strconv"
@@ -20,14 +21,24 @@ var (
 func Init(brokers []string) (*kgo.Client, error) {
 	var err error
 	once.Do(func() {
-		client, err = kgo.NewClient(
+
+		// fetch the msk auth opts
+		authOpts, authErr := kafkaauth.IAMOpts(context.Background())
+		if authErr != nil {
+			logger.Log.Error("Error building MSK IAM auth", "error", authErr)
+			os.Exit(1)
+		}
+
+		opts := append([]kgo.Opt{
 			kgo.SeedBrokers(brokers...),
-			kgo.ProduceRequestTimeout(5*time.Second),
+			kgo.ProduceRequestTimeout(5 * time.Second),
 			kgo.ProducerLinger(0),
-			kgo.ProducerBatchMaxBytes(5*1024*1024),
+			kgo.ProducerBatchMaxBytes(5 * 1024 * 1024),
 			kgo.ProducerBatchCompression(kgo.GzipCompression()),
 			kgo.WithLogger(kgo.BasicLogger(os.Stdout, kgo.LogLevelWarn, nil)),
-		)
+		}, authOpts...)
+
+		client, err = kgo.NewClient(opts...)
 
 		pingErr := client.Ping(context.Background())
 		if pingErr != nil {

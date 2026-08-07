@@ -4,6 +4,7 @@ import (
 	"context"
 	"market-persistence/config"
 	"os"
+	"shared/kafkaauth"
 	"shared/logger"
 	"shared/metrics"
 	"strconv"
@@ -32,13 +33,22 @@ var (
 
 func Init(ctx context.Context, cfg *config.KafkaConfig) {
 	once.Do(func() {
-		client, err := kgo.NewClient(
+
+		authOpts, authErr := kafkaauth.IAMOpts(context.Background())
+		if authErr != nil {
+			logger.Log.Error("Error building MSK IAM auth", "error", authErr)
+			os.Exit(1)
+		}
+
+		opts := append([]kgo.Opt{
 			kgo.SeedBrokers(cfg.BootstrapServers...),
 			kgo.ConsumeTopics(cfg.TopicConfig.Tick, cfg.TopicConfig.Book),
 			kgo.ConsumerGroup(cfg.ConsumerGroup),
 			kgo.MaxBufferedRecords(cfg.MaxBufferRecords),
 			kgo.DisableAutoCommit(),
-		)
+		}, authOpts...)
+
+		client, err := kgo.NewClient(opts...)
 
 		Client = client
 		TickTopic = cfg.TopicConfig.Tick

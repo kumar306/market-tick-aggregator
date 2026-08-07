@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kafka-client
+  namespace: default
+  annotations:
+    # when a pod uses this service account, talks to EKS pod mutating webhook to 
+    # inject AWS env var, mount OIDC token configured to assume this IAM role which can connect to MSKs
+    eks.amazonaws.com/role-arn: "arn:aws:iam::399400614342:role/mta-msk-irsa"

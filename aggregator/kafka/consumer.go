@@ -4,6 +4,7 @@ import (
 	"context"
 	"market-aggregator/constants"
 	"os"
+	"shared/kafkaauth"
 	"shared/logger"
 
 	"github.com/twmb/franz-go/pkg/kadm"
@@ -19,10 +20,19 @@ var DownstreamTopic string
 // create; from there, Kafka's own group coordinator hands out the actual
 // partition assignment to each session.
 func PartitionCount(ctx context.Context, cfg *constants.KafkaConfig, topic string) (int, error) {
-	client, err := kgo.NewClient(
+
+	authOpts, authErr := kafkaauth.IAMOpts(context.Background())
+	if authErr != nil {
+		logger.Log.Error("Error building MSK IAM auth", "error", authErr)
+		os.Exit(1)
+	}
+
+	opts := append([]kgo.Opt{
 		kgo.SeedBrokers(cfg.BootstrapServers...),
 		kgo.WithLogger(kgo.BasicLogger(os.Stdout, kgo.LogLevelWarn, nil)),
-	)
+	}, authOpts...)
+
+	client, err := kgo.NewClient(opts...)
 	if err != nil {
 		return 0, err
 	}
