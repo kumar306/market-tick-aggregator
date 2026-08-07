@@ -150,7 +150,7 @@ func TestEvaluateAndDispatchSnapshotGating(t *testing.T) {
 	state.Orderbook.Asks.Upsert(51, 1)
 	w.OrderbookStateMap[key] = state
 
-	snapshot := w.CloneLightWeight(state.Exchange, state.Symbol, state.LastProcessedOffset)
+	snapshot := w.CloneLightWeight(state.Exchange, state.Symbol, state.LastProcessedOffset, state.Orderbook)
 	w.SnapshotStateMap[key] = snapshot
 
 	// not safe yet, should not dispatch

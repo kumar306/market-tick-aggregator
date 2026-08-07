@@ -295,7 +295,7 @@ func (w *Worker) HandleSnapshotRequest() {
 		}
 
 		// clone the orderbook into a snapshot along with current snapshot offset
-		clonedBook := w.CloneLightWeight(st.Exchange, st.Symbol, st.LastProcessedOffset)
+		clonedBook := w.CloneLightWeight(st.Exchange, st.Symbol, st.LastProcessedOffset, st.Orderbook)
 		w.SnapshotStateMap[key] = clonedBook
 		st.SnapshotPending = true
 		logger.Log.Info("Cloned book for snapshot", "worker", w.ID, "exchange", st.Exchange, "symbol", st.Symbol)
@@ -489,10 +489,8 @@ func (w *Worker) RestoreOrCreateState(exchange string, symbol string) *SymbolSta
 
 func (w *Worker) CloneLightWeight(exchange string,
 	symbol string,
-	partitionOffsets map[int32]int64) *book.OrderBookSnapshot {
-
-	key := exchange + ":" + symbol
-	b := w.OrderbookStateMap[key].Orderbook
+	partitionOffsets map[int32]int64,
+	orderBook *book.OrderBook) *book.OrderBookSnapshot {
 
 	// copy partition offsets
 	copiedOffsets := make(map[int32]int64)
@@ -503,21 +501,19 @@ func (w *Worker) CloneLightWeight(exchange string,
 	bids := make([]*book.PriceLevel, 0)
 	asks := make([]*book.PriceLevel, 0)
 
-	b.Bids.Iterate(func(price, quantity float64) bool {
+	orderBook.Bids.Iterate(func(price, quantity float64) bool {
 		bids = append(bids, &book.PriceLevel{
 			Price:    price,
 			Quantity: quantity,
 		})
-
 		return true
 	})
 
-	b.Asks.Iterate(func(price, quantity float64) bool {
+	orderBook.Asks.Iterate(func(price, quantity float64) bool {
 		asks = append(asks, &book.PriceLevel{
 			Price:    price,
 			Quantity: quantity,
 		})
-
 		return true
 	})
 
