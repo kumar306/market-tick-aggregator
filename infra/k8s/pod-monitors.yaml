@@ -1,0 +1,18 @@
+# manifest to inform our helm prometheus release in monitoring to scrape pods in default namespace
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: market-tick-services
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack
+spec:
+  namespaceSelector:
+    matchNames: ["default"]
+  selector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values: [adapter, normalizer, aggregator, orderbook, persistence]
+  podMetricsEndpoints:
+    - port: metrics

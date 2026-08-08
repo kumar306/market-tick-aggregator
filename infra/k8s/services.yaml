@@ -14,12 +14,13 @@ spec:
       serviceAccountName: kafka-client
       containers:
         - name: adapter
-          image: 399400614342.dkr.ecr.us-east-1.amazonaws.com/market-tick-adapter:v5
+          image: 399400614342.dkr.ecr.us-east-1.amazonaws.com/market-tick-adapter:v6
           env:
             - name: CONFIG_FILE
               value: "./config/docker.config.yaml"
           ports:
-            - containerPort: 2112
+            - name: metrics
+              containerPort: 2112
           resources:
           # requests 0.1vcpu, 16 MB RAM to place the pod, cpu throttles if goes over 0.5 vcpu, and OOM pod killed if ram exceeds 32 MB
             requests: { cpu: "100m", memory: "128Mi" }
@@ -48,7 +49,7 @@ spec:
       serviceAccountName: kafka-client
       containers:
         - name: normalizer
-          image: 399400614342.dkr.ecr.us-east-1.amazonaws.com/market-tick-normalizer:v5
+          image: 399400614342.dkr.ecr.us-east-1.amazonaws.com/market-tick-normalizer:v6
           env:
             - name: CONFIG_FILE
               value: ./config/docker.config.yaml
@@ -57,7 +58,8 @@ spec:
             - name: REDIS_PASSWORD
               valueFrom: { secretKeyRef: { name: db-credentials, key: REDIS_PASSWORD } }
           ports:
-            - containerPort: 2113
+            - name: metrics
+              containerPort: 2113
           resources:
           # requests: 0.2 vcpu, 32 MB RAM, max: 1 vcpu, max: 64 MB RAM
             requests: { cpu: "200m", memory: "256Mi" }
@@ -86,7 +88,7 @@ spec:
       serviceAccountName: kafka-client
       containers:
         - name: aggregator
-          image: 399400614342.dkr.ecr.us-east-1.amazonaws.com/market-tick-aggregator:v5
+          image: 399400614342.dkr.ecr.us-east-1.amazonaws.com/market-tick-aggregator:v6
           env:
             - name: CONFIG_FILE
               value: "./config/docker.config.yaml"
@@ -95,7 +97,8 @@ spec:
             - name: REDIS_PASSWORD
               valueFrom: { secretKeyRef: { name: db-credentials, key: REDIS_PASSWORD } }
           ports:
-            - containerPort: 2114
+            - name: metrics
+              containerPort: 2114
           resources:
           # same as normalizer
             requests: { cpu: "200m", memory: "256Mi" }
@@ -124,7 +127,7 @@ spec:
       serviceAccountName: kafka-client
       containers:
         - name: orderbook
-          image: 399400614342.dkr.ecr.us-east-1.amazonaws.com/market-tick-orderbook:v5
+          image: 399400614342.dkr.ecr.us-east-1.amazonaws.com/market-tick-orderbook:v6
           env:
             - name: CONFIG_FILE
               value: "./config/docker.config.yaml"
@@ -133,7 +136,8 @@ spec:
             - name: REDIS_PASSWORD
               valueFrom: { secretKeyRef: { name: db-credentials, key: REDIS_PASSWORD } }
           ports:
-            - containerPort: 2115
+            - name: metrics
+              containerPort: 2115
           resources:
           # same as above
             requests: { cpu: "200m", memory: "256Mi" }
@@ -162,7 +166,7 @@ spec:
       serviceAccountName: kafka-client
       containers:
         - name: persistence
-          image: 399400614342.dkr.ecr.us-east-1.amazonaws.com/market-tick-persistence:v5
+          image: 399400614342.dkr.ecr.us-east-1.amazonaws.com/market-tick-persistence:v6
           env:
             - name: CONFIG_FILE
               value: "./config/docker.config.yaml"
@@ -177,7 +181,8 @@ spec:
             - name: POSTGRES_DB
               valueFrom: { secretKeyRef: { name: db-credentials, key: POSTGRES_DB } }
           ports:
-            - containerPort: 2116
+            - name: metrics
+              containerPort: 2116
           resources:
             requests: { cpu: "200m", memory: "256Mi" }
             limits: { cpu: "1", memory: "512Mi" }
@@ -205,7 +210,7 @@ spec:
       serviceAccountName: kafka-client
       containers:
         - name: ui-backend
-          image: 399400614342.dkr.ecr.us-east-1.amazonaws.com/market-tick-ui-backend:v5
+          image: 399400614342.dkr.ecr.us-east-1.amazonaws.com/market-tick-ui-backend:v6
           env:
             - name: CONFIG_FILE
               value: "./config/docker.config.yaml"
@@ -255,7 +260,7 @@ spec:
     spec:
       containers:
         - name: ui
-          image: 399400614342.dkr.ecr.us-east-1.amazonaws.com/market-tick-ui:v5
+          image: 399400614342.dkr.ecr.us-east-1.amazonaws.com/market-tick-ui:v6-2
           ports:
             - containerPort: 3000
           resources:

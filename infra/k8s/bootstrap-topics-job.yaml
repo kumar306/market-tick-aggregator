@@ -15,9 +15,9 @@ spec:
       restartPolicy: Never
       containers:
         - name: bootstrap-topics
-          image: 399400614342.dkr.ecr.us-east-1.amazonaws.com/market-tick-loadtest:v2
+          image: 399400614342.dkr.ecr.us-east-1.amazonaws.com/market-tick-loadtest:v5
           command: ["./loadtest"]
           args: ["-create-topics"]
           env:
             - name: KAFKA_ADDR
-              value: "boot-f9mq3sb9.c3.kafka-serverless.us-east-1.amazonaws.com:9098"
+              value: "boot-x2lqibby.c3.kafka-serverless.us-east-1.amazonaws.com:9098"

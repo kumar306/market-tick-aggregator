@@ -1,0 +1,23 @@
+alertmanager:
+  enabled: false
+
+ # downsize as i have only 2 t3.medium instances, and cannot afford default prom resources on helm chart
+
+prometheus:
+  prometheusSpec:
+    resources:
+      requests: { cpu: "100m", memory: "256Mi" }
+      limits: { cpu: "500m", memory: "512Mi" }
+    
+grafana:
+  resources:
+    requests: { cpu: "100m", memory: "128Mi" }
+    limits: { cpu: "300m", memory: "256Mi" }
+
+prometheus-node-exporter:
+  resources:
+    requests: { cpu: "50m", memory: "32Mi" }
+
+kube-state-metrics:
+  resources:
+    requests: { cpu: "50m", memory: "64Mi" }
