@@ -1,0 +1,53 @@
+File: normalizer
+Build ID: c8dc61072814e490c169f1aa9224411de755b3c1
+Type: inuse_space
+Time: 2026-08-10 00:08:44 IST
+Showing nodes accounting for 2563.73kB, 100% of 2563.73kB total
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%  1026.46kB 40.04%  crypto/tls.(*Conn).HandshakeContext (inline)
+         0     0%     0%  1026.46kB 40.04%  crypto/tls.(*Conn).clientHandshake
+         0     0%     0%  1026.46kB 40.04%  crypto/tls.(*Conn).handshakeContext
+         0     0%     0%  1026.46kB 40.04%  crypto/tls.(*Dialer).DialContext
+         0     0%     0%  1026.46kB 40.04%  crypto/tls.dial
+         0     0%     0%  1026.46kB 40.04%  github.com/twmb/franz-go/pkg/kgo.(*broker).connect
+         0     0%     0%  1026.46kB 40.04%  github.com/twmb/franz-go/pkg/kgo.(*broker).handleReq
+         0     0%     0%  1026.46kB 40.04%  github.com/twmb/franz-go/pkg/kgo.(*broker).handleReqs
+         0     0%     0%  1026.46kB 40.04%  github.com/twmb/franz-go/pkg/kgo.(*broker).loadConnection
+         0     0%     0%  1026.46kB 40.04%  github.com/twmb/franz-go/pkg/kgo.NewClient.func2
+         0     0%     0%   514.38kB 20.06%  bytes.(*Buffer).Write
+         0     0%     0%   514.38kB 20.06%  bytes.(*Buffer).grow
+  514.38kB 20.06% 20.06%   514.38kB 20.06%  bytes.growSlice
+         0     0% 20.06%   514.38kB 20.06%  crypto/tls.(*Conn).readHandshake
+         0     0% 20.06%   514.38kB 20.06%  crypto/tls.(*Conn).readHandshakeBytes
+         0     0% 20.06%   514.38kB 20.06%  crypto/tls.(*Conn).readRecord (inline)
+         0     0% 20.06%   514.38kB 20.06%  crypto/tls.(*Conn).readRecordOrCCS
+         0     0% 20.06%   513.12kB 20.01%  github.com/twmb/franz-go/pkg/kgo.(*ProcessFetchPartitionOpts).processRecordBatch
+         0     0% 20.06%   513.12kB 20.01%  github.com/twmb/franz-go/pkg/kgo.(*cursorOffsetNext).processRespPartition
+         0     0% 20.06%   513.12kB 20.01%  github.com/twmb/franz-go/pkg/kgo.(*decompressor).Decompress
+         0     0% 20.06%   513.12kB 20.01%  github.com/twmb/franz-go/pkg/kgo.(*decompressor).Decompress.func2
+         0     0% 20.06%   513.12kB 20.01%  github.com/twmb/franz-go/pkg/kgo.(*source).fetch
+         0     0% 20.06%   513.12kB 20.01%  github.com/twmb/franz-go/pkg/kgo.(*source).handleReqResp
+         0     0% 20.06%   513.12kB 20.01%  github.com/twmb/franz-go/pkg/kgo.(*source).loopFetch
+         0     0% 20.06%   513.12kB 20.01%  github.com/twmb/franz-go/pkg/kgo.ProcessFetchPartition
+  513.12kB 20.01% 40.08%   513.12kB 20.01%  slices.Clone[go.shape.[]uint8,go.shape.uint8] (inline)
+  512.10kB 19.97% 60.05%   512.10kB 19.97%  net/http.init
+         0     0% 60.05%   512.10kB 19.97%  runtime.doInit (inline)
+         0     0% 60.05%   512.10kB 19.97%  runtime.doInit1
+         0     0% 60.05%   512.10kB 19.97%  runtime.main
+         0     0% 60.05%   512.08kB 19.97%  crypto/tls.(*Config).cipherSuites
+         0     0% 60.05%   512.08kB 19.97%  crypto/tls.(*Conn).makeClientHello
+         0     0% 60.05%   512.08kB 19.97%  crypto/tls.defaultCipherSuites
+         0     0% 60.05%   512.08kB 19.97%  crypto/tls.defaultCipherSuites.func1
+         0     0% 60.05%   512.08kB 19.97%  internal/godebug.(*Setting).Value
+         0     0% 60.05%   512.08kB 19.97%  internal/godebug.(*Setting).Value.func1
+         0     0% 60.05%   512.08kB 19.97%  internal/godebug.lookup
+         0     0% 60.05%   512.08kB 19.97%  internal/sync.(*HashTrieMap[go.shape.interface {},go.shape.interface {}]).LoadOrStore
+         0     0% 60.05%   512.08kB 19.97%  internal/sync.(*HashTrieMap[go.shape.interface {},go.shape.interface {}]).expand
+  512.08kB 19.97% 80.03%   512.08kB 19.97%  internal/sync.newIndirectNode[go.shape.interface {},go.shape.interface {}] (inline)
+         0     0% 80.03%   512.08kB 19.97%  slices.DeleteFunc[go.shape.[]uint16,go.shape.uint16]
+         0     0% 80.03%   512.08kB 19.97%  slices.IndexFunc[go.shape.[]uint16,go.shape.uint16] (inline)
+         0     0% 80.03%   512.08kB 19.97%  sync.(*Map).LoadOrStore (inline)
+         0     0% 80.03%   512.08kB 19.97%  sync.(*Once).Do (inline)
+         0     0% 80.03%   512.08kB 19.97%  sync.(*Once).doSlow
+  512.05kB 19.97%   100%   512.05kB 19.97%  runtime.(*scavengerState).init
+         0     0%   100%   512.05kB 19.97%  runtime.bgscavenge

@@ -1,0 +1,38 @@
+File: aggregator
+Build ID: daa602da4b0a67620d3e04c9cbe7283fdb52acb2
+Type: inuse_space
+Time: 2026-08-10 00:07:27 IST
+Showing nodes accounting for 1539.41kB, 100% of 1539.41kB total
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%   514.38kB 33.41%  bytes.(*Buffer).Grow (inline)
+         0     0%     0%   514.38kB 33.41%  bytes.(*Buffer).grow
+  514.38kB 33.41% 33.41%   514.38kB 33.41%  bytes.growSlice
+         0     0% 33.41%   514.38kB 33.41%  crypto/tls.(*Conn).HandshakeContext (inline)
+         0     0% 33.41%   514.38kB 33.41%  crypto/tls.(*Conn).clientHandshake
+         0     0% 33.41%   514.38kB 33.41%  crypto/tls.(*Conn).handshakeContext
+         0     0% 33.41%   514.38kB 33.41%  crypto/tls.(*Conn).readFromUntil
+         0     0% 33.41%   514.38kB 33.41%  crypto/tls.(*Conn).readHandshake
+         0     0% 33.41%   514.38kB 33.41%  crypto/tls.(*Conn).readHandshakeBytes
+         0     0% 33.41%   514.38kB 33.41%  crypto/tls.(*Conn).readRecord (inline)
+         0     0% 33.41%   514.38kB 33.41%  crypto/tls.(*Conn).readRecordOrCCS
+         0     0% 33.41%   514.38kB 33.41%  crypto/tls.(*Dialer).DialContext
+         0     0% 33.41%   514.38kB 33.41%  crypto/tls.dial
+         0     0% 33.41%   514.38kB 33.41%  github.com/twmb/franz-go/pkg/kgo.(*broker).connect
+         0     0% 33.41%   514.38kB 33.41%  github.com/twmb/franz-go/pkg/kgo.(*broker).handleReq
+         0     0% 33.41%   514.38kB 33.41%  github.com/twmb/franz-go/pkg/kgo.(*broker).handleReqs
+         0     0% 33.41%   514.38kB 33.41%  github.com/twmb/franz-go/pkg/kgo.(*broker).loadConnection
+         0     0% 33.41%   514.38kB 33.41%  github.com/twmb/franz-go/pkg/kgo.NewClient.func2
+         0     0% 33.41%   512.88kB 33.32%  github.com/prometheus/client_golang/prometheus.(*Registry).MustRegister
+  512.88kB 33.32% 66.73%   512.88kB 33.32%  github.com/prometheus/client_golang/prometheus.(*Registry).Register
+         0     0% 66.73%   512.88kB 33.32%  github.com/prometheus/client_golang/prometheus.MustRegister (inline)
+         0     0% 66.73%   512.88kB 33.32%  github.com/prometheus/client_golang/prometheus.init.0
+         0     0% 66.73%   512.88kB 33.32%  runtime.doInit (inline)
+         0     0% 66.73%   512.88kB 33.32%  runtime.doInit1
+         0     0% 66.73%   512.88kB 33.32%  runtime.main
+         0     0% 66.73%   512.16kB 33.27%  github.com/twmb/franz-go/pkg/kgo.(*ProcessFetchPartitionOpts).processRecordBatch
+         0     0% 66.73%   512.16kB 33.27%  github.com/twmb/franz-go/pkg/kgo.(*cursorOffsetNext).processRespPartition
+         0     0% 66.73%   512.16kB 33.27%  github.com/twmb/franz-go/pkg/kgo.(*source).fetch
+         0     0% 66.73%   512.16kB 33.27%  github.com/twmb/franz-go/pkg/kgo.(*source).handleReqResp
+         0     0% 66.73%   512.16kB 33.27%  github.com/twmb/franz-go/pkg/kgo.(*source).loopFetch
+         0     0% 66.73%   512.16kB 33.27%  github.com/twmb/franz-go/pkg/kgo.ProcessFetchPartition
+  512.16kB 33.27%   100%   512.16kB 33.27%  github.com/twmb/franz-go/pkg/kgo.ensureLen[go.shape.[]github.com/twmb/franz-go/pkg/kgo.Record,go.shape.struct { Key []uint8; Value []uint8; Headers []github.com/twmb/franz-go/pkg/kgo.RecordHeader; Timestamp time.Time; Topic string; Partition int32; Attrs github.com/twmb/franz-go/pkg/kgo.RecordAttrs; ProducerEpoch int16; ProducerID int64; LeaderEpoch int32; Offset int64; Context context.Context }] (inline)

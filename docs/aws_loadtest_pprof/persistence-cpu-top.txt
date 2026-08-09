@@ -1,0 +1,44 @@
+File: persistence
+Build ID: bf4cb23b33a47f97219a0d43d4152077adb60593
+Type: cpu
+Time: 2026-08-10 00:09:24 IST
+Duration: 30s, Total samples = 40ms ( 0.13%)
+Showing nodes accounting for 40ms, 100% of 40ms total
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%       10ms 25.00%  context.WithCancel
+         0     0%     0%       10ms 25.00%  context.withCancel (inline)
+         0     0%     0%       10ms 25.00%  crypto/tls.(*Conn).HandshakeContext (inline)
+         0     0%     0%       10ms 25.00%  crypto/tls.(*Conn).Write
+         0     0%     0%       10ms 25.00%  crypto/tls.(*Conn).handshakeContext
+         0     0%     0%       10ms 25.00%  crypto/tls.(*Conn).write
+         0     0%     0%       10ms 25.00%  crypto/tls.(*Conn).writeRecordLocked
+         0     0%     0%       10ms 25.00%  crypto/tls.(*Dialer).DialContext
+         0     0%     0%       10ms 25.00%  crypto/tls.dial
+         0     0%     0%       10ms 25.00%  github.com/twmb/franz-go/pkg/kgo.(*broker).connect
+         0     0%     0%       10ms 25.00%  github.com/twmb/franz-go/pkg/kgo.(*broker).handleReq
+         0     0%     0%       10ms 25.00%  github.com/twmb/franz-go/pkg/kgo.(*broker).handleReqs
+         0     0%     0%       10ms 25.00%  github.com/twmb/franz-go/pkg/kgo.(*broker).loadConnection
+         0     0%     0%       10ms 25.00%  github.com/twmb/franz-go/pkg/kgo.(*brokerCxn).handleResp
+         0     0%     0%       10ms 25.00%  github.com/twmb/franz-go/pkg/kgo.(*brokerCxn).handleResps
+         0     0%     0%       10ms 25.00%  github.com/twmb/franz-go/pkg/kgo.(*brokerCxn).writeConn.func2
+         0     0%     0%       10ms 25.00%  github.com/twmb/franz-go/pkg/kgo.NewClient.func2
+         0     0%     0%       10ms 25.00%  github.com/twmb/franz-go/pkg/kmsg.(*ListOffsetsResponse).ReadFrom
+      10ms 25.00% 25.00%       10ms 25.00%  github.com/twmb/franz-go/pkg/kmsg.(*ListOffsetsResponse).readFrom
+         0     0% 25.00%       10ms 25.00%  internal/poll.(*FD).Write
+         0     0% 25.00%       10ms 25.00%  internal/poll.ignoringEINTRIO (inline)
+      10ms 25.00% 50.00%       10ms 25.00%  internal/runtime/syscall.Syscall6
+         0     0% 50.00%       10ms 25.00%  net.(*conn).Write
+         0     0% 50.00%       10ms 25.00%  net.(*netFD).Write
+      10ms 25.00% 75.00%       10ms 25.00%  runtime.checkIdleGCNoP
+         0     0% 75.00%       10ms 25.00%  runtime.findRunnable
+         0     0% 75.00%       10ms 25.00%  runtime.mallocgc
+         0     0% 75.00%       10ms 25.00%  runtime.mallocgcSmallScanNoHeader
+         0     0% 75.00%       10ms 25.00%  runtime.mcall
+         0     0% 75.00%       10ms 25.00%  runtime.newobject
+      10ms 25.00%   100%       10ms 25.00%  runtime.nextFreeFast (inline)
+         0     0%   100%       10ms 25.00%  runtime.park_m
+         0     0%   100%       10ms 25.00%  runtime.schedule
+         0     0%   100%       10ms 25.00%  syscall.RawSyscall6
+         0     0%   100%       10ms 25.00%  syscall.Syscall
+         0     0%   100%       10ms 25.00%  syscall.Write (inline)
+         0     0%   100%       10ms 25.00%  syscall.write

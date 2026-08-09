@@ -1,0 +1,135 @@
+File: aggregator
+Build ID: daa602da4b0a67620d3e04c9cbe7283fdb52acb2
+Type: cpu
+Time: 2026-08-10 00:07:28 IST
+Duration: 30s, Total samples = 310ms ( 1.03%)
+Showing nodes accounting for 310ms, 100% of 310ms total
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%      160ms 51.61%  github.com/twmb/franz-go/pkg/kgo.Fetches.EachRecord
+      10ms  3.23%  3.23%      160ms 51.61%  market-aggregator/worker.(*Worker).ProcessTick
+         0     0%  3.23%      160ms 51.61%  market-aggregator/worker.(*Worker).Run
+         0     0%  3.23%      160ms 51.61%  market-aggregator/worker.(*Worker).Run.func1
+      40ms 12.90% 16.13%       50ms 16.13%  internal/runtime/maps.(*Iter).Next
+         0     0% 16.13%       40ms 12.90%  github.com/twmb/franz-go/pkg/kgo.(*broker).handleReq
+         0     0% 16.13%       40ms 12.90%  github.com/twmb/franz-go/pkg/kgo.(*broker).handleReqs
+         0     0% 16.13%       30ms  9.68%  github.com/twmb/franz-go/pkg/kgo.(*brokerCxn).readConn.func2
+         0     0% 16.13%       30ms  9.68%  github.com/twmb/franz-go/pkg/kgo.(*brokerCxn).writeRequest
+         0     0% 16.13%       30ms  9.68%  google.golang.org/protobuf/internal/impl.(*MessageInfo).unmarshal
+         0     0% 16.13%       30ms  9.68%  google.golang.org/protobuf/internal/impl.(*MessageInfo).unmarshalPointer
+      10ms  3.23% 19.35%       30ms  9.68%  google.golang.org/protobuf/internal/impl.(*MessageInfo).unmarshalPointerEager
+         0     0% 19.35%       30ms  9.68%  google.golang.org/protobuf/proto.Unmarshal
+         0     0% 19.35%       30ms  9.68%  google.golang.org/protobuf/proto.UnmarshalOptions.unmarshal
+      20ms  6.45% 25.81%       30ms  9.68%  market-aggregator/internal/aggmetrics.(*RollingVolume).Update
+      10ms  3.23% 29.03%       30ms  9.68%  runtime.mallocgc
+         0     0% 29.03%       30ms  9.68%  runtime.mapIterNext
+         0     0% 29.03%       30ms  9.68%  runtime.systemstack
+         0     0% 29.03%       20ms  6.45%  crypto/tls.(*Conn).HandshakeContext (inline)
+         0     0% 29.03%       20ms  6.45%  crypto/tls.(*Conn).Read
+         0     0% 29.03%       20ms  6.45%  crypto/tls.(*Conn).handshakeContext
+         0     0% 29.03%       20ms  6.45%  github.com/twmb/franz-go/pkg/kgo.(*produceRequest).AppendTo
+         0     0% 29.03%       20ms  6.45%  github.com/twmb/franz-go/pkg/kgo.seqRecBatch.appendTo
+         0     0% 29.03%       20ms  6.45%  github.com/twmb/franz-go/pkg/kmsg.(*RequestFormatter).AppendRequest
+         0     0% 29.03%       20ms  6.45%  google.golang.org/protobuf/internal/impl.consumeStringValidateUTF8
+         0     0% 29.03%       20ms  6.45%  io.ReadAtLeast
+         0     0% 29.03%       20ms  6.45%  io.ReadFull (inline)
+      10ms  3.23% 32.26%       20ms  6.45%  market-aggregator/internal/aggmetrics.(*Returns).Update
+         0     0% 32.26%       20ms  6.45%  runtime.gcBgMarkWorker
+         0     0% 32.26%       20ms  6.45%  runtime.gcBgMarkWorker.func2
+         0     0% 32.26%       20ms  6.45%  runtime.gcDrain
+      20ms  6.45% 38.71%       20ms  6.45%  runtime.growslice
+         0     0% 38.71%       20ms  6.45%  runtime.mapIterStart
+      20ms  6.45% 45.16%       20ms  6.45%  runtime.nextFreeFast (inline)
+      10ms  3.23% 48.39%       20ms  6.45%  runtime.scanobject
+      10ms  3.23% 51.61%       20ms  6.45%  runtime.selectgo
+         0     0% 51.61%       20ms  6.45%  runtime.slicebytetostring
+         0     0% 51.61%       10ms  3.23%  bufio.(*Writer).Flush
+         0     0% 51.61%       10ms  3.23%  compress/flate.(*Writer).Write (inline)
+      10ms  3.23% 54.84%       10ms  3.23%  compress/flate.(*compressor).deflate
+         0     0% 54.84%       10ms  3.23%  compress/flate.(*compressor).write
+         0     0% 54.84%       10ms  3.23%  compress/gzip.(*Writer).Write
+      10ms  3.23% 58.06%       10ms  3.23%  context.(*cancelCtx).Done
+         0     0% 58.06%       10ms  3.23%  crypto/internal/fips140/hmac.(*HMAC).Sum
+         0     0% 58.06%       10ms  3.23%  crypto/sha1.(*digest).ConstantTimeSum
+         0     0% 58.06%       10ms  3.23%  crypto/tls.(*Conn).Handshake (inline)
+         0     0% 58.06%       10ms  3.23%  crypto/tls.(*Conn).clientHandshake
+         0     0% 58.06%       10ms  3.23%  crypto/tls.(*Conn).readRecord (inline)
+         0     0% 58.06%       10ms  3.23%  crypto/tls.(*Conn).readRecordOrCCS
+         0     0% 58.06%       10ms  3.23%  crypto/tls.(*Conn).verifyServerCertificate
+         0     0% 58.06%       10ms  3.23%  crypto/tls.(*Dialer).DialContext
+         0     0% 58.06%       10ms  3.23%  crypto/tls.(*clientHandshakeState).doFullHandshake
+         0     0% 58.06%       10ms  3.23%  crypto/tls.(*clientHandshakeState).handshake
+         0     0% 58.06%       10ms  3.23%  crypto/tls.(*cthWrapper).Sum
+         0     0% 58.06%       10ms  3.23%  crypto/tls.(*halfConn).decrypt
+         0     0% 58.06%       10ms  3.23%  crypto/tls.dial
+         0     0% 58.06%       10ms  3.23%  crypto/tls.tls10MAC
+      10ms  3.23% 61.29%       10ms  3.23%  crypto/x509.(*Certificate).Verify
+         0     0% 61.29%       10ms  3.23%  gcWriteBarrier
+         0     0% 61.29%       10ms  3.23%  github.com/klauspost/compress/s2.EncodeSnappy
+         0     0% 61.29%       10ms  3.23%  github.com/klauspost/compress/s2.encodeBlockSnappy
+      10ms  3.23% 64.52%       10ms  3.23%  github.com/klauspost/compress/s2.encodeSnappyBlockAsm12B
+         0     0% 64.52%       10ms  3.23%  github.com/prometheus/client_golang/prometheus/promhttp.HandlerForTransactional.func1
+         0     0% 64.52%       10ms  3.23%  github.com/prometheus/common/expfmt.MetricFamilyToText
+         0     0% 64.52%       10ms  3.23%  github.com/prometheus/common/expfmt.MetricFamilyToText.func1
+         0     0% 64.52%       10ms  3.23%  github.com/prometheus/common/expfmt.NewEncoder.func7
+         0     0% 64.52%       10ms  3.23%  github.com/prometheus/common/expfmt.encoderCloser.Encode
+         0     0% 64.52%       10ms  3.23%  github.com/twmb/franz-go/pkg/kbin.AppendVarintBytes
+         0     0% 64.52%       10ms  3.23%  github.com/twmb/franz-go/pkg/kgo.(*Client).commitTransactionOffsets.func2
+         0     0% 64.52%       10ms  3.23%  github.com/twmb/franz-go/pkg/kgo.(*Client).shardedRequest.func1
+         0     0% 64.52%       10ms  3.23%  github.com/twmb/franz-go/pkg/kgo.(*GroupTransactSession).End.func3
+         0     0% 64.52%       10ms  3.23%  github.com/twmb/franz-go/pkg/kgo.(*ProcessFetchPartitionOpts).processRecordBatch
+         0     0% 64.52%       10ms  3.23%  github.com/twmb/franz-go/pkg/kgo.(*broker).connect
+         0     0% 64.52%       10ms  3.23%  github.com/twmb/franz-go/pkg/kgo.(*broker).loadConnection
+         0     0% 64.52%       10ms  3.23%  github.com/twmb/franz-go/pkg/kgo.(*brokerCxn).handleResp
+         0     0% 64.52%       10ms  3.23%  github.com/twmb/franz-go/pkg/kgo.(*brokerCxn).handleResps
+         0     0% 64.52%       10ms  3.23%  github.com/twmb/franz-go/pkg/kgo.(*brokerCxn).readResponse
+         0     0% 64.52%       10ms  3.23%  github.com/twmb/franz-go/pkg/kgo.(*brokerCxn).writeConn
+         0     0% 64.52%       10ms  3.23%  github.com/twmb/franz-go/pkg/kgo.(*compressor).Compress
+         0     0% 64.52%       10ms  3.23%  github.com/twmb/franz-go/pkg/kgo.(*cursorOffsetNext).processRespPartition
+         0     0% 64.52%       10ms  3.23%  github.com/twmb/franz-go/pkg/kgo.(*groupConsumer).commitTxn.func2
+         0     0% 64.52%       10ms  3.23%  github.com/twmb/franz-go/pkg/kgo.(*sink).drain
+         0     0% 64.52%       10ms  3.23%  github.com/twmb/franz-go/pkg/kgo.(*source).fetch
+         0     0% 64.52%       10ms  3.23%  github.com/twmb/franz-go/pkg/kgo.(*source).handleReqResp
+         0     0% 64.52%       10ms  3.23%  github.com/twmb/franz-go/pkg/kgo.(*source).loopFetch
+      10ms  3.23% 67.74%       10ms  3.23%  github.com/twmb/franz-go/pkg/kgo.(*wrappedLogger).Level
+         0     0% 67.74%       10ms  3.23%  github.com/twmb/franz-go/pkg/kgo.NewClient.func2
+         0     0% 67.74%       10ms  3.23%  github.com/twmb/franz-go/pkg/kgo.ProcessFetchPartition
+         0     0% 67.74%       10ms  3.23%  github.com/twmb/franz-go/pkg/kgo.ensureLen[go.shape.[]github.com/twmb/franz-go/pkg/kmsg.Record,go.shape.struct { Length int32; Attributes int8; TimestampDelta int32; TimestampDelta64 int64; OffsetDelta int32; Key []uint8; Value []uint8; Headers []github.com/twmb/franz-go/pkg/kmsg.Header }] (inline)
+         0     0% 67.74%       10ms  3.23%  github.com/twmb/franz-go/pkg/kgo.promisedRec.appendTo
+      10ms  3.23% 70.97%       10ms  3.23%  market-aggregator/internal/aggmetrics.(*OHLC).Update
+      10ms  3.23% 74.19%       10ms  3.23%  market-aggregator/internal/aggmetrics.(*Volatility).Update
+         0     0% 74.19%       10ms  3.23%  math.Log (inline)
+      10ms  3.23% 77.42%       10ms  3.23%  math.archLog
+         0     0% 77.42%       10ms  3.23%  net/http.(*ServeMux).ServeHTTP
+         0     0% 77.42%       10ms  3.23%  net/http.(*conn).serve
+         0     0% 77.42%       10ms  3.23%  net/http.HandlerFunc.ServeHTTP
+         0     0% 77.42%       10ms  3.23%  net/http.serverHandler.ServeHTTP
+         0     0% 77.42%       10ms  3.23%  runtime.(*_panic).start
+      10ms  3.23% 80.65%       10ms  3.23%  runtime.(*moduledata).textAddr
+         0     0% 80.65%       10ms  3.23%  runtime.(*unwinder).next
+         0     0% 80.65%       10ms  3.23%  runtime.(*unwinder).resolveInternal
+      10ms  3.23% 83.87%       10ms  3.23%  runtime.(*waitq).dequeue (inline)
+      10ms  3.23% 87.10%       10ms  3.23%  runtime.arenaIndex (inline)
+      10ms  3.23% 90.32%       10ms  3.23%  runtime.asyncPreempt
+         0     0% 90.32%       10ms  3.23%  runtime.closechan
+         0     0% 90.32%       10ms  3.23%  runtime.copystack
+         0     0% 90.32%       10ms  3.23%  runtime.findObject
+         0     0% 90.32%       10ms  3.23%  runtime.funcInfo.entry (inline)
+         0     0% 90.32%       10ms  3.23%  runtime.funcspdelta (inline)
+         0     0% 90.32%       10ms  3.23%  runtime.gcDrainMarkWorkerFractional (inline)
+         0     0% 90.32%       10ms  3.23%  runtime.gcDrainMarkWorkerIdle (inline)
+         0     0% 90.32%       10ms  3.23%  runtime.lock (inline)
+         0     0% 90.32%       10ms  3.23%  runtime.lock2
+         0     0% 90.32%       10ms  3.23%  runtime.lockWithRank (inline)
+         0     0% 90.32%       10ms  3.23%  runtime.makeslice
+         0     0% 90.32%       10ms  3.23%  runtime.mallocgcSmallNoscan
+         0     0% 90.32%       10ms  3.23%  runtime.mallocgcTiny
+      10ms  3.23% 93.55%       10ms  3.23%  runtime.memmove
+         0     0% 93.55%       10ms  3.23%  runtime.newstack
+      10ms  3.23% 96.77%       10ms  3.23%  runtime.osyield
+         0     0% 96.77%       10ms  3.23%  runtime.pcvalue
+         0     0% 96.77%       10ms  3.23%  runtime.sellock
+         0     0% 96.77%       10ms  3.23%  runtime.spanOf (inline)
+      10ms  3.23%   100%       10ms  3.23%  runtime.typePointers.next
+         0     0%   100%       10ms  3.23%  runtime.wbBufFlush
+         0     0%   100%       10ms  3.23%  runtime.wbBufFlush.func1
+         0     0%   100%       10ms  3.23%  runtime.wbBufFlush1

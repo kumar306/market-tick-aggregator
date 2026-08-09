@@ -1,0 +1,81 @@
+File: orderbook
+Build ID: c39e2b7ce54101e8a956d32531ff33d5871ebc08
+Type: cpu
+Time: 2026-08-10 00:08:06 IST
+Duration: 30s, Total samples = 220ms ( 0.73%)
+Showing nodes accounting for 220ms, 100% of 220ms total
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%       90ms 40.91%  market-orderbook/dispatcher.startWorker
+         0     0%     0%       90ms 40.91%  market-orderbook/worker.(*Worker).Run
+         0     0%     0%       70ms 31.82%  google.golang.org/protobuf/internal/impl.(*MessageInfo).unmarshal
+      10ms  4.55%  4.55%       70ms 31.82%  google.golang.org/protobuf/internal/impl.(*MessageInfo).unmarshalPointer
+         0     0%  4.55%       70ms 31.82%  google.golang.org/protobuf/internal/impl.(*MessageInfo).unmarshalPointerEager
+         0     0%  4.55%       70ms 31.82%  google.golang.org/protobuf/proto.Unmarshal
+         0     0%  4.55%       70ms 31.82%  google.golang.org/protobuf/proto.UnmarshalOptions.unmarshal
+         0     0%  4.55%       70ms 31.82%  market-orderbook/dispatcher.RunDispatcher
+      10ms  4.55%  9.09%       70ms 31.82%  market-orderbook/worker.(*Worker).ProcessBookUpdate
+         0     0%  9.09%       60ms 27.27%  market-orderbook/book.(*TreeBookSide).Upsert
+         0     0%  9.09%       60ms 27.27%  market-orderbook/orderedtree/skiplist.(*SkipList).Insert
+         0     0%  9.09%       50ms 22.73%  runtime.mallocgc
+         0     0%  9.09%       50ms 22.73%  runtime.systemstack
+         0     0%  9.09%       40ms 18.18%  google.golang.org/protobuf/internal/impl.consumeMessageSliceInfo
+      40ms 18.18% 27.27%       40ms 18.18%  market-orderbook/orderedtree/skiplist.(*SkipList).find (inline)
+         0     0% 27.27%       40ms 18.18%  runtime.gcBgMarkWorker
+         0     0% 27.27%       40ms 18.18%  runtime.gcBgMarkWorker.func2
+         0     0% 27.27%       40ms 18.18%  runtime.gcDrain
+         0     0% 27.27%       40ms 18.18%  runtime.gcDrainMarkWorkerIdle (inline)
+      20ms  9.09% 36.36%       40ms 18.18%  runtime.scanobject
+         0     0% 36.36%       30ms 13.64%  google.golang.org/protobuf/internal/impl.consumeStringValidateUTF8
+         0     0% 36.36%       30ms 13.64%  reflect.New
+      10ms  4.55% 40.91%       30ms 13.64%  runtime.mallocgcSmallScanNoHeader
+         0     0% 40.91%       20ms  9.09%  market-orderbook/backpressure.OnDequeue
+         0     0% 40.91%       20ms  9.09%  reflect.unsafe_New
+         0     0% 40.91%       20ms  9.09%  runtime.(*mcache).nextFree
+         0     0% 40.91%       20ms  9.09%  runtime.(*mcache).refill
+         0     0% 40.91%       20ms  9.09%  runtime.(*mcentral).cacheSpan
+         0     0% 40.91%       20ms  9.09%  runtime.(*mcentral).grow
+      10ms  4.55% 45.45%       20ms  9.09%  runtime.mallocgcTiny
+         0     0% 45.45%       20ms  9.09%  runtime.slicebytetostring
+      10ms  4.55% 50.00%       10ms  4.55%  github.com/prometheus/client_golang/prometheus.(*gauge).Set
+         0     0% 50.00%       10ms  4.55%  github.com/twmb/franz-go/pkg/kgo.(*ProcessFetchPartitionOpts).processRecordBatch
+         0     0% 50.00%       10ms  4.55%  github.com/twmb/franz-go/pkg/kgo.(*cursorOffsetNext).processRespPartition
+         0     0% 50.00%       10ms  4.55%  github.com/twmb/franz-go/pkg/kgo.(*source).fetch
+         0     0% 50.00%       10ms  4.55%  github.com/twmb/franz-go/pkg/kgo.(*source).handleReqResp
+         0     0% 50.00%       10ms  4.55%  github.com/twmb/franz-go/pkg/kgo.(*source).loopFetch
+         0     0% 50.00%       10ms  4.55%  github.com/twmb/franz-go/pkg/kgo.Fetches.EachRecord
+         0     0% 50.00%       10ms  4.55%  github.com/twmb/franz-go/pkg/kgo.ProcessFetchPartition
+      10ms  4.55% 54.55%       10ms  4.55%  github.com/twmb/franz-go/pkg/kgo.readRawRecordsInto
+         0     0% 54.55%       10ms  4.55%  internal/sync.(*Mutex).Unlock (inline)
+      10ms  4.55% 59.09%       10ms  4.55%  internal/sync.(*Mutex).unlockSlow
+         0     0% 59.09%       10ms  4.55%  market-orderbook/kafka.StartConsumer
+         0     0% 59.09%       10ms  4.55%  market-orderbook/kafka.StartConsumer.func1
+         0     0% 59.09%       10ms  4.55%  market-orderbook/orderedtree/skiplist.randomLevel (inline)
+      10ms  4.55% 63.64%       10ms  4.55%  math/rand.(*Rand).Float64 (inline)
+         0     0% 63.64%       10ms  4.55%  math/rand.Float64
+         0     0% 63.64%       10ms  4.55%  reflect.(*rtype).ptrTo
+         0     0% 63.64%       10ms  4.55%  reflect.(*rtype).typeOff (inline)
+         0     0% 63.64%       10ms  4.55%  reflect.ptrTo (inline)
+         0     0% 63.64%       10ms  4.55%  reflect.resolveTypeOff
+      10ms  4.55% 68.18%       10ms  4.55%  runtime.(*fixalloc).alloc
+         0     0% 68.18%       10ms  4.55%  runtime.(*mheap).alloc
+         0     0% 68.18%       10ms  4.55%  runtime.(*mheap).alloc.func1
+         0     0% 68.18%       10ms  4.55%  runtime.(*mheap).allocMSpanLocked
+         0     0% 68.18%       10ms  4.55%  runtime.(*mheap).allocSpan
+         0     0% 68.18%       10ms  4.55%  runtime.(*mspan).initHeapBits
+      10ms  4.55% 72.73%       10ms  4.55%  runtime.(*mspan).writeHeapBitsSmall
+         0     0% 72.73%       10ms  4.55%  runtime.greyobject
+         0     0% 72.73%       10ms  4.55%  runtime.heapSetTypeNoHeader (inline)
+      10ms  4.55% 77.27%       10ms  4.55%  runtime.mapaccess1_fast32
+      10ms  4.55% 81.82%       10ms  4.55%  runtime.memclrNoHeapPointers
+         0     0% 81.82%       10ms  4.55%  runtime.newobject
+      10ms  4.55% 86.36%       10ms  4.55%  runtime.pageIndexOf (inline)
+         0     0% 86.36%       10ms  4.55%  runtime.resolveTypeOff
+         0     0% 86.36%       10ms  4.55%  runtime.rtype.typeOff (inline)
+         0     0% 86.36%       10ms  4.55%  runtime.selectgo
+         0     0% 86.36%       10ms  4.55%  runtime.selunlock
+      10ms  4.55% 90.91%       10ms  4.55%  runtime.typePointers.next
+         0     0% 90.91%       10ms  4.55%  runtime.unlock (inline)
+      10ms  4.55% 95.45%       10ms  4.55%  runtime.unlock2
+         0     0% 95.45%       10ms  4.55%  runtime.unlockWithRank (inline)
+         0     0% 95.45%       10ms  4.55%  sync.(*Mutex).Unlock (inline)
+      10ms  4.55%   100%       10ms  4.55%  unicode/utf8.Valid

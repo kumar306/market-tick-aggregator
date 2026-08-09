@@ -1,0 +1,57 @@
+File: adapter
+Build ID: ba39653ab9c5c6ce56f6614d0574263b7415fde8
+Type: inuse_space
+Time: 2026-08-10 00:06:47 IST
+Showing nodes accounting for 6798.52kB, 100% of 6798.52kB total
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%  3926.37kB 57.75%  github.com/twmb/franz-go/pkg/kgo.(*broker).handleReq
+         0     0%     0%  3926.37kB 57.75%  github.com/twmb/franz-go/pkg/kgo.(*broker).handleReqs
+ 2707.76kB 39.83% 39.83%  3801.27kB 55.91%  compress/flate.NewWriter (inline)
+         0     0% 39.83%  3801.27kB 55.91%  compress/gzip.(*Writer).Write
+         0     0% 39.83%  2898.68kB 42.64%  github.com/twmb/franz-go/pkg/kgo.(*brokerCxn).writeRequest
+         0     0% 39.83%  2898.68kB 42.64%  github.com/twmb/franz-go/pkg/kgo.(*compressor).Compress
+         0     0% 39.83%  2898.68kB 42.64%  github.com/twmb/franz-go/pkg/kgo.(*produceRequest).AppendTo
+         0     0% 39.83%  2898.68kB 42.64%  github.com/twmb/franz-go/pkg/kgo.seqRecBatch.appendTo
+         0     0% 39.83%  2898.68kB 42.64%  github.com/twmb/franz-go/pkg/kmsg.(*RequestFormatter).AppendRequest
+         0     0% 39.83%  1455.56kB 21.41%  main.main
+         0     0% 39.83%  1455.56kB 21.41%  market-adapter/feeds.GetStreamHandler
+ 1455.56kB 21.41% 61.24%  1455.56kB 21.41%  market-adapter/ring.NewSpscDropOldestRing[go.shape.[]uint8]
+         0     0% 61.24%  1455.56kB 21.41%  runtime.main
+         0     0% 61.24%  1093.51kB 16.08%  compress/flate.(*compressor).init
+ 1093.51kB 16.08% 77.32%  1093.51kB 16.08%  compress/flate.(*compressor).initDeflate (inline)
+         0     0% 77.32%  1027.69kB 15.12%  crypto/tls.(*Conn).HandshakeContext (inline)
+         0     0% 77.32%  1027.69kB 15.12%  crypto/tls.(*Conn).clientHandshake
+         0     0% 77.32%  1027.69kB 15.12%  crypto/tls.(*Conn).handshakeContext
+         0     0% 77.32%  1027.69kB 15.12%  crypto/tls.(*Conn).verifyServerCertificate
+         0     0% 77.32%  1027.69kB 15.12%  crypto/tls.(*Dialer).DialContext
+         0     0% 77.32%  1027.69kB 15.12%  crypto/tls.(*clientHandshakeState).doFullHandshake
+         0     0% 77.32%  1027.69kB 15.12%  crypto/tls.(*clientHandshakeState).handshake
+         0     0% 77.32%  1027.69kB 15.12%  crypto/tls.dial
+         0     0% 77.32%  1027.69kB 15.12%  crypto/x509.(*CertPool).AppendCertsFromPEM
+         0     0% 77.32%  1027.69kB 15.12%  crypto/x509.(*Certificate).Verify
+         0     0% 77.32%  1027.69kB 15.12%  crypto/x509.initSystemRoots
+         0     0% 77.32%  1027.69kB 15.12%  crypto/x509.loadSystemRoots
+         0     0% 77.32%  1027.69kB 15.12%  crypto/x509.systemRootsPool
+         0     0% 77.32%  1027.69kB 15.12%  github.com/twmb/franz-go/pkg/kgo.(*broker).connect
+         0     0% 77.32%  1027.69kB 15.12%  github.com/twmb/franz-go/pkg/kgo.(*broker).loadConnection
+         0     0% 77.32%  1027.69kB 15.12%  github.com/twmb/franz-go/pkg/kgo.NewClient.func2
+         0     0% 77.32%  1027.69kB 15.12%  sync.(*Once).Do (inline)
+         0     0% 77.32%  1027.69kB 15.12%  sync.(*Once).doSlow
+         0     0% 77.32%   902.59kB 13.28%  bufio.(*Writer).Flush
+         0     0% 77.32%   902.59kB 13.28%  github.com/prometheus/client_golang/prometheus/promhttp.HandlerForTransactional.func1
+         0     0% 77.32%   902.59kB 13.28%  github.com/prometheus/common/expfmt.MetricFamilyToText
+         0     0% 77.32%   902.59kB 13.28%  github.com/prometheus/common/expfmt.MetricFamilyToText.func1
+         0     0% 77.32%   902.59kB 13.28%  github.com/prometheus/common/expfmt.NewEncoder.func7
+         0     0% 77.32%   902.59kB 13.28%  github.com/prometheus/common/expfmt.encoderCloser.Encode
+         0     0% 77.32%   902.59kB 13.28%  net/http.(*ServeMux).ServeHTTP
+         0     0% 77.32%   902.59kB 13.28%  net/http.(*conn).serve
+         0     0% 77.32%   902.59kB 13.28%  net/http.HandlerFunc.ServeHTTP
+         0     0% 77.32%   902.59kB 13.28%  net/http.serverHandler.ServeHTTP
+     515kB  7.58% 84.90%      515kB  7.58%  crypto/x509.(*CertPool).addCertFunc (inline)
+     514kB  7.56% 92.46%      514kB  7.56%  bufio.NewReaderSize (inline)
+         0     0% 92.46%      514kB  7.56%  github.com/gorilla/websocket.(*Dialer).Dial (inline)
+         0     0% 92.46%      514kB  7.56%  github.com/gorilla/websocket.(*Dialer).DialContext
+         0     0% 92.46%      514kB  7.56%  github.com/gorilla/websocket.newConn
+         0     0% 92.46%      514kB  7.56%  market-adapter/internal.Connect
+         0     0% 92.46%      514kB  7.56%  market-adapter/internal.SupervisorLoop
+  512.69kB  7.54%   100%   512.69kB  7.54%  encoding/pem.Decode

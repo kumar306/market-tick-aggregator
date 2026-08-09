@@ -1,0 +1,40 @@
+File: persistence
+Build ID: bf4cb23b33a47f97219a0d43d4152077adb60593
+Type: inuse_space
+Time: 2026-08-10 00:09:23 IST
+Showing nodes accounting for 2444.07kB, 100% of 2444.07kB total
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%   902.59kB 36.93%  bufio.(*Writer).Flush
+  902.59kB 36.93% 36.93%   902.59kB 36.93%  compress/flate.NewWriter (inline)
+         0     0% 36.93%   902.59kB 36.93%  compress/gzip.(*Writer).Write
+         0     0% 36.93%   902.59kB 36.93%  github.com/prometheus/client_golang/prometheus/promhttp.HandlerForTransactional.func1
+         0     0% 36.93%   902.59kB 36.93%  github.com/prometheus/common/expfmt.MetricFamilyToText
+         0     0% 36.93%   902.59kB 36.93%  github.com/prometheus/common/expfmt.MetricFamilyToText.func1
+         0     0% 36.93%   902.59kB 36.93%  github.com/prometheus/common/expfmt.NewEncoder.func7
+         0     0% 36.93%   902.59kB 36.93%  github.com/prometheus/common/expfmt.encoderCloser.Encode
+         0     0% 36.93%   902.59kB 36.93%  net/http.(*ServeMux).ServeHTTP
+         0     0% 36.93%   902.59kB 36.93%  net/http.(*conn).serve
+         0     0% 36.93%   902.59kB 36.93%  net/http.HandlerFunc.ServeHTTP
+         0     0% 36.93%   902.59kB 36.93%  net/http.serverHandler.ServeHTTP
+  516.64kB 21.14% 58.07%   516.64kB 21.14%  github.com/aws/aws-sdk-go-v2/service/ssooidc/internal/endpoints.init
+         0     0% 58.07%   516.64kB 21.14%  runtime.doInit (inline)
+         0     0% 58.07%   516.64kB 21.14%  runtime.doInit1
+         0     0% 58.07%   516.64kB 21.14%  runtime.main
+         0     0% 58.07%   512.62kB 20.97%  crypto/tls.(*Conn).HandshakeContext (inline)
+         0     0% 58.07%   512.62kB 20.97%  crypto/tls.(*Conn).clientHandshake
+         0     0% 58.07%   512.62kB 20.97%  crypto/tls.(*Conn).handshakeContext
+         0     0% 58.07%   512.62kB 20.97%  crypto/tls.(*Conn).verifyServerCertificate
+         0     0% 58.07%   512.62kB 20.97%  crypto/tls.(*Dialer).DialContext
+         0     0% 58.07%   512.62kB 20.97%  crypto/tls.(*clientHandshakeState).doFullHandshake
+         0     0% 58.07%   512.62kB 20.97%  crypto/tls.(*clientHandshakeState).handshake
+  512.62kB 20.97% 79.04%   512.62kB 20.97%  crypto/tls.(*weakCertCache).newCert
+         0     0% 79.04%   512.62kB 20.97%  crypto/tls.dial
+         0     0% 79.04%   512.62kB 20.97%  github.com/twmb/franz-go/pkg/kgo.(*broker).connect
+         0     0% 79.04%   512.62kB 20.97%  github.com/twmb/franz-go/pkg/kgo.(*broker).handleReq
+         0     0% 79.04%   512.62kB 20.97%  github.com/twmb/franz-go/pkg/kgo.(*broker).handleReqs
+         0     0% 79.04%   512.62kB 20.97%  github.com/twmb/franz-go/pkg/kgo.(*broker).loadConnection
+         0     0% 79.04%   512.62kB 20.97%  github.com/twmb/franz-go/pkg/kgo.NewClient.func2
+  512.22kB 20.96%   100%   512.22kB 20.96%  runtime.malg
+         0     0%   100%   512.22kB 20.96%  runtime.newproc.func1
+         0     0%   100%   512.22kB 20.96%  runtime.newproc1
+         0     0%   100%   512.22kB 20.96%  runtime.systemstack
