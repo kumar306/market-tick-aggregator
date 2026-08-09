@@ -28,6 +28,9 @@ func initMetrics() {
 }
 
 func TestOrderbookIntegration_EndToEndSnapshotAndFlush(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping testcontainers-backed test in short mode")
+	}
 	initMetrics()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)

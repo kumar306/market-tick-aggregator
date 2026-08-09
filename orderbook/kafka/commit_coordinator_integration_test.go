@@ -11,6 +11,9 @@ import (
 )
 
 func TestCommitCoordinatorCommitsAndBroadcasts(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping testcontainers-backed test in short mode")
+	}
 	initMetrics()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

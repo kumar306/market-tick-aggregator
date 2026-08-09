@@ -23,6 +23,9 @@ import (
 // normalizes them, and produces to the downstream topic
 // this only passes if the worker's transaction actually commits, not just if Produce was called.
 func TestWorker(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping testcontainers-backed test in short mode")
+	}
 	metrics.InitNormalizerMetrics()
 
 	registry.InitConverterRegistry()

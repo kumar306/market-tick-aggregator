@@ -23,6 +23,9 @@ import (
 )
 
 func TestMainFlowSmoke(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping testcontainers-backed test in short mode")
+	}
 	initMetrics()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)

@@ -7,8 +7,21 @@ on:
 
 jobs:
   backend:
-    name: Go test + vet
+    name: Go test + vet (${{ matrix.module }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module:
+          - adapter
+          - aggregator
+          - normalizer
+          - orderbook
+          - persistence
+          - shared
+          - ui-backend
+          - loadtest
+          - mockexchange
     steps:
       - uses: actions/checkout@v4
 
@@ -16,11 +29,20 @@ jobs:
         with:
           go-version-file: go.work
 
+      # each module has its own go.mod, so run inside it directly rather
+      # than relying on go.work workspace resolution for a bare ./... at
+      # the repo root, which does not behave the same on every runner.
       - name: Vet
+        working-directory: ${{ matrix.module }}
         run: go vet ./...
 
+      # -short skips the handful of tests that spin up real Kafka/Redis
+      # containers via testcontainers - those are real and useful locally,
+      # but too timing-sensitive for a shared CI runner pulling fresh
+      # images on every run.
       - name: Test
-        run: go test ./...
+        working-directory: ${{ matrix.module }}
+        run: go test -short ./...
 
   frontend:
     name: UI lint + build

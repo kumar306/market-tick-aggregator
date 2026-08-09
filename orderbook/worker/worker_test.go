@@ -29,6 +29,9 @@ func newTestWorker(ctx context.Context) *Worker {
 }
 
 func TestProcessBookUpdateUpdatesState(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test that requires a live Redis client in short mode")
+	}
 	initMetrics()
 	ctx := context.Background()
 	w := newTestWorker(ctx)

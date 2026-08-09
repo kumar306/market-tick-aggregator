@@ -295,7 +295,7 @@ func main() {
 		os.Exit(1)
 	}
 	pingCancel()
-	fmt.Println("Connected to Kafka.\n")
+	fmt.Println("Connected to Kafka.")
 
 	// msk serverless will never create the topics automatically
 	// we need to create the topics as part of a batch job inside the pod which is inside the private subnet as msk serverless

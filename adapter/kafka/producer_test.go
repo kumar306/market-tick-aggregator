@@ -22,6 +22,9 @@ import (
 // fetch from the same topic - if len(records) = 0 or some error, then means message didnt get produced so fail the test
 
 func Test_ProduceAsync(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping testcontainers-backed test in short mode")
+	}
 	metrics.InitAdapterMetrics()
 	ctx := context.Background()
 

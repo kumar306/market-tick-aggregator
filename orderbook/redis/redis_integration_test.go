@@ -12,6 +12,9 @@ import (
 )
 
 func TestRedisLoadAndGetSnapshot(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping testcontainers-backed test in short mode")
+	}
 	ctx := context.Background()
 
 	container, addr := testcontainers.StartRedis(ctx, t)
