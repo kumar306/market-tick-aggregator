@@ -44,6 +44,36 @@ jobs:
         working-directory: ${{ matrix.module }}
         run: go test -short ./...
 
+  proto-check:
+    name: Generated proto code is up to date
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.work
+
+      - uses: arduino/setup-protoc@v3
+        with:
+          version: "33.1"
+
+      - name: Install protoc-gen-go
+        run: go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.10
+
+      - name: Regenerate from .proto sources
+        run: ./scripts/generate-proto.sh
+
+      # if regenerating produced any diff, the committed .pb.go files were
+      # stale relative to their .proto source, and this fails the build
+      # instead of letting stale generated code merge silently.
+      - name: Fail if generated code is stale
+        run: |
+          if ! git diff --exit-code --stat; then
+            echo "::error::Generated proto code is out of date. Run ./scripts/generate-proto.sh and commit the result."
+            exit 1
+          fi
+
   frontend:
     name: UI lint + build
     runs-on: ubuntu-latest
