@@ -172,6 +172,9 @@ func (w *Worker) ProcessBookUpdate(rec *constants.DispatchRecord) {
 	state.LastProcessedOffset[rec.Partition] = max(state.LastProcessedOffset[rec.Partition], rec.Offset)
 	metrics.Orderbook_UpdatesTotal.WithLabelValues(strconv.Itoa(w.ID), state.Exchange, state.Symbol).Add(1)
 	metrics.Orderbook_E2ELatencySeconds.Observe(float64(time.Now().UnixMilli()-rec.TsMs) / 1000.0)
+	if rec.Record != nil {
+		metrics.Orderbook_KafkaRecordAgeSeconds.Observe(time.Since(rec.Record.Timestamp).Seconds())
+	}
 }
 
 func (w *Worker) FlushBook(flushEpoch int32) {
@@ -499,24 +502,14 @@ func (w *Worker) CloneLightWeight(exchange string,
 		copiedOffsets[partition] = offset
 	}
 
-	bids := make([]*book.PriceLevel, 0)
-	asks := make([]*book.PriceLevel, 0)
-
-	orderBook.Bids.Iterate(func(price, quantity float64) bool {
-		bids = append(bids, &book.PriceLevel{
-			Price:    price,
-			Quantity: quantity,
-		})
-		return true
-	})
-
-	orderBook.Asks.Iterate(func(price, quantity float64) bool {
-		asks = append(asks, &book.PriceLevel{
-			Price:    price,
-			Quantity: quantity,
-		})
-		return true
-	})
+	// bounded to FlushDepth, not the full book
+	// and the downstream flush only ever exposes top-N anyway, so a snapshot
+	// deeper than that recovers nothing extra on restart.
+	// this change is required because cloning book becomes more expensive with each clone and snapshotting lies on hot path
+	// on high load test, cloning is the reason we faced severe backpressure thrashing due to snapshotting time
+	// so reduce the clone to topN reduce from O(N) to O(15)
+	bids := orderBook.Bids.TopN(w.FlushDepth)
+	asks := orderBook.Asks.TopN(w.FlushDepth)
 
 	cloned := &book.OrderBookSnapshot{
 		Exchange:         exchange,

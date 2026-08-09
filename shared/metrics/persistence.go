@@ -32,6 +32,11 @@ var (
 
 	// dql
 	Persistence_DLQCount *prometheus.CounterVec
+
+	// downstream half of e2e latency - from aggregator/orderbook's own result
+	// timestamp to the moment the row actually lands in postgres
+	Persistence_TickFlushLagSeconds prometheus.Histogram
+	Persistence_BookFlushLagSeconds prometheus.Histogram
 )
 
 func InitPersistenceMetrics() {
@@ -53,4 +58,6 @@ func InitPersistenceMetrics() {
 	Persistence_BatchDroppedItems = NewCounterVec("persistence_batch_dropped_items", "Number of dropped items for batcher add", []string{"pipeline"})
 	Persistence_BatchDroppedTimers = NewCounterVec("persistence_batch_dropped_timer_events", "Number of dropped timer events for batcher", []string{"pipeline"})
 	Persistence_DLQCount = NewCounterVec("persistence_dlq_count", "Number of DLQ publishes", []string{"pipeline"})
+	Persistence_TickFlushLagSeconds = NewHistogram("persistence_tick_flush_lag_seconds", "Time from a window's end_ts to the row landing in postgres", prometheus.ExponentialBuckets(0.001, 2, 18))
+	Persistence_BookFlushLagSeconds = NewHistogram("persistence_book_flush_lag_seconds", "Time from a book flush's event_time to the row landing in postgres", prometheus.ExponentialBuckets(0.001, 2, 18))
 }

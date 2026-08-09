@@ -6,6 +6,7 @@ import (
 	"market-persistence/db/model"
 	"shared/logger"
 	"shared/metrics"
+	"time"
 )
 
 const stagingAggregatedTicksDDL = `
@@ -124,5 +125,11 @@ func FlushAggregateTicks(ctx context.Context, tx util.Tx, rows []*model.Aggregat
 
 	logger.Log.Info("Rows affected", "copied", copied, "inserted", rowsAffected)
 	metrics.Persistence_DbRowsWritten.WithLabelValues("aggregated_ticks").Add(float64(rowsAffected))
+
+	now := time.Now()
+	for _, row := range rows {
+		metrics.Persistence_TickFlushLagSeconds.Observe(now.Sub(row.EndTs).Seconds())
+	}
+
 	return nil
 }

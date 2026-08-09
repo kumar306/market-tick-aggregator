@@ -18,6 +18,7 @@ locals {
         ui          = "ui/Dockerfile"
         ui-backend  = "ui-backend/Dockerfile"
         loadtest    = "loadtest/Dockerfile"
+        mockexchange = "mockexchange/Dockerfile"
     }
 }
 

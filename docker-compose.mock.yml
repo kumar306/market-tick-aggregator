@@ -1,0 +1,62 @@
+# Overlay that swaps adapter/normalizer onto local mock exchanges instead of
+# real ones - the local equivalent of infra/scripts/toggle-mock-feeds.sh, so
+# the same e2e latency test can be reproduced on localhost as a control
+# against the AWS/EKS/MSK run.
+#
+# Usage: docker compose -f docker-compose.yml -f docker-compose.app.yml -f docker-compose.mock.yml up -d --build
+services:
+  binance-mock:
+    build:
+      context: .
+      dockerfile: mockexchange/Dockerfile
+    container_name: binance_mock
+    environment:
+      EXCHANGE: binance
+      RATE_PER_SEC: 50
+    ports:
+      - "8081:8081"
+    restart: unless-stopped
+
+  coinbase-mock:
+    build:
+      context: .
+      dockerfile: mockexchange/Dockerfile
+    container_name: coinbase_mock
+    environment:
+      EXCHANGE: coinbase
+      RATE_PER_SEC: 50
+    ports:
+      - "8082:8081"
+    restart: unless-stopped
+
+  kraken-mock:
+    build:
+      context: .
+      dockerfile: mockexchange/Dockerfile
+    container_name: kraken_mock
+    environment:
+      EXCHANGE: kraken
+      RATE_PER_SEC: 50
+    ports:
+      - "8083:8081"
+    restart: unless-stopped
+
+  adapter:
+    environment:
+      BINANCE_WS_URL: ws://binance-mock:8081/ws
+      COINBASE_WS_URL: ws://coinbase-mock:8081/ws
+      KRAKEN_WS_URL: ws://kraken-mock:8081/ws
+    depends_on:
+      binance-mock:
+        condition: service_started
+      coinbase-mock:
+        condition: service_started
+      kraken-mock:
+        condition: service_started
+
+  normalizer:
+    environment:
+      BINANCE_REST_URL: http://binance-mock:8081/api/v3/depth
+    depends_on:
+      binance-mock:
+        condition: service_started

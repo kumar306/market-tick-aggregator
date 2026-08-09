@@ -10,6 +10,7 @@ COPY persistence ./persistence
 COPY shared ./shared
 COPY ui-backend ./ui-backend
 COPY loadtest ./loadtest
+COPY mockexchange ./mockexchange
 
 WORKDIR /src/normalizer
 RUN go build -o /out/normalizer .

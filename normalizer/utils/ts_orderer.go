@@ -24,7 +24,12 @@ func TsOrder(msg *constants.PipelineMessage,
 	workerChannel chan *constants.DispatchRecord) ([]*constants.PipelineMessage, error) {
 
 	if !symbolState.GapActive {
-		symbolState.Gap = time.NewTimer(20 * time.Second)
+		// this window only exists to smooth out millisecond-scale websocket
+		// jitter (see comment above) - 20s made every message pay a
+		// worst-case ~20s tax regardless of whether any actual reordering
+		// occurred, which dominated orderbook_e2e_latency_seconds for every
+		// exchange routed through TsOrder (coinbase/kraken book channels).
+		symbolState.Gap = time.NewTimer(250 * time.Millisecond)
 		symbolState.GapActive = true
 
 		go func(t *time.Timer) {

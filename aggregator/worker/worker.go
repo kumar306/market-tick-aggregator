@@ -180,6 +180,9 @@ func (w *Worker) ProcessTick(rec *kgo.Record) {
 		}
 	}
 
+	metrics.Aggregator_TicksIngestedTotal.WithLabelValues(w.idLabel).Inc()
+	metrics.Aggregator_E2ELatencySeconds.Observe(float64(time.Now().UnixMilli()-tick.EventTsMillis) / 1000.0)
+
 	processingTime := time.Now().UnixMilli() - start
 	metrics.Aggregator_TickProcessingDurationMs.
 		WithLabelValues(w.idLabel).

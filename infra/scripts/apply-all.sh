@@ -75,12 +75,8 @@ helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheu
   -f infra/helm/prometheus-values.yaml
 kubectl apply -f infra/k8s/pod-monitors.yaml
 
-echo "== deploy the 5 pipeline services =="
-kubectl apply -f infra/k8s/services.yaml
-set_service_images "$TAG"
-for svc in adapter normalizer aggregator orderbook persistence; do
-  kubectl rollout status deployment/$svc --timeout=120s
-done
+echo "== deploy the 5 pipeline services (tag $TAG) =="
+apply_services "$TAG"
 
 echo "== done =="
 kubectl get pods

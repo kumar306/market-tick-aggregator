@@ -257,6 +257,7 @@ func main() {
 	topic := flag.String("topic", "normalized.ticks", "Kafka topic to produce into")
 	stepDur := flag.Duration("step", 30*time.Second, "Duration to sustain each rate level")
 	createTopics := flag.Bool("create-topics", false, "Create all pipeline topics on the cluster, then exit")
+	resetOffsets := flag.Bool("reset-offsets", false, "Skip all pipeline consumer groups to latest on their input topics, then exit (groups must be empty)")
 
 	flag.Parse()
 
@@ -304,6 +305,15 @@ func main() {
 			os.Exit(1)
 		}
 		fmt.Println("Topics created.")
+		return
+	}
+
+	if *resetOffsets {
+		if err := resetOffsetsToLatest(ctx, client); err != nil {
+			fmt.Fprintf(os.Stderr, "ERROR: failed to reset offsets: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("Offsets reset to latest.")
 		return
 	}
 

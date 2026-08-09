@@ -3,6 +3,7 @@ package kafkaauth
 import (
 	"context"
 	"crypto/tls"
+	"os"
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/twmb/franz-go/pkg/kgo"
@@ -11,9 +12,13 @@ import (
 )
 
 // returns the kgo options needed to authenticate to an MSK Serverless
-// cluster over SASL/IAM + TLS.
-
+// cluster over SASL/IAM + TLS. Local docker-compose's Kafka broker is
+// plaintext, so this only engages when KAFKA_AUTH_MODE=iam - set on the AWS
+// infra-config ConfigMap, unset (and therefore a no-op) everywhere else.
 func IAMOpts(ctx context.Context) ([]kgo.Opt, error) {
+	if os.Getenv("KAFKA_AUTH_MODE") != "iam" {
+		return nil, nil
+	}
 	// load aws sdk default credential chain which loads env vars, injected OIDC token
 	// picks up token, calls sts:assumeRoleWithWebIdentity, gets the access token, secret (temp ~1 hour rotated)
 	cfg, err := config.LoadDefaultConfig(ctx)

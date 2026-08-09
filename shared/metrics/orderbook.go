@@ -26,6 +26,8 @@ var (
 	Orderbook_MaxWorkerQueueUsage            *prometheus.HistogramVec
 	Orderbook_ConsumerSuccessesTotal         *prometheus.CounterVec
 	Orderbook_ConsumerErrorsTotal            *prometheus.CounterVec
+	Orderbook_E2ELatencySeconds              prometheus.Histogram
+	Orderbook_KafkaRecordAgeSeconds          prometheus.Histogram
 )
 
 func InitOrderbookMetrics() {
@@ -54,4 +56,10 @@ func InitOrderbookMetrics() {
 	Orderbook_ConsumerErrorsTotal = NewCounterVec("orderbook_consumer_errors_total", "Total number of consumption errors", []string{"partition"})
 	Orderbook_KafkaFetchPaused = NewGauge("orderbook_kafka_fetch_paused", "0 -> kafka not paused, 1 -> kafka paused")
 	Orderbook_MaxWorkerQueueUsage = NewHistogramVec("orderbook_max_worker_queue_usage", "Track max worker queue usage over time", prometheus.DefBuckets, []string{"worker"})
+	Orderbook_E2ELatencySeconds = NewHistogram("orderbook_e2e_latency_seconds", "Time from event origination (exchange/mock event timestamp) to book update applied", prometheus.ExponentialBuckets(0.001, 2, 18))
+	// temporary diagnostic: time since Kafka's own broker-assigned record
+	// timestamp, vs orderbook_e2e_latency_seconds which measures from the
+	// application-level event time. Splits "sitting in Kafka unconsumed"
+	// from "delay before it ever reached Kafka" (adapter/normalizer).
+	Orderbook_KafkaRecordAgeSeconds = NewHistogram("orderbook_kafka_record_age_seconds", "Time since Kafka's own record timestamp to book update applied", prometheus.ExponentialBuckets(0.001, 2, 18))
 }

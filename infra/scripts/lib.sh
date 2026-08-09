@@ -35,9 +35,11 @@ apply_infra_config() {
   kubectl create configmap infra-config \
     --from-literal=KAFKA_BOOTSTRAP_SERVERS="$msk_broker" \
     --from-literal=KAFKA_ADDR="$msk_broker" \
+    --from-literal=KAFKA_AUTH_MODE=iam \
     --from-literal=BINANCE_WS_URL="${BINANCE_WS_URL:-}" \
     --from-literal=COINBASE_WS_URL="${COINBASE_WS_URL:-}" \
     --from-literal=KRAKEN_WS_URL="${KRAKEN_WS_URL:-}" \
+    --from-literal=BINANCE_REST_URL="${BINANCE_REST_URL:-}" \
     --dry-run=client -o yaml | kubectl apply -f -
 }
 
@@ -53,24 +55,28 @@ apply_static_service_configs() {
   done
 }
 
-set_service_images() {
-  local tag="$1"
-  for svc in adapter normalizer aggregator orderbook persistence; do
-    kubectl set image deployment/$svc $svc=399400614342.dkr.ecr.us-east-1.amazonaws.com/market-tick-$svc:$tag
-  done
+# Applies a manifest with every image tag rewritten to $tag in the same pass
+# that hits the cluster - no separate "apply, then kubectl set image" step,
+# so there's never a moment where the wrong tag is briefly (or permanently,
+# if the follow-up step gets skipped) what's actually running. Works
+# regardless of whatever tag happens to already be in the checked-in file,
+# so those files never need manual editing again.
+apply_with_current_tag() {
+  local file="$1" tag="$2"
+  sed -E "s#(market-tick-[a-z]+):v[0-9]+#\1:${tag}#g" "$file" | kubectl apply -f -
 }
 
-set_mock_images() {
+apply_services() {
   local tag="$1"
-  for m in binance-mock coinbase-mock kraken-mock; do
-    kubectl set image deployment/$m $m=399400614342.dkr.ecr.us-east-1.amazonaws.com/market-tick-mockexchange:$tag
+  apply_with_current_tag infra/k8s/services.yaml "$tag"
+  for svc in adapter normalizer aggregator orderbook persistence; do
+    kubectl rollout status deployment/$svc --timeout=120s
   done
 }
 
 deploy_mocks() {
   local tag="$1"
-  kubectl apply -f infra/k8s/mock-exchanges.yaml
-  set_mock_images "$tag"
+  apply_with_current_tag infra/k8s/mock-exchanges.yaml "$tag"
   for m in binance-mock coinbase-mock kraken-mock; do
     kubectl rollout status deployment/$m --timeout=120s
   done

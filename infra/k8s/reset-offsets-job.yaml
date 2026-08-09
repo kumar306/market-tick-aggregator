@@ -1,22 +1,21 @@
-# loadtest batch job
+# run only while normalizer/aggregator/orderbook/persistence are scaled to 0 -
+# Kafka rejects an external offset commit while a group still has members
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: bootstrap-topics
+  name: reset-offsets
   namespace: default
-spec: 
+spec:
   backoffLimit: 2
   ttlSecondsAfterFinished: 300
   template:
     spec:
-      # kafka-client account which allows IRSA to inject OIDC token in our loadtest pod
-      # which exchanges token with STS, validates and dials MSK serverless via TLS and sigv4 payload of temp credentials
       serviceAccountName: kafka-client
       restartPolicy: Never
       containers:
-        - name: bootstrap-topics
+        - name: reset-offsets
           image: 399400614342.dkr.ecr.us-east-1.amazonaws.com/market-tick-loadtest:v10
           command: ["./loadtest"]
-          args: ["-create-topics"]
+          args: ["-reset-offsets"]
           envFrom:
             - configMapRef: { name: infra-config }

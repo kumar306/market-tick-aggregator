@@ -33,6 +33,7 @@ var (
 	Aggregator_CommitOffsetErrorsTotal  prometheus.Counter
 	Aggregator_CommitLatencySeconds     prometheus.Histogram
 	Aggregator_ConsumerLag              *prometheus.GaugeVec
+	Aggregator_E2ELatencySeconds        prometheus.Histogram
 
 	aggregatorMetricsOnce sync.Once
 )
@@ -186,6 +187,12 @@ func InitAggregatorMetrics() {
 			"aggregator_consumer_lag",
 			"Consumer group lag per topic/partition",
 			[]string{"topic", "partition"},
+		)
+
+		Aggregator_E2ELatencySeconds = NewHistogram(
+			"aggregator_e2e_latency_seconds",
+			"Time from event origination (exchange/mock event timestamp) to aggregator tick pickup",
+			prometheus.ExponentialBuckets(0.001, 2, 18),
 		)
 	})
 }

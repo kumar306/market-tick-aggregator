@@ -12,16 +12,15 @@ COPY ui-backend ./ui-backend
 COPY loadtest ./loadtest
 COPY mockexchange ./mockexchange
 
-WORKDIR /src/ui-backend
-RUN go build -o /out/ui-backend .
+WORKDIR /src/mockexchange
+RUN go build -o /out/mockexchange .
 
 FROM alpine:3.22
 RUN apk add --no-cache ca-certificates
-WORKDIR /app/ui-backend
+WORKDIR /app/mockexchange
 
-COPY --from=builder /out/ui-backend /app/ui-backend/ui-backend
-COPY ui-backend/config ./config
+COPY --from=builder /out/mockexchange /app/mockexchange/mockexchange
 
-EXPOSE 8080
+EXPOSE 8081
 
-CMD ["./ui-backend"]
+CMD ["./mockexchange"]

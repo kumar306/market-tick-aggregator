@@ -37,6 +37,7 @@ func Init(ctx context.Context, cfg *constants.KafkaConfig) {
 			kgo.SeedBrokers(cfg.BootstrapServers...),
 			kgo.ConsumeTopics(cfg.TopicConfig.Upstream),
 			kgo.ConsumerGroup(cfg.ConsumerGroup),
+			kgo.FetchIsolationLevel(kgo.ReadCommitted()),
 			kgo.MaxBufferedRecords(cfg.MaxBufferRecords),
 			kgo.DisableAutoCommit(),
 			kgo.WithLogger(kgo.BasicLogger(os.Stdout, kgo.LogLevelWarn, nil)),

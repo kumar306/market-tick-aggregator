@@ -6,6 +6,7 @@ import (
 	"market-persistence/db/model"
 	"shared/logger"
 	"shared/metrics"
+	"time"
 )
 
 const stagingOrderbookFlushesDDL = `
@@ -193,6 +194,11 @@ func FlushOrderbook(ctx context.Context, tx util.Tx, rows []*model.OrderbookFlus
 	logger.Log.Info("Rows affected", "copiedFlushes", copiedFlushes, "copiedLevels", copiedLevels, "orderbook_flushes", parentRowsAffected, "orderbook_flush_levels", levelRowsAffected)
 	metrics.Persistence_DbRowsWritten.WithLabelValues("orderbook_flushes").Add(float64(parentRowsAffected))
 	metrics.Persistence_DbRowsWritten.WithLabelValues("orderbook_flush_levels").Add(float64(levelRowsAffected))
+
+	now := time.Now()
+	for _, row := range rows {
+		metrics.Persistence_BookFlushLagSeconds.Observe(now.Sub(row.FlushRow.EventTime).Seconds())
+	}
 
 	return nil
 }
