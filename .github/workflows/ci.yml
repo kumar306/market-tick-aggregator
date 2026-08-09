@@ -62,7 +62,7 @@ jobs:
         run: go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.10
 
       - name: Regenerate from .proto sources
-        run: ./scripts/generate-proto.sh
+        run: bash scripts/generate-proto.sh
 
       # if regenerating produced any diff, the committed .pb.go files were
       # stale relative to their .proto source, and this fails the build
