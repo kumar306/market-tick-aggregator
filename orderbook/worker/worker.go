@@ -171,6 +171,7 @@ func (w *Worker) ProcessBookUpdate(rec *constants.DispatchRecord) {
 	// trigger an event to snapshot channel after flush
 	state.LastProcessedOffset[rec.Partition] = max(state.LastProcessedOffset[rec.Partition], rec.Offset)
 	metrics.Orderbook_UpdatesTotal.WithLabelValues(strconv.Itoa(w.ID), state.Exchange, state.Symbol).Add(1)
+	metrics.Orderbook_E2ELatencySeconds.Observe(float64(time.Now().UnixMilli()-rec.TsMs) / 1000.0)
 }
 
 func (w *Worker) FlushBook(flushEpoch int32) {

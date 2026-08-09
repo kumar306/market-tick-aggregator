@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: binance-mock, namespace: default }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: binance-mock } }
+  template:
+    metadata: { labels: { app: binance-mock } }
+    spec:
+      containers:
+        - name: binance-mock
+          image: 399400614342.dkr.ecr.us-east-1.amazonaws.com/market-tick-mockexchange:v8
+          env:
+            - { name: EXCHANGE, value: "binance" }
+            - { name: RATE_PER_SEC, value: "150" }
+          ports: [{ containerPort: 8081 }]
+          resources:
+            requests: { cpu: "100m", memory: "64Mi" }
+            limits: { cpu: "300m", memory: "128Mi" }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: binance-mock, namespace: default }
+spec:
+  selector: { app: binance-mock }
+  ports: [{ port: 8081, targetPort: 8081 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: coinbase-mock, namespace: default }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: coinbase-mock } }
+  template:
+    metadata: { labels: { app: coinbase-mock } }
+    spec:
+      containers:
+        - name: coinbase-mock
+          image: 399400614342.dkr.ecr.us-east-1.amazonaws.com/market-tick-mockexchange:v8
+          env:
+            - { name: EXCHANGE, value: "coinbase" }
+            - { name: RATE_PER_SEC, value: "150" }
+          ports: [{ containerPort: 8081 }]
+          resources:
+            requests: { cpu: "100m", memory: "64Mi" }
+            limits: { cpu: "300m", memory: "128Mi" }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: coinbase-mock, namespace: default }
+spec:
+  selector: { app: coinbase-mock }
+  ports: [{ port: 8081, targetPort: 8081 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: kraken-mock, namespace: default }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: kraken-mock } }
+  template:
+    metadata: { labels: { app: kraken-mock } }
+    spec:
+      containers:
+        - name: kraken-mock
+          image: 399400614342.dkr.ecr.us-east-1.amazonaws.com/market-tick-mockexchange:v8
+          env:
+            - { name: EXCHANGE, value: "kraken" }
+            - { name: RATE_PER_SEC, value: "150" }
+          ports: [{ containerPort: 8081 }]
+          resources:
+            requests: { cpu: "100m", memory: "64Mi" }
+            limits: { cpu: "300m", memory: "128Mi" }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: kraken-mock, namespace: default }
+spec:
+  selector: { app: kraken-mock }
+  ports: [{ port: 8081, targetPort: 8081 }]

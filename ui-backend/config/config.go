@@ -5,6 +5,7 @@ import (
 	"market-ui-backend/constants"
 	"os"
 	"shared/logger"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -23,6 +24,12 @@ func GetConfig(cfgFilePath string) (*constants.Config, error) {
 	if err != nil {
 		logger.Log.Error("Error when unmarshalling YAML", "err", err)
 		return nil, fmt.Errorf("unmarshal error: %w", err)
+	}
+
+	// infra-provided override so the same config file works unmodified across
+	// environments - no per-environment config file regeneration needed
+	if brokers := os.Getenv("KAFKA_BOOTSTRAP_SERVERS"); brokers != "" {
+		c.KafkaConfig.BootstrapServers = strings.Split(brokers, ",")
 	}
 
 	// // validate correct config values

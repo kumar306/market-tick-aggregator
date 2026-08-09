@@ -1,0 +1,28 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: loadtest-ramp
+  namespace: default
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: ramp
+          image: curlimages/curl:8.10.1
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -e
+              STEP=60
+              for TOTAL in 500 1000 2500 5000 10000; do
+                PER_STREAM=$((TOTAL / 6))
+                echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) level start: total=${TOTAL}/s per-stream=${PER_STREAM}/s"
+                curl -s "http://binance-mock.default.svc.cluster.local:8081/rate?value=${PER_STREAM}"
+                curl -s "http://coinbase-mock.default.svc.cluster.local:8081/rate?value=${PER_STREAM}"
+                curl -s "http://kraken-mock.default.svc.cluster.local:8081/rate?value=${PER_STREAM}"
+                sleep $STEP
+              done
+              echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) ramp complete - last level (10000/s total) keeps running until you dial it back down"

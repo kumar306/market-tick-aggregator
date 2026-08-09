@@ -30,6 +30,17 @@ func GetConfig(cfgFilePath string) (*constants.Config, error) {
 		return nil, fmt.Errorf("unmarshal error: %w", err)
 	}
 
+	// infra-provided overrides so the same config file works unmodified across
+	// environments - no per-environment config file regeneration needed
+	if brokers := os.Getenv("KAFKA_BOOTSTRAP_SERVERS"); brokers != "" {
+		c.BootstrapServers = strings.Split(brokers, ",")
+	}
+	for _, feed := range c.Feeds {
+		if url := os.Getenv(strings.ToUpper(feed.Name) + "_WS_URL"); url != "" {
+			feed.Url = url
+		}
+	}
+
 	err = ValidateAll(&c)
 	if err != nil {
 		logger.Log.Error("Validation Error", "err", err)

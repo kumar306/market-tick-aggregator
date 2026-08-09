@@ -27,3 +27,6 @@ infra/k8s/*secret*.yaml
 
 # generated, environment-specific configs (rebuilt via sed, go stale across cluster recreates)
 infra/k8s/config
+
+# script-managed image tag state, not real infra config
+infra/terraform/.image_tag

@@ -14,7 +14,9 @@ spec:
       serviceAccountName: kafka-client
       containers:
         - name: adapter
-          image: 399400614342.dkr.ecr.us-east-1.amazonaws.com/market-tick-adapter:v6
+          image: 399400614342.dkr.ecr.us-east-1.amazonaws.com/market-tick-adapter:v8
+          envFrom:
+            - configMapRef: { name: infra-config }
           env:
             - name: CONFIG_FILE
               value: "./config/docker.config.yaml"
@@ -22,7 +24,6 @@ spec:
             - name: metrics
               containerPort: 2112
           resources:
-          # requests 0.1vcpu, 16 MB RAM to place the pod, cpu throttles if goes over 0.5 vcpu, and OOM pod killed if ram exceeds 32 MB
             requests: { cpu: "100m", memory: "128Mi" }
             limits: { cpu: "500m", memory: "256Mi" }
           volumeMounts:
@@ -49,11 +50,13 @@ spec:
       serviceAccountName: kafka-client
       containers:
         - name: normalizer
-          image: 399400614342.dkr.ecr.us-east-1.amazonaws.com/market-tick-normalizer:v6
+          image: 399400614342.dkr.ecr.us-east-1.amazonaws.com/market-tick-normalizer:v8
+          envFrom:
+            - configMapRef: { name: infra-config }
           env:
             - name: CONFIG_FILE
-              value: ./config/docker.config.yaml
-            - name: REDIS_ADDR  
+              value: "./config/docker.config.yaml"
+            - name: REDIS_ADDR
               valueFrom: { secretKeyRef: { name: db-credentials, key: REDIS_ADDR } }
             - name: REDIS_PASSWORD
               valueFrom: { secretKeyRef: { name: db-credentials, key: REDIS_PASSWORD } }
@@ -61,7 +64,6 @@ spec:
             - name: metrics
               containerPort: 2113
           resources:
-          # requests: 0.2 vcpu, 32 MB RAM, max: 1 vcpu, max: 64 MB RAM
             requests: { cpu: "200m", memory: "256Mi" }
             limits: { cpu: "1", memory: "512Mi" }
           volumeMounts:
@@ -88,7 +90,9 @@ spec:
       serviceAccountName: kafka-client
       containers:
         - name: aggregator
-          image: 399400614342.dkr.ecr.us-east-1.amazonaws.com/market-tick-aggregator:v6
+          image: 399400614342.dkr.ecr.us-east-1.amazonaws.com/market-tick-aggregator:v8
+          envFrom:
+            - configMapRef: { name: infra-config }
           env:
             - name: CONFIG_FILE
               value: "./config/docker.config.yaml"
@@ -100,7 +104,6 @@ spec:
             - name: metrics
               containerPort: 2114
           resources:
-          # same as normalizer
             requests: { cpu: "200m", memory: "256Mi" }
             limits: { cpu: "1", memory: "512Mi" }
           volumeMounts:
@@ -127,7 +130,9 @@ spec:
       serviceAccountName: kafka-client
       containers:
         - name: orderbook
-          image: 399400614342.dkr.ecr.us-east-1.amazonaws.com/market-tick-orderbook:v6
+          image: 399400614342.dkr.ecr.us-east-1.amazonaws.com/market-tick-orderbook:v8
+          envFrom:
+            - configMapRef: { name: infra-config }
           env:
             - name: CONFIG_FILE
               value: "./config/docker.config.yaml"
@@ -139,7 +144,6 @@ spec:
             - name: metrics
               containerPort: 2115
           resources:
-          # same as above
             requests: { cpu: "200m", memory: "256Mi" }
             limits: { cpu: "1", memory: "512Mi" }
           volumeMounts:
@@ -166,7 +170,9 @@ spec:
       serviceAccountName: kafka-client
       containers:
         - name: persistence
-          image: 399400614342.dkr.ecr.us-east-1.amazonaws.com/market-tick-persistence:v6
+          image: 399400614342.dkr.ecr.us-east-1.amazonaws.com/market-tick-persistence:v8
+          envFrom:
+            - configMapRef: { name: infra-config }
           env:
             - name: CONFIG_FILE
               value: "./config/docker.config.yaml"
@@ -193,89 +199,3 @@ spec:
       volumes:
         - name: config
           configMap: { name: persistence-config }
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: ui-backend
-  namespace: default
-spec:
-  replicas: 1
-  selector:
-    matchLabels: { app: ui-backend }
-  template:
-    metadata:
-      labels: { app: ui-backend }
-    spec:
-      serviceAccountName: kafka-client
-      containers:
-        - name: ui-backend
-          image: 399400614342.dkr.ecr.us-east-1.amazonaws.com/market-tick-ui-backend:v6
-          env:
-            - name: CONFIG_FILE
-              value: "./config/docker.config.yaml"
-            - name: DATABASE_URL
-              valueFrom: { secretKeyRef: { name: db-credentials, key: DATABASE_URL } }
-            - name: CORS_ALLOWED_ORIGINS
-              value: "*"
-          ports:
-            - containerPort: 8080
-          resources:
-            requests: { cpu: "100m", memory: "128Mi" }
-            limits: { cpu: "500m", memory: "256Mi" }
-          volumeMounts:
-            - name: config
-              mountPath: /app/ui-backend/config/docker.config.yaml
-              subPath: config.yaml
-      volumes:
-        - name: config
-          configMap: { name: ui-backend-config }
----
-# lb for ui-backend to be hit from UI
-apiVersion: v1
-kind: Service
-metadata:
-  name: ui-backend
-  namespace: default
-spec:
-  type: LoadBalancer
-  selector: { app: ui-backend }
-  loadBalancerSourceRanges: ["106.51.179.89/32"]
-  ports:
-    - port: 8080
-      targetPort: 8080
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: ui
-  namespace: default
-spec:
-  replicas: 1
-  selector:
-    matchLabels: { app: ui }
-  template:
-    metadata:
-      labels: { app: ui }
-    spec:
-      containers:
-        - name: ui
-          image: 399400614342.dkr.ecr.us-east-1.amazonaws.com/market-tick-ui:v6-2
-          ports:
-            - containerPort: 3000
-          resources:
-            requests: { cpu: "100m", memory: "128Mi" }
-            limits: { cpu: "500m", memory: "256Mi" }
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: ui
-  namespace: default
-spec:
-  type: LoadBalancer
-  selector: { app: ui }
-  loadBalancerSourceRanges: ["106.51.179.89/32"]
-  ports:
-    - port: 3000
-      targetPort: 3000

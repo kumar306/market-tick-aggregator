@@ -1,0 +1,96 @@
+# NOT applied by the automation scripts - load testing doesn't need
+# the dashboard, and ui's LoadBalancer hostname changes on every recreate,
+# which means a rebuild of the ui image each time (baked-in NEXT_PUBLIC_*
+# values). Kept here so the work isn't lost - apply manually when you
+# actually want the live dashboard demo:
+#   kubectl apply -f infra/k8s/ui.yaml
+# (ui-backend's CORS_ALLOWED_ORIGINS and ui's image tag/NEXT_PUBLIC_* baked
+# values will need updating to match whatever LB hostnames exist that day -
+# see the manual steps from earlier in this project's history.)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ui-backend
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: ui-backend }
+  template:
+    metadata:
+      labels: { app: ui-backend }
+    spec:
+      serviceAccountName: kafka-client
+      containers:
+        - name: ui-backend
+          image: 399400614342.dkr.ecr.us-east-1.amazonaws.com/market-tick-ui-backend:v8
+          envFrom:
+            - configMapRef: { name: infra-config }
+          env:
+            - name: CONFIG_FILE
+              value: "./config/docker.config.yaml"
+            - name: DATABASE_URL
+              valueFrom: { secretKeyRef: { name: db-credentials, key: DATABASE_URL } }
+            - name: CORS_ALLOWED_ORIGINS
+              value: "*"
+          ports:
+            - containerPort: 8080
+          resources:
+            requests: { cpu: "100m", memory: "128Mi" }
+            limits: { cpu: "500m", memory: "256Mi" }
+          volumeMounts:
+            - name: config
+              mountPath: /app/ui-backend/config/docker.config.yaml
+              subPath: config.yaml
+      volumes:
+        - name: config
+          configMap: { name: ui-backend-config }
+---
+# lb for ui-backend to be hit from UI
+apiVersion: v1
+kind: Service
+metadata:
+  name: ui-backend
+  namespace: default
+spec:
+  type: LoadBalancer
+  selector: { app: ui-backend }
+  loadBalancerSourceRanges: ["106.51.179.89/32"]
+  ports:
+    - port: 8080
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ui
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: ui }
+  template:
+    metadata:
+      labels: { app: ui }
+    spec:
+      containers:
+        - name: ui
+          image: 399400614342.dkr.ecr.us-east-1.amazonaws.com/market-tick-ui:v6-2
+          ports:
+            - containerPort: 3000
+          resources:
+            requests: { cpu: "100m", memory: "128Mi" }
+            limits: { cpu: "500m", memory: "256Mi" }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ui
+  namespace: default
+spec:
+  type: LoadBalancer
+  selector: { app: ui }
+  loadBalancerSourceRanges: ["106.51.179.89/32"]
+  ports:
+    - port: 3000
+      targetPort: 3000

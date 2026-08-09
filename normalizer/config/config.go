@@ -27,6 +27,12 @@ func GetConfig(cfgFilePath string) (*constants.Config, error) {
 		return nil, fmt.Errorf("unmarshal error: %w", err)
 	}
 
+	// infra-provided override so the same config file works unmodified across
+	// environments - no per-environment config file regeneration needed
+	if brokers := os.Getenv("KAFKA_BOOTSTRAP_SERVERS"); brokers != "" {
+		c.KafkaConfig.Brokers = strings.Split(brokers, ",")
+	}
+
 	// validate correct config values
 	err = Validate(&c)
 	if err != nil {
