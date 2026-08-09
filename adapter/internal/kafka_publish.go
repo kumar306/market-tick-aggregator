@@ -36,11 +36,16 @@ func PublishToKafkaLoop(wg *sync.WaitGroup,
 
 			// normalize after reading from ring buffer
 			symbol, normalized, normalizeErr := normalizer.Normalize(msg)
+
 			if normalizeErr != nil {
 				logger.Log.Error("Failed to normalize message for feed", "name", name, "err", normalizeErr, "msg", msg)
 				metrics.Adapter_NormalizerErrors.WithLabelValues(name).Inc()
+				messageBufferPool.Put(&msg)
 				continue
 			}
+
+			// since normalized is a new byte[], msg is not used anymore, return it back to the buffer pool
+			messageBufferPool.Put(&msg)
 
 			// to filter out kraken heartbeat messages. heartbeat returns nil
 			if len(symbol) == 0 || len(normalized) == 0 {
