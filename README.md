@@ -8,6 +8,12 @@ The repository is built as a complete streaming system rather than a single Kafk
 
 ![Market Tick Aggregator Architecture](docs/market-tick-aggregator-architecture.svg)
 
+## AWS Deployment Architecture
+
+The full pipeline runs on real AWS infrastructure: EKS for the five pipeline services, MSK Serverless for Kafka, RDS for Postgres, and ElastiCache for Redis, all provisioned by Terraform and deployed through a scripted `apply-all.sh` sequence. Details and the automated deployment flow are further down under [AWS Infrastructure and Deployment](#aws-infrastructure-and-deployment); this diagram is the full picture up front.
+
+![AWS deployment architecture](docs/images/aws-architecture.png)
+
 ## Dashboard Preview
 
 ![Dashboard overview](docs/images/light%20mode.png)
@@ -33,7 +39,7 @@ This project demonstrates:
 - Kafka based event transport, with transactional exactly once processing on the hops that need it
 - keyed ordered processing
 - backpressure and bounded queue management
-- circuit breaker and WAL based failure handling
+- circuit breaker protected Kafka calls in the orderbook service, and threshold based backpressure control in the normalizer
 - tumbling and rolling metric computation
 - replay safe persistence
 - a real cloud deployment on EKS and MSK, load tested and profiled rather than just benchmarked locally
@@ -48,7 +54,7 @@ flowchart LR
     A[Exchange WebSocket Feeds<br/>Binance / Coinbase / Kraken]
     B[Adapter<br/>Raw ingestion + reconnects]
     C[(Kafka Raw Topics)]
-    D[Normalizer<br/>Schema unification + ordering + WAL/circuit breaker]
+    D[Normalizer<br/>Schema unification + ordering + backpressure]
     E[(Kafka Normalized Topics)]
     F[Aggregator<br/>Windowed metric engine]
     G[Orderbook Engine<br/>Book snapshot/update processor]
@@ -81,7 +87,7 @@ flowchart LR
 | Module | Role |
 | --- | --- |
 | [`adapter`](adapter/README.md) | Exchange feed ingestion and raw Kafka publishing |
-| [`normalizer`](normalizer/README.md) | Exchange schema unification, ordering, backpressure, WAL |
+| [`normalizer`](normalizer/README.md) | Exchange schema unification, ordering, backpressure |
 | [`aggregator`](aggregator/README.md) | Windowed OHLC and metric computation |
 | [`orderbook`](orderbook/README.md) | In memory book maintenance and orderbook flush generation |
 | [`persistence`](persistence/README.md) | Batched durable sink into Postgres |
