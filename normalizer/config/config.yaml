@@ -11,6 +11,9 @@ kafka:
   consumer_group: normalizer-group-1
   max_buffer_records: 1000
   commit_offset_interval_millis: 500
+  # at_least_once: no Kafka transactions. outputs are visible once acked; offsets are committed behind the acks,
+  # at most this often. transactional: the previous exactly-once mode, kept for comparison.
+  delivery_mode: at_least_once
   cb_consecutive_failures: 5
   cb_timeout_millis: 3000
   cb_req_count: 5

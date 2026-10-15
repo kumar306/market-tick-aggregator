@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"market-persistence/batcher/util"
 	"market-persistence/config"
+	"shared/ingestts"
 	"shared/logger"
 	"shared/metrics"
 	"time"
@@ -235,6 +236,20 @@ func (b *Batcher[T]) Flush() error {
 
 	for _, item := range b.items {
 		maxOffsetPerPartitionMap[item.Record.Partition] = max(maxOffsetPerPartitionMap[item.Record.Partition], item.Record.Offset)
+	}
+
+	// end-to-end latency, from the websocket read of the newest message each row reflects to NOW, the moment the
+	// rows became visible. It has to be measured here, after Commit: inside the flush function the rows are still
+	// invisible, which would under-report by the commit time, and it must include the time the item waited in
+	// this batcher for the batch to fill or the timer to fire.
+	committedAtMs := time.Now().UnixMilli()
+	for _, item := range valid {
+		if item.Record == nil {
+			continue
+		}
+		if ingestMs, ok := ingestts.Find(item.Record.Headers); ok {
+			metrics.Persistence_IngestToInsertSeconds.WithLabelValues(b.pipeline).Observe(float64(committedAtMs-ingestMs) / 1000)
+		}
 	}
 
 	// commit offsets upon db write success

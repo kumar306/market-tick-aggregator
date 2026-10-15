@@ -45,7 +45,7 @@ func GetStreamHandler(name string, streamCfg *constants.Stream) (*constants.Stre
 		Normalizer: normalizer,
 		Subscriber: factory.CreateSubscriber(streamCfg.Channel, streamCfg.ProductIds),
 		Pinger:     factory.CreatePinger(),
-		Ring:       ring.NewSpscDropOldestRing[[]byte](streamCfg.RingBufferSize, name+"|"+streamCfg.Channel),
+		Ring:       ring.NewSpscDropOldestRing[constants.RawMessage](streamCfg.RingBufferSize, name+"|"+streamCfg.Channel),
 		Mu:         &sync.Mutex{},
 	}, nil
 

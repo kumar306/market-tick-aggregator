@@ -9,6 +9,7 @@ import (
 	"market-aggregator/utils"
 	"shared/logger"
 	"shared/metrics"
+	"shared/ingestts"
 	"shared/polldeadline"
 	"shared/srcoffset"
 	"strconv"
@@ -223,9 +224,13 @@ func (w *Worker) ProcessTick(rec *kgo.Record) {
 		w.dirty[bufferKey] = struct{}{}
 	}
 
+	ingestMs, hasIngest := ingestts.Find(rec.Headers)
 	for _, window := range windowState.Windows {
 		for _, metric := range window.Metrics {
 			metric.Update(tick)
+		}
+		if hasIngest && ingestMs > window.NewestIngestMs {
+			window.NewestIngestMs = ingestMs
 		}
 	}
 
@@ -270,7 +275,11 @@ func (w *Worker) FlushWindow(flushRec *constants.DispatchRecord, client utils.Ka
 			metric.Reset()
 		}
 
-		kafka.PublishAggregate(client, aggregatedTick, func() { w.TxnFailed.Store(true) })
+		// only ticks since this window's last flush are "new"; a quiet symbol must not report an ever-growing age
+		ingestMs := window.NewestIngestMs
+		window.NewestIngestMs = 0
+
+		kafka.PublishAggregate(client, aggregatedTick, ingestMs, func() { w.TxnFailed.Store(true) })
 
 		// the flush reset this symbol's tumbling metrics, so its saved state is now stale
 		if w.atLeastOnce {

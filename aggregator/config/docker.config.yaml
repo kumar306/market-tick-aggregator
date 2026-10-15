@@ -7,6 +7,11 @@ kafka:
   consumer_group: aggregator-group-1
   max_buffer_records: 5000
   commit_offset_interval_millis: 5000
+  # at_least_once: no Kafka transactions. each symbol is checkpointed (state + applied source offsets) every
+  # checkpoint_interval_millis, and input offsets are committed only behind an acked checkpoint. That interval is
+  # also the most a crash can replay. commit_offset_interval_millis is only used by transactional mode.
+  delivery_mode: at_least_once
+  checkpoint_interval_millis: 2000
   backpressure:
     queue_usage_high_threshold: 0.8
     queue_usage_low_threshold: 0.4

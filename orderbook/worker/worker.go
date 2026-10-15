@@ -8,6 +8,7 @@ import (
 	"market-orderbook/kafka"
 	"market-orderbook/proto/generated"
 	"market-orderbook/redis"
+	"shared/ingestts"
 	"shared/logger"
 	"shared/metrics"
 	"strconv"
@@ -52,6 +53,10 @@ type SymbolState struct {
 	Exchange        string
 	Symbol          string
 	TimestampMillis int64
+
+	// ingest time (unix ms, stamped by the adapter at websocket read) of the newest update applied since the last
+	// flush; 0 = none new. Emitted with the flushed book so persistence can measure ingest-to-insert.
+	NewestIngestMs int64
 
 	// orderbook
 	Orderbook *book.OrderBook
@@ -166,6 +171,11 @@ func (w *Worker) ProcessBookUpdate(rec *constants.DispatchRecord) {
 	}
 
 	state.TimestampMillis = rec.TsMs
+	if rec.Record != nil {
+		if ingestMs, ok := ingestts.Find(rec.Record.Headers); ok && ingestMs > state.NewestIngestMs {
+			state.NewestIngestMs = ingestMs
+		}
+	}
 
 	// maintain the last processed offset. on flush the last committed offset = last processed offset
 	// trigger an event to snapshot channel after flush
@@ -248,8 +258,10 @@ func (w *Worker) FlushBook(flushEpoch int32) {
 			continue
 		}
 
-		// flush to downstream
-		kafka.ProduceAsync(w.ID, w.Ctx, kafka.Client, keyBytes, valBytes)
+		// flush to downstream. only updates since the last flush count, so a quiet book does not report a growing age
+		ingestMs := st.NewestIngestMs
+		st.NewestIngestMs = 0
+		kafka.ProduceAsync(w.ID, w.Ctx, kafka.Client, keyBytes, valBytes, ingestMs)
 	}
 
 	ackOffsetMap := make(map[int32]int64)

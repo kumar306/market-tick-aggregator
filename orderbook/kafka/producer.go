@@ -2,6 +2,7 @@ package kafka
 
 import (
 	"context"
+	"shared/ingestts"
 	"shared/logger"
 	"shared/metrics"
 	"strconv"
@@ -10,7 +11,8 @@ import (
 	"github.com/twmb/franz-go/pkg/kgo"
 )
 
-func ProduceAsync(id int, ctx context.Context, client *kgo.Client, key, value []byte) {
+// ingestMs is the websocket-read time of the newest update in this flushed book (0 = none new since the last flush).
+func ProduceAsync(id int, ctx context.Context, client *kgo.Client, key, value []byte, ingestMs int64) {
 
 	logger.Log.Info("Ready to flush kafka record to downstream")
 
@@ -18,6 +20,9 @@ func ProduceAsync(id int, ctx context.Context, client *kgo.Client, key, value []
 		Key:   key,
 		Value: value,
 		Topic: DownstreamTopic,
+	}
+	if ingestMs > 0 {
+		rec.Headers = []kgo.RecordHeader{ingestts.Header(ingestMs)}
 	}
 
 	start := time.Now()

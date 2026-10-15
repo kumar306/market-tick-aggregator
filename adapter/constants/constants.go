@@ -67,7 +67,15 @@ type StreamHandler struct {
 	Normalizer Normalizer
 	Subscriber Subscriber
 	Pinger     Pinger
-	Ring       *ring.SpscDropOldestRing[[]byte]
+	Ring       *ring.SpscDropOldestRing[RawMessage]
+}
+
+// RawMessage is what travels through the ring buffer: the websocket payload plus the moment it was read.
+// The read time is the pipeline's "ingest time". It is taken before the buffer on purpose, so time spent waiting in
+// the ring (the first place a backlog shows up) is counted in the end-to-end latency, not hidden from it.
+type RawMessage struct {
+	Data     []byte
+	ReadAtMs int64
 }
 
 const ConfigFile string = "./config/config.yaml"

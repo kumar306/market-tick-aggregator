@@ -4,6 +4,7 @@ import (
 	"context"
 	"market-normalizer/constants"
 	"shared/logger"
+	"shared/ingestts"
 	"shared/metrics"
 	"shared/srcoffset"
 	"time"
@@ -26,6 +27,10 @@ func ProduceAsync(producer constants.Producer, topic string, msg *constants.Pipe
 			Key:   srcoffset.HeaderKey,
 			Value: srcoffset.Encode(msg.Record.Topic, msg.Record.Partition, msg.Record.Offset),
 		}}
+		// pass the adapter's websocket-read time along untouched, for the end-to-end latency measured at persistence
+		if ingestMs, ok := ingestts.Find(msg.Record.Headers); ok {
+			record.Headers = append(record.Headers, ingestts.Header(ingestMs))
+		}
 	}
 
 	producer.Produce(context.Background(), record, func(r *kgo.Record, err error) {

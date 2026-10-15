@@ -1,6 +1,7 @@
 package kafka_test
 
 import (
+	"shared/ingestts"
 	"context"
 	"encoding/json"
 	kf "market-adapter/kafka"
@@ -112,7 +113,7 @@ func Test_ProduceAsync(t *testing.T) {
 	`)
 	key := []byte("ETH-USD")
 
-	kf.ProduceAsync(topicName, "coinbase", "ticker", key, val, 0)
+	kf.ProduceAsync(topicName, "coinbase", "ticker", key, val, 0, 0)
 	// dont buffer this produce
 	client.Flush(ctx)
 
@@ -136,7 +137,7 @@ func Test_ProduceAsync(t *testing.T) {
 	}, 10*time.Second, 200*time.Millisecond, "No message consumed within timeout")
 
 	// now verify the drop marker gets attached when droppedBefore > 0
-	kf.ProduceAsync(topicName, "coinbase", "ticker", key, val, 7)
+	kf.ProduceAsync(topicName, "coinbase", "ticker", key, val, 7, 0)
 	client.Flush(ctx)
 
 	markerFetched := false
@@ -153,4 +154,25 @@ func Test_ProduceAsync(t *testing.T) {
 		}
 		return markerFetched
 	}, 10*time.Second, 200*time.Millisecond, "No message with drop marker consumed within timeout")
+
+	// the websocket-read time rides along as a header, next to the drop marker when both apply
+	const readAtMs = int64(1_700_000_000_123)
+	kf.ProduceAsync(topicName, "coinbase", "ticker", key, val, 3, readAtMs)
+	client.Flush(ctx)
+
+	ingestFetched := false
+	require.Eventually(t, func() bool {
+		fetches := client.PollFetches(ctx)
+		iter := fetches.RecordIter()
+		for !iter.Done() {
+			rec := iter.Next()
+			require.Len(t, rec.Headers, 2, "drop marker plus ingest time")
+			ms, ok := ingestts.Find(rec.Headers)
+			require.True(t, ok, "ingest header missing")
+			require.Equal(t, readAtMs, ms)
+			ingestFetched = true
+			break
+		}
+		return ingestFetched
+	}, 10*time.Second, 200*time.Millisecond, "No message with ingest header consumed within timeout")
 }

@@ -98,6 +98,10 @@ type Window struct {
 	DurationMs     int64
 	FlushCadencyMs int64
 	LastFlushTsMs  int64
+	// ingest time (unix ms, stamped by the adapter at websocket read) of the newest tick applied to this window since
+	// its last flush; 0 = no new tick. Emitted with the aggregate so persistence can measure ingest-to-insert.
+	// Not checkpointed: after a restart it is 0 until a new tick arrives, so no sample is better than a wrong one.
+	NewestIngestMs int64
 }
 
 // tick arrives - a particular symbol

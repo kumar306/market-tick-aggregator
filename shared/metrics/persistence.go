@@ -37,6 +37,10 @@ var (
 	// timestamp to the moment the row actually lands in postgres
 	Persistence_TickFlushLagSeconds prometheus.Histogram
 	Persistence_BookFlushLagSeconds prometheus.Histogram
+
+	// the whole pipeline: from the exchange websocket message that the row reflects (newest one, stamped by the
+	// adapter at read time) to the moment the transaction that inserted the row COMMITTED, i.e. became visible
+	Persistence_IngestToInsertSeconds *prometheus.HistogramVec
 )
 
 func InitPersistenceMetrics() {
@@ -60,4 +64,8 @@ func InitPersistenceMetrics() {
 	Persistence_DLQCount = NewCounterVec("persistence_dlq_count", "Number of DLQ publishes", []string{"pipeline"})
 	Persistence_TickFlushLagSeconds = NewHistogram("persistence_tick_flush_lag_seconds", "Time from a window's end_ts to the row landing in postgres", prometheus.ExponentialBuckets(0.001, 2, 18))
 	Persistence_BookFlushLagSeconds = NewHistogram("persistence_book_flush_lag_seconds", "Time from a book flush's event_time to the row landing in postgres", prometheus.ExponentialBuckets(0.001, 2, 18))
+	// 0.5ms .. ~65s
+	Persistence_IngestToInsertSeconds = NewHistogramVec("persistence_ingest_to_insert_seconds",
+		"End-to-end: exchange websocket ingest of the newest message a row reflects, to that row being committed in postgres",
+		prometheus.ExponentialBuckets(0.0005, 2, 18), []string{"pipeline"})
 }

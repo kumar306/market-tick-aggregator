@@ -3,6 +3,7 @@ package kafka
 import (
 	"context"
 	"os"
+	"shared/ingestts"
 	"shared/kafkaauth"
 	"shared/logger"
 	"shared/metrics"
@@ -56,7 +57,9 @@ func Init(brokers []string) (*kgo.Client, error) {
 
 const DroppedCountHeader = "dropped-count"
 
-func ProduceAsync(topic string, name string, channel string, key, value []byte, droppedBefore uint64) {
+// ingestMs is when the message was read off the websocket (0 = unknown, no header is written).
+// Downstream copies it forward so persistence can report ingest-to-insert latency.
+func ProduceAsync(topic string, name string, channel string, key, value []byte, droppedBefore uint64, ingestMs int64) {
 
 	record := &kgo.Record{
 		Key:   key,
@@ -65,9 +68,11 @@ func ProduceAsync(topic string, name string, channel string, key, value []byte, 
 	}
 
 	if droppedBefore > 0 {
-		record.Headers = []kgo.RecordHeader{
-			{Key: DroppedCountHeader, Value: []byte(strconv.FormatUint(droppedBefore, 10))},
-		}
+		record.Headers = append(record.Headers,
+			kgo.RecordHeader{Key: DroppedCountHeader, Value: []byte(strconv.FormatUint(droppedBefore, 10))})
+	}
+	if ingestMs > 0 {
+		record.Headers = append(record.Headers, ingestts.Header(ingestMs))
 	}
 
 	client.Produce(context.Background(), record, func(r *kgo.Record, err error) {

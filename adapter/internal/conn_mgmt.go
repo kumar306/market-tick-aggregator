@@ -13,7 +13,7 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-func ReadMessages(conn *websocket.Conn, ctx context.Context, cancel context.CancelFunc, wg *sync.WaitGroup, ring *ring.SpscDropOldestRing[[]byte]) {
+func ReadMessages(conn *websocket.Conn, ctx context.Context, cancel context.CancelFunc, wg *sync.WaitGroup, ring *ring.SpscDropOldestRing[constants.RawMessage]) {
 	name := ring.Name
 	metrics.Adapter_SupervisorGoroutines.WithLabelValues(name).Inc()
 	defer wg.Done()
@@ -24,6 +24,8 @@ func ReadMessages(conn *websocket.Conn, ctx context.Context, cancel context.Canc
 			return
 		default:
 			_, r, err := conn.NextReader()
+			// ingest time: the message has just arrived off the websocket
+			readAtMs := time.Now().UnixMilli()
 			if err != nil {
 				logger.Log.Error("Failed to read message for feed", "name", name, "err", err)
 				cancel()
@@ -44,7 +46,7 @@ func ReadMessages(conn *websocket.Conn, ctx context.Context, cancel context.Canc
 				continue
 			}
 
-			ring.Push(buf.Bytes())
+			ring.Push(constants.RawMessage{Data: buf.Bytes(), ReadAtMs: readAtMs})
 		}
 	}
 }
