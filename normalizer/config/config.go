@@ -71,9 +71,19 @@ func Validate(c *constants.Config) error {
 		kafkaConfig.MaxBufferRecords = 5000
 	}
 
-	if kafkaConfig.CommitOffsetIntervalMillis < 2000 {
-		logger.Log.Warn("Normalizer kafka commit offset interval millis missing or < 2 seconds. Setting to default [2 seconds]")
-		kafkaConfig.CommitOffsetIntervalMillis = 2000
+	switch kafkaConfig.DeliveryMode {
+	case constants.DeliveryTransactional, constants.DeliveryAtLeastOnce:
+	case "":
+		kafkaConfig.DeliveryMode = constants.DeliveryTransactional
+	default:
+		return logger.LogAndWrap("Normalizer kafka delivery_mode must be transactional or at_least_once", nil, "delivery_mode", kafkaConfig.DeliveryMode)
+	}
+
+	// the interval is the wait AFTER a commit finishes, so it cannot starve polling. Below 100ms the worker
+	// would spend nearly all its time in End() with almost nothing to commit.
+	if kafkaConfig.CommitOffsetIntervalMillis < 100 {
+		logger.Log.Warn("Normalizer kafka commit offset interval millis missing or < 100ms. Setting to default [500ms]")
+		kafkaConfig.CommitOffsetIntervalMillis = 500
 	}
 
 	return nil

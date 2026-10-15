@@ -64,7 +64,21 @@ func main() {
 
 	commitInterval := time.Duration(cfg.KafkaConfig.CommitOffsetIntervalMillis) * time.Millisecond
 
+	logger.Log.Info("Normalizer delivery mode", "mode", cfg.KafkaConfig.DeliveryMode)
+
 	for i := 0; i < numPartitions; i++ {
+		if cfg.KafkaConfig.DeliveryMode == constants.DeliveryAtLeastOnce {
+			cl, err := kafka.NewWorkerClient(ctx, cfg.KafkaConfig, i)
+			if err != nil {
+				logger.Log.Error("Failed to create worker client. Stopping main()", "worker", i, "err", err)
+				os.Exit(1)
+			}
+			bp := backpressure.NewController(i, cl, cfg.KafkaConfig.BackpressureConfig, int64(cfg.WorkerQueueSize))
+			w := worker.NewWorker(i, eventChannels[i], bp)
+			go w.RunAtLeastOnce(ctx, cl, commitInterval)
+			continue
+		}
+
 		session, err := kafka.NewWorkerSession(ctx, cfg.KafkaConfig, i)
 		if err != nil {
 			logger.Log.Error("Failed to create worker session. Stopping main()", "worker", i, "err", err)

@@ -63,8 +63,17 @@ func main() {
 			"partition_count", numPartitions)
 	}
 
+	atLeastOnce := cfg.KafkaConfig.DeliveryMode == constants.DeliveryAtLeastOnce
+	logger.Log.Info("Aggregator delivery mode", "mode", cfg.KafkaConfig.DeliveryMode)
+
 	// get the existing agg state
-	checkpoints := kafka.LoadCheckpoints(ctx, cfg.KafkaConfig)
+	var checkpoints map[string]map[constants.MetricName]constants.Metric
+	var symbolCheckpoints map[string]*kafka.SymbolCheckpoint
+	if atLeastOnce {
+		symbolCheckpoints = kafka.LoadSymbolCheckpoints(ctx, cfg.KafkaConfig)
+	} else {
+		checkpoints = kafka.LoadCheckpoints(ctx, cfg.KafkaConfig)
+	}
 
 	// create worker channels and workers
 	flushChannels := make([]chan *constants.DispatchRecord, numPartitions)
@@ -74,7 +83,21 @@ func main() {
 
 	commitInterval := time.Duration(cfg.KafkaConfig.CommitOffsetIntervalMillis) * time.Millisecond
 
+	checkpointInterval := time.Duration(cfg.KafkaConfig.CheckpointIntervalMillis) * time.Millisecond
+
 	for i := 0; i < numPartitions; i++ {
+		if atLeastOnce {
+			cl, err := kafka.NewWorkerClient(ctx, cfg.KafkaConfig, i)
+			if err != nil {
+				logger.Log.Error("Failed to create worker client. Stopping main()", "worker", i, "err", err)
+				os.Exit(1)
+			}
+			w := worker.NewWorker(i, flushChannels[i], cfg.WindowConfig, nil)
+			w.EnableAtLeastOnce(symbolCheckpoints)
+			go w.RunAtLeastOnce(ctx, cl, checkpointInterval)
+			continue
+		}
+
 		session, err := kafka.NewWorkerSession(ctx, cfg.KafkaConfig, i)
 		if err != nil {
 			logger.Log.Error("Failed to create worker session. Stopping main()", "worker", i, "err", err)

@@ -9,6 +9,13 @@ import (
 	"time"
 )
 
+// gapFlushTimeout is how long a message that arrived out of sequence waits for the missing ones before the buffer
+// is flushed in order anyway. It was 10s with no measurement behind it. Websocket reordering is milliseconds, so a
+// gap that has not filled within a couple of seconds is a real drop, not jitter.
+// It also sets how far back a replay can reach: while a record is parked here the normalizer's commit is held
+// behind it, so downstream's seen-offset window (srcoffset.SeenSpan) must cover this timeout.
+const gapFlushTimeout = 2 * time.Second
+
 func InitSequenceOrdererState(symbolState *constants.SymbolState, msg *constants.PipelineMessage) {
 	// pre allocate cap
 	symbolState.BufferSeqMap = make(map[int64]*constants.PipelineMessage, 128)
@@ -58,7 +65,7 @@ func SequenceOrderer(
 			symbolState.BufferSeqId = append(symbolState.BufferSeqId, msg.SeqId)
 		}
 		symbolState.BufferSeqMap[msg.SeqId] = msg
-		symbolState.Gap = time.NewTimer(10 * time.Second)
+		symbolState.Gap = time.NewTimer(gapFlushTimeout)
 
 		// send a timer event to worker channel to flush the buffer
 		go func(t *time.Timer) {

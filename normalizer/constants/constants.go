@@ -20,6 +20,7 @@ type KafkaConfig struct {
 	ConsumerGroup              string              `yaml:"consumer_group"`
 	MaxBufferRecords           int                 `yaml:"max_buffer_records"`
 	CommitOffsetIntervalMillis int                 `yaml:"commit_offset_interval_millis"`
+	DeliveryMode               string              `yaml:"delivery_mode"`
 	CBReqCount                 int                 `yaml:"cb_req_count"`
 	CBTimeoutMillis            int                 `yaml:"cb_timeout_millis"`
 	CBConsecutiveFailures      int                 `yaml:"cb_consecutive_failures"`
@@ -94,6 +95,11 @@ const (
 	NormalizedTickerTopic    string = "normalized.ticks"
 	NormalizedBookTopic      string = "normalized.book"
 	DroppedCountHeader       string = "dropped-count"
+
+	// DeliveryMode: transactional = Kafka transactions (exactly-once, output visible after the commit round trips)
+	// at_least_once = plain idempotent produce, offsets committed behind the acks (output visible once acked)
+	DeliveryTransactional string = "transactional"
+	DeliveryAtLeastOnce   string = "at_least_once"
 )
 
 // rest /api/v3/depth response shape

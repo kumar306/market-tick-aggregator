@@ -32,7 +32,17 @@ type KafkaConfig struct {
 	CBFailureRatio             float64            `yaml:"cb_failure_ratio"`
 	ProduceErrorBufferSize     int                `yaml:"produce_error_buffer_size"`
 	CommitOffsetIntervalMillis int                `yaml:"commit_offset_interval_millis"`
+	// transactional (exactly-once) or at_least_once (checkpoint + seen source offsets, no transactions)
+	DeliveryMode string `yaml:"delivery_mode"`
+	// at_least_once only: how often changed symbols are checkpointed and input offsets committed behind them.
+	// Also the most a crash can replay.
+	CheckpointIntervalMillis int `yaml:"checkpoint_interval_millis"`
 }
+
+const (
+	DeliveryTransactional string = "transactional"
+	DeliveryAtLeastOnce   string = "at_least_once"
+)
 
 type BackpressureConfig struct {
 	QueueUsageHighThreshold float64 `yaml:"queue_usage_high_threshold"`

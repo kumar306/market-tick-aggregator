@@ -18,6 +18,7 @@ import (
 	"unsafe"
 
 	"github.com/twmb/franz-go/pkg/kgo"
+	"github.com/twmb/franz-go/pkg/kmsg"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -55,8 +56,10 @@ func (w *Worker) Run(ctx context.Context, session *kgo.GroupTransactSession, com
 		return
 	}
 
-	commitTicker := time.NewTicker(commitInterval)
-	defer commitTicker.Stop()
+	// re-armed after each End(), not a Ticker: a Ticker keeps its own schedule, so when End() takes longer than
+	// the interval the next tick is already waiting, the select always picks it, and the poll branch never runs.
+	commitTimer := time.NewTimer(commitInterval)
+	defer commitTimer.Stop()
 
 	for {
 		select {
@@ -77,12 +80,13 @@ func (w *Worker) Run(ctx context.Context, session *kgo.GroupTransactSession, com
 				w.ProcessSnapshotReady(ctx, dispatchRec, session)
 			}
 
-		case <-commitTicker.C:
+		case <-commitTimer.C:
 			w.endTransaction(ctx, session)
 			if err := session.Begin(); err != nil {
 				logger.Log.Error("Failed to begin next transaction", "worker", w.ID, "err", err)
 				return
 			}
+			commitTimer.Reset(commitInterval)
 
 		default:
 			// same fix as normalizer to avoid heap allocs per fetch on ctx.withTimeout
@@ -113,6 +117,126 @@ func (w *Worker) Run(ctx context.Context, session *kgo.GroupTransactSession, com
 	}
 }
 
+// RunAtLeastOnce is Run without Kafka transactions. Outputs are produced as soon as they are normalized,
+// so downstream sees them after one produce ack instead of after a commit protocol. Input offsets are committed
+// separately, asynchronously, and never past a record whose output is unacked or still buffered in an orderer.
+// A crash therefore replays at most the records since the last commit (duplicates, never loss); downstream
+// drops those using the source header.
+func (w *Worker) RunAtLeastOnce(ctx context.Context, cl *kgo.Client, commitInterval time.Duration) {
+	defer cl.Close()
+
+	tracker := kafka.NewSourceTracker()
+	producer := kafka.NewTrackedProducer(cl, tracker)
+	committed := make(map[kafka.TP]int64)
+
+	commitTimer := time.NewTimer(commitInterval)
+	defer commitTimer.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			// graceful stop: wait for acks so the frontier is as far forward as it can be, then commit synchronously
+			_ = cl.Flush(context.Background())
+			w.commitFrontier(context.Background(), cl, tracker, committed, true)
+			return
+
+		case dispatchRec, ok := <-w.EventChannel:
+			if !ok {
+				return
+			}
+			switch dispatchRec.Event {
+			case constants.FlushBuffer:
+				w.FlushBuffer(ctx, dispatchRec, producer)
+			case constants.SnapshotReady:
+				w.ProcessSnapshotReady(ctx, dispatchRec, producer)
+			}
+
+		case <-commitTimer.C:
+			w.commitFrontier(ctx, cl, tracker, committed, false)
+			commitTimer.Reset(commitInterval)
+
+		default:
+			pollCtx := w.poll.Reset(200 * time.Millisecond)
+			fetches := cl.PollFetches(pollCtx)
+
+			if fetches.IsClientClosed() {
+				return
+			}
+
+			fetches.EachRecord(func(rec *kgo.Record) {
+				if w.Backpressure != nil {
+					w.Backpressure.OnEnqueue(rec.Topic, rec.Partition)
+				}
+				if err := w.ProcessRecord(ctx, rec, producer); err != nil {
+					logger.Log.Error("Error processing record", "worker", w.ID, "err", err)
+				}
+				if w.Backpressure != nil {
+					w.Backpressure.OnDequeue()
+				}
+			})
+
+			fetches.EachError(func(topic string, partition int32, err error) {
+				logger.Log.Error("Fetch error", "worker", w.ID, "topic", topic, "partition", partition, "err", err)
+			})
+		}
+	}
+}
+
+// commitFrontier commits the input offsets that are safe: polled, and with no output still pending.
+// The async commit is off the visibility path, so its round trips cost latency to nobody.
+func (w *Worker) commitFrontier(ctx context.Context, cl *kgo.Client, tracker *kafka.SourceTracker, last map[kafka.TP]int64, sync bool) {
+	frontier := kafka.Frontier(cl.UncommittedOffsets(), tracker.MinInflight(), w.bufferedSources(), last)
+	if len(frontier) == 0 {
+		return
+	}
+	for topic, parts := range frontier {
+		for p, eo := range parts {
+			last[kafka.TP{Topic: topic, Partition: p}] = eo.Offset
+		}
+	}
+
+	start := time.Now()
+	onDone := func(_ *kgo.Client, _ *kmsg.OffsetCommitRequest, _ *kmsg.OffsetCommitResponse, err error) {
+		if err != nil {
+			logger.Log.Error("Offset commit failed", "worker", w.ID, "err", err)
+			return
+		}
+		metrics.Normalizer_CommitLatencySeconds.Observe(time.Since(start).Seconds())
+	}
+	if sync {
+		cl.CommitOffsetsSync(ctx, frontier, onDone)
+		return
+	}
+	cl.CommitOffsets(ctx, frontier, onDone)
+}
+
+// bufferedSources is the lowest source offset per partition among records parked in an orderer buffer.
+// Those were consumed but have no output yet, so committing past them would lose them in a crash.
+// Runs on the worker goroutine, the only one that touches the buffers.
+func (w *Worker) bufferedSources() map[kafka.TP]int64 {
+	lowest := make(map[kafka.TP]int64)
+	note := func(msg *constants.PipelineMessage) {
+		if msg == nil || msg.Record == nil {
+			return
+		}
+		k := kafka.TP{Topic: msg.Record.Topic, Partition: msg.Record.Partition}
+		if cur, ok := lowest[k]; !ok || msg.Record.Offset < cur {
+			lowest[k] = msg.Record.Offset
+		}
+	}
+	for _, state := range w.WorkerMap {
+		for _, msg := range state.BufferSeqMap {
+			note(msg)
+		}
+		for _, msgs := range state.BufferTimeMap {
+			for _, msg := range msgs {
+				note(msg)
+			}
+		}
+	}
+	return lowest
+}
+
 // TxnFailed reports whether the current cycle has a produce failure pending
 // abort. Exposed for tests; production code shouldn't need to read this.
 func (w *Worker) TxnFailed() bool {
@@ -125,9 +249,13 @@ func (w *Worker) endTransaction(ctx context.Context, session *kgo.GroupTransactS
 		commit = kgo.TryAbort
 		logger.Log.Warn("Aborting transaction due to a produce failure this cycle", "worker", w.ID)
 	}
+
+	// End() is several broker round trips in sequence and blocks this worker the whole time
+	start := time.Now()
 	if _, err := session.End(ctx, commit); err != nil {
 		logger.Log.Error("Transaction end failed", "worker", w.ID, "err", err)
 	}
+	metrics.Normalizer_CommitLatencySeconds.Observe(time.Since(start).Seconds())
 }
 
 func (w *Worker) ProcessRecord(ctx context.Context, rec *kgo.Record, producer constants.Producer) error {

@@ -66,6 +66,18 @@ func Validate(cfg *constants.Config) error {
 		return logger.LogAndWrap("Consumer group should not be blank", nil)
 	}
 
+	switch kafkaCfg.DeliveryMode {
+	case constants.DeliveryTransactional, constants.DeliveryAtLeastOnce:
+	case "":
+		kafkaCfg.DeliveryMode = constants.DeliveryTransactional
+	default:
+		return logger.LogAndWrap("delivery_mode must be transactional or at_least_once", nil, "delivery_mode", kafkaCfg.DeliveryMode)
+	}
+
+	if kafkaCfg.CheckpointIntervalMillis <= 0 {
+		kafkaCfg.CheckpointIntervalMillis = 2000
+	}
+
 	backpressureCfg := kafkaCfg.BackpressureConfig
 
 	if backpressureCfg.QueueUsageHighThreshold <= 0 ||

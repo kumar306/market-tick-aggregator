@@ -44,6 +44,9 @@ var (
 	// commit lag
 	Normalizer_CommitLatencySeconds prometheus.Histogram
 
+	// one observation per broker round trip, by request name (Produce, EndTxn, ...)
+	Normalizer_BrokerRPCSeconds *prometheus.HistogramVec
+
 	// worker metrics
 	Normalizer_NormalizedMessagesTotal      *prometheus.CounterVec
 	Normalizer_NormalizedMessageErrorsTotal *prometheus.CounterVec
@@ -216,10 +219,18 @@ func InitNormalizerMetrics() {
 			[]string{"worker"})
 
 		// commit lag
+		// 14 doublings reach ~8s: an End() over a 0.5s-RTT link takes ~2.3s, past the old 2.048s top bucket
 		Normalizer_CommitLatencySeconds = NewHistogram(
 			"normalizer_commit_latency_seconds",
-			"Commit latency in seconds",
-			prometheus.ExponentialBuckets(0.001, 2, 12),
+			"Duration of the transaction End() (flush, offset commit, EndTxn) in seconds",
+			prometheus.ExponentialBuckets(0.001, 2, 14),
+		)
+
+		Normalizer_BrokerRPCSeconds = NewHistogramVec(
+			"normalizer_broker_rpc_seconds",
+			"Broker round-trip time by request type. Fetch is a long poll, so it includes the broker's wait.",
+			prometheus.ExponentialBuckets(0.001, 2, 14),
+			[]string{"request"},
 		)
 
 		// worker metrics

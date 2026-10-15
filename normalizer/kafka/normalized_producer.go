@@ -5,6 +5,7 @@ import (
 	"market-normalizer/constants"
 	"shared/logger"
 	"shared/metrics"
+	"shared/srcoffset"
 	"time"
 
 	"github.com/twmb/franz-go/pkg/kgo"
@@ -18,6 +19,14 @@ func ProduceAsync(producer constants.Producer, topic string, msg *constants.Pipe
 	start := time.Now()
 
 	record := &kgo.Record{Key: key, Value: value, Topic: topic}
+	if msg.Record != nil {
+		// where this output came from. Lets a downstream consumer drop a replayed copy, and lets the worker
+		// hold the offset commit back until this output is acked (at-least-once mode).
+		record.Headers = []kgo.RecordHeader{{
+			Key:   srcoffset.HeaderKey,
+			Value: srcoffset.Encode(msg.Record.Topic, msg.Record.Partition, msg.Record.Offset),
+		}}
+	}
 
 	producer.Produce(context.Background(), record, func(r *kgo.Record, err error) {
 		if err != nil {
