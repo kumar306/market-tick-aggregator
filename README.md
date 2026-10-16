@@ -36,7 +36,7 @@ The full pipeline runs on real AWS infrastructure: EKS for the five pipeline ser
 This project demonstrates:
 
 - multi exchange protocol handling, including the quirks each exchange has around symbol resync and sequencing
-- Kafka based event transport, with transactional exactly once processing on the hops that need it
+- Kafka based event transport, with at-least-once delivery and source offset deduplication on the Kafka to Kafka hops (a transactional exactly once mode exists behind a config flag)
 - keyed ordered processing
 - backpressure and bounded queue management
 - circuit breaker protected Kafka calls in the orderbook service, and threshold based backpressure control in the normalizer
@@ -100,7 +100,7 @@ flowchart LR
 
 A few things in this codebase are worth calling out specifically, because they came from real problems rather than being designed in up front.
 
-**Kafka transactions instead of Redis based deduplication.** Earlier versions of the aggregator and normalizer detected duplicate processing with a Redis backed dedupe key checked and marked on every tick. That path has since been replaced with Kafka's own transactional guarantees. Both services now give each worker its own `GroupTransactSession`, since each worker owns a disjoint set of partitions from the consumer group, and that session reads, processes, and produces within a single transaction before committing its consumed offsets as part of that same transaction. Downstream consumers read with `read_committed` isolation, so nothing partially processed ever becomes visible. This removed a Redis round trip from the hot path entirely and made correctness a property of the Kafka protocol rather than something the application had to maintain by hand.
+**At-least-once delivery with source offset deduplication, instead of Kafka transactions or a Redis dedupe check.** The normalizer and aggregator run with `delivery_mode: at_least_once`. Every output carries the source (topic, partition, offset) of the record it came from in a Kafka header, and is produced as soon as it is ready, so downstream sees it after one produce ack rather than after a transaction commit. The normalizer commits input offsets asynchronously and never past a record whose output is still unacked or parked in an orderer. The aggregator saves each symbol's window state together with the source offsets it has already applied in a single checkpoint record, and commits input offsets only behind an acked checkpoint; after a crash, replayed records are recognised by their source offset in a sliding bitset held in memory and dropped, with no external store on the hot path. The Postgres sink drops repeated rows (`ON CONFLICT DO NOTHING`); a window re-flushed after an aggregator crash carries a new start timestamp and is not caught by that. A transactional mode (one `GroupTransactSession` per worker, `read_committed` downstream) remains behind the same flag.
 
 **A real REST based resync path for Binance's depth stream.** Binance's WebSocket depth feed never sends an initial snapshot, unlike Coinbase and Kraken, which do. So the first time the normalizer sees a symbol, or any time it detects that adapter's ring buffer dropped a message, it has to fetch a snapshot over Binance's REST API and splice it together with whatever deltas arrived in the meantime, buffered by sequence id until the splice completes. This runs as a single in flight async fetch guarded by a pending flag, with the result posted back through the worker's own event loop so there is no data race on the buffered state.
 
@@ -286,7 +286,7 @@ flowchart TB
     Priv -->|outbound via| NAT
 ```
 
-Every service authenticates to MSK Serverless over SASL/IAM through IRSA rather than static credentials: an EKS service account is federated through the cluster's OIDC provider, assumes an IAM role scoped to exactly the Kafka actions each pod needs (connect, topic access, group access, and transactional id access for the services using Kafka transactions), and MSK never sees a long lived secret.
+Every service authenticates to MSK Serverless over SASL/IAM through IRSA rather than static credentials: an EKS service account is federated through the cluster's OIDC provider, assumes an IAM role scoped to exactly the Kafka actions each pod needs (connect, topic access, group access, and transactional id access, which only the optional transactional delivery mode uses), and MSK never sees a long lived secret.
 
 Deployment itself is scripted rather than manual. Terraform provisions the VPC, EKS cluster, MSK cluster, RDS instance, ElastiCache instance, and one ECR repository per service, and a `null_resource` in the same Terraform run builds and pushes every service's Docker image whenever the image tag changes, so there is no separate manual build step. A single script, `infra/scripts/apply-all.sh`, drives the whole sequence: Terraform apply, kubeconfig setup, the shared `infra-config` ConfigMap that every pod reads its Kafka and database connection info from, Postgres schema bootstrap, Kafka topic creation, and finally rolling out all five pipeline services. The image tag auto increments on each `--rebuild` run so there is never a moment where the wrong image is briefly live. `infra/scripts/run-loadtest.sh` and `infra/scripts/destroy-all.sh` handle the load test lifecycle and teardown the same way, so the whole environment can be brought up, exercised, and torn down without any manual AWS console work.
 
@@ -337,20 +337,22 @@ After a load test run, per service processing metrics are visible in Prometheus 
 
 ## AWS End to End Load Test
 
-Beyond the local Go microbenchmarks above, the full pipeline was deployed to the AWS infrastructure described above and load tested end to end using the `mockexchange` servers, which replicate Binance, Coinbase, and Kraken's real feed protocols closely enough that adapter cannot tell the difference. The test ramped from 500 to 10,000 combined messages per second.
+Beyond the local Go microbenchmarks above, the full pipeline was deployed to the AWS infrastructure described above and load tested end to end using the `mockexchange` servers, which replicate Binance, Coinbase, and Kraken's real feed protocols closely enough that adapter cannot tell the difference. The test ramped from 500 to 10,000 combined messages per second offered.
 
 **End to end latency** (`persistence_ingest_to_insert_seconds`: from the adapter reading the message off the exchange websocket to the Postgres transaction that stores the row committing, i.e. when the row becomes visible; for each row it is the age of the newest message that row reflects):
 
-| Path | p50 | p95 |
-| --- | --- | --- |
-| Tick aggregates, ingest to Postgres commit | 47 ms | ~85 ms |
-| Orderbook flushes, ingest to Postgres commit | ~150 ms | ~0.3 s |
-| Hop: ingest to aggregator pickup | | 30 to 50 ms |
-| Hop: ingest to orderbook applied | | 0.26 to 0.36 s |
+| Path | p50 | p95 | p99 |
+| --- | --- | --- | --- |
+| Tick aggregates, ingest to Postgres commit | 47 ms | ~85 ms | ~120 ms |
+| Orderbook flushes, ingest to Postgres commit | ~150 ms | ~0.3 s | ~0.34 s |
+| Hop: ingest to aggregator pickup | | 30 to 50 ms | |
+| Hop: ingest to orderbook applied | | 0.26 to 0.34 s | |
 
-Of 1,351 steady state tick rows, 92% were visible within 75 ms of ingest, 98% within 100 ms and all within 200 ms. The book path is slower because the orderbook itself holds updates for a 250 ms ordering window on Coinbase and Kraken. This is a data freshness number, not the delay of every individual tick: a tick that arrives just after a window flush also waits for that window's next flush, up to a second for the finest window.
+Of 1,351 steady state tick rows, 92% were visible within 75 ms of ingest, 98% within 100 ms and all within 200 ms. Persistence holds a batch for at most 10 ms after its first row arrives, then writes it in one Postgres transaction (7.7 ms p50, 18 ms p95 for ticks). Real MSK calls from the pods measured 3 to 5 ms for Produce, Fetch and offset commit. The book path is slower because the orderbook itself holds updates for a 250 ms ordering window on Coinbase and Kraken.
 
-Two changes got it here. Kafka transactions were replaced by at-least-once delivery: every output carries its source (topic, partition, offset), input offsets are committed only behind acked outputs, and the aggregator saves each symbol's window state together with the source offsets it has already applied in a single checkpoint record, so a replay after a crash is dropped from memory. The persistence batcher then flushes a batch a fixed time after its first row arrives instead of on a ticker, which had been flushing every other tick and holding rows up to 2 seconds. Real MSK calls from the pods measured 3 to 5 ms for Produce, Fetch and offset commit. The earlier August measurement (transactional mode, p95 7.1 to 7.4 s to pipeline pickup) measured a different point in a different mode, so the two are not a like for like comparison, and transactional mode was not re-run on this run's infrastructure. The ramp offered up to 10,000 messages per second, but the mock exchanges cap near 800 per stream, so about 4.9k per second was delivered at the top levels; the adapter's buffers stayed empty. Full detail is in [`docs/aws_loadtest_metrics/RESULTS.md`](docs/aws_loadtest_metrics/RESULTS.md).
+This is a data freshness number, not the delay of every individual tick: a tick that arrives just after a window flush also waits for that window's next flush, up to a second for the finest window.
+
+The ramp offered up to 10,000 messages per second. The mock exchanges cap near 800 per stream, so about 4.9k per second was delivered at the top levels; the adapter's buffers stayed empty, so that ceiling is the load generator and not the pipeline. Full detail is in [`docs/aws_loadtest_metrics/RESULTS.md`](docs/aws_loadtest_metrics/RESULTS.md).
 
 ![End to end latency, ingest to Postgres commit](docs/aws_loadtest_metrics/e2e-ingest-to-insert.png)
 ![Same, whole run including the startup transient](docs/aws_loadtest_metrics/e2e-ingest-to-insert-full-range.png)
@@ -409,7 +411,7 @@ Prometheus exposes service metrics:
 
 - explicit service boundaries over a monolith
 - bounded queues and backpressure over pretending the pipeline is lossless under overload
-- Kafka transactions for exactly once processing on the Kafka to Kafka hops (normalizer, aggregator), rather than an application level dedupe check, with the final Postgres sink staying replay safe rather than claiming exactly once all the way through
+- At-least-once delivery with source offset deduplication on the Kafka to Kafka hops (normalizer, aggregator) rather than Kafka transactions or an application level dedupe store, so output is visible once produced instead of after a commit, with the Postgres sink dropping repeated rows rather than claiming exactly once all the way through
 - a demoable dashboard as a first class consumer of the system
 - single node deployment as the default operational model for simplicity and reviewability, with a full AWS deployment path available and validated separately
 
