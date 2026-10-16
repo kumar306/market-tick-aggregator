@@ -64,7 +64,8 @@ kubectl wait --for=condition=complete --timeout=120s job/postgres-init
 
 echo "== Kafka topics =="
 kubectl delete job bootstrap-topics --ignore-not-found
-kubectl apply -f infra/k8s/bootstrap-topics-job.yaml
+# through the tag-rewriting helper like every other manifest: the file hardcodes an old tag that a fresh ECR does not have
+apply_with_current_tag infra/k8s/bootstrap-topics-job.yaml "$TAG"
 kubectl wait --for=condition=complete --timeout=60s job/bootstrap-topics
 
 echo "== Prometheus + Grafana (Helm) =="

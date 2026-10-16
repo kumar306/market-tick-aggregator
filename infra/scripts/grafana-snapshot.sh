@@ -5,13 +5,14 @@
 # Usage:
 #   ./infra/scripts/grafana-snapshot.sh <from_epoch_ms> <to_epoch_ms> <out.png>
 #
-# Needs: kubectl + helm pointed at the cluster, curl, and Microsoft Edge or Chrome (headless mode).
+# Needs: kubectl + helm pointed at the cluster, curl, Node 22+, and Microsoft Edge or Chrome.
 # The port-forward is local-only. Anonymous Viewer access is switched on so the headless browser needs no login;
 # it only exists for the life of the cluster and is never exposed outside this machine.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
 FROM="${1:?from epoch ms}"; TO="${2:?to epoch ms}"; OUT="${3:?output png}"
+case "$OUT" in /*|?:*) ;; *) OUT="$PWD/$OUT" ;; esac   # an absolute path: the browser resolves a relative one against its own cwd
 PORT=3000
 BASE="http://localhost:${PORT}"
 
@@ -64,6 +65,6 @@ echo
 
 URL="${BASE}/d/mta-e2e/mta-e2e-ingest-to-insert?orgId=1&from=${FROM}&to=${TO}"
 echo "== screenshot =="
-"$(browser)" --headless=new --disable-gpu --hide-scrollbars --window-size=1920,1320 \
-  --virtual-time-budget=45000 --screenshot="$(cygpath -w "$OUT")" "$URL" >/dev/null 2>&1
+# DevTools capture with a real wait: the plain --screenshot flag fires at page load, before the panels have drawn
+node infra/scripts/cdp-screenshot.mjs "$(browser)" "$URL" "$(cygpath -w "$OUT")" 30
 ls -la "$OUT"

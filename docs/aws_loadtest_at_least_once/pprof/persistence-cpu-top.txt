@@ -1,0 +1,49 @@
+File: persistence
+Build ID: 4dc4c75e6f60243219381e8c4ba87f2589f390dd
+Type: cpu
+Time: 2026-10-16 11:11:24 IST
+Duration: 30s, Total samples = 50ms ( 0.17%)
+Showing nodes accounting for 50ms, 100% of 50ms total
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%       20ms 40.00%  github.com/twmb/franz-go/pkg/kgo.(*broker).handleReq
+         0     0%     0%       20ms 40.00%  github.com/twmb/franz-go/pkg/kgo.(*broker).handleReqs
+         0     0%     0%       20ms 40.00%  github.com/twmb/franz-go/pkg/kgo.(*brokerCxn).writeRequest
+      10ms 20.00% 20.00%       20ms 40.00%  runtime.selectgo
+         0     0% 20.00%       10ms 20.00%  bytes.(*Buffer).ReadFrom
+         0     0% 20.00%       10ms 20.00%  crypto/tls.(*Conn).Read
+         0     0% 20.00%       10ms 20.00%  crypto/tls.(*Conn).readFromUntil
+         0     0% 20.00%       10ms 20.00%  crypto/tls.(*Conn).readRecord (inline)
+         0     0% 20.00%       10ms 20.00%  crypto/tls.(*Conn).readRecordOrCCS
+         0     0% 20.00%       10ms 20.00%  crypto/tls.(*atLeastReader).Read
+         0     0% 20.00%       10ms 20.00%  github.com/twmb/franz-go/pkg/kgo.(*broker).loadConnection
+         0     0% 20.00%       10ms 20.00%  github.com/twmb/franz-go/pkg/kgo.(*brokerCxn).handleResp
+         0     0% 20.00%       10ms 20.00%  github.com/twmb/franz-go/pkg/kgo.(*brokerCxn).handleResps
+         0     0% 20.00%       10ms 20.00%  github.com/twmb/franz-go/pkg/kgo.(*brokerCxn).init
+         0     0% 20.00%       10ms 20.00%  github.com/twmb/franz-go/pkg/kgo.(*brokerCxn).readConn.func2
+      10ms 20.00% 40.00%       10ms 20.00%  github.com/twmb/franz-go/pkg/kgo.(*brokerCxn).readResponse
+         0     0% 40.00%       10ms 20.00%  github.com/twmb/franz-go/pkg/kgo.(*brokerCxn).requestAPIVersions
+         0     0% 40.00%       10ms 20.00%  github.com/twmb/franz-go/pkg/kgo.(*brokerCxn).writeConn
+         0     0% 40.00%       10ms 20.00%  github.com/twmb/franz-go/pkg/kgo.(*fetchRequest).AppendTo
+         0     0% 40.00%       10ms 20.00%  github.com/twmb/franz-go/pkg/kgo.(*fetchRequest).adjustPreferringLag
+         0     0% 40.00%       10ms 20.00%  github.com/twmb/franz-go/pkg/kgo.(*source).loopFetch
+         0     0% 40.00%       10ms 20.00%  github.com/twmb/franz-go/pkg/kmsg.(*RequestFormatter).AppendRequest
+         0     0% 40.00%       10ms 20.00%  internal/poll.(*FD).Read
+         0     0% 40.00%       10ms 20.00%  internal/poll.ignoringEINTRIO (inline)
+      10ms 20.00% 60.00%       10ms 20.00%  internal/runtime/syscall.Syscall6
+         0     0% 60.00%       10ms 20.00%  io.ReadAtLeast
+         0     0% 60.00%       10ms 20.00%  io.ReadFull (inline)
+         0     0% 60.00%       10ms 20.00%  net.(*conn).Read
+         0     0% 60.00%       10ms 20.00%  net.(*netFD).Read
+      10ms 20.00% 80.00%       10ms 20.00%  runtime.(*stkframe).getStackMap
+         0     0% 80.00%       10ms 20.00%  runtime.adjustframe
+         0     0% 80.00%       10ms 20.00%  runtime.copystack
+         0     0% 80.00%       10ms 20.00%  runtime.goready (inline)
+         0     0% 80.00%       10ms 20.00%  runtime.newstack
+      10ms 20.00%   100%       10ms 20.00%  runtime.ready
+         0     0%   100%       10ms 20.00%  runtime.send
+         0     0%   100%       10ms 20.00%  runtime.send.goready.func1
+         0     0%   100%       10ms 20.00%  runtime.systemstack
+         0     0%   100%       10ms 20.00%  syscall.RawSyscall6
+         0     0%   100%       10ms 20.00%  syscall.Read (inline)
+         0     0%   100%       10ms 20.00%  syscall.Syscall
+         0     0%   100%       10ms 20.00%  syscall.read

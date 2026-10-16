@@ -1,0 +1,58 @@
+File: aggregator
+Build ID: dbea23e7a2f7b6108ae99864aaf082d5d8051ed0
+Type: inuse_space
+Time: 2026-10-16 11:09:25 IST
+Showing nodes accounting for 3077.67kB, 100% of 3077.67kB total
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%  1028.76kB 33.43%  bytes.(*Buffer).grow
+ 1028.76kB 33.43% 33.43%  1028.76kB 33.43%  bytes.growSlice
+         0     0% 33.43%  1028.76kB 33.43%  crypto/tls.(*Conn).HandshakeContext (inline)
+         0     0% 33.43%  1028.76kB 33.43%  crypto/tls.(*Conn).clientHandshake
+         0     0% 33.43%  1028.76kB 33.43%  crypto/tls.(*Conn).handshakeContext
+         0     0% 33.43%  1028.76kB 33.43%  crypto/tls.(*Conn).readHandshake
+         0     0% 33.43%  1028.76kB 33.43%  crypto/tls.(*Conn).readHandshakeBytes
+         0     0% 33.43%  1028.76kB 33.43%  crypto/tls.(*Conn).readRecord (inline)
+         0     0% 33.43%  1028.76kB 33.43%  crypto/tls.(*Conn).readRecordOrCCS
+         0     0% 33.43%  1028.76kB 33.43%  crypto/tls.(*Dialer).DialContext
+         0     0% 33.43%  1028.76kB 33.43%  crypto/tls.dial
+         0     0% 33.43%  1028.76kB 33.43%  github.com/twmb/franz-go/pkg/kgo.(*broker).connect
+         0     0% 33.43%  1028.76kB 33.43%  github.com/twmb/franz-go/pkg/kgo.(*broker).handleReq
+         0     0% 33.43%  1028.76kB 33.43%  github.com/twmb/franz-go/pkg/kgo.(*broker).handleReqs
+         0     0% 33.43%  1028.76kB 33.43%  github.com/twmb/franz-go/pkg/kgo.(*broker).loadConnection
+         0     0% 33.43%  1028.76kB 33.43%  github.com/twmb/franz-go/pkg/kgo.NewClient.func2
+         0     0% 33.43%  1024.20kB 33.28%  market-aggregator/worker.(*Worker).RunAtLeastOnce
+         0     0% 33.43%   514.38kB 16.71%  bytes.(*Buffer).Grow (inline)
+         0     0% 33.43%   514.38kB 16.71%  bytes.(*Buffer).Write
+         0     0% 33.43%   514.38kB 16.71%  crypto/tls.(*Conn).readFromUntil
+         0     0% 33.43%   512.69kB 16.66%  github.com/prometheus/procfs.init
+         0     0% 33.43%   512.69kB 16.66%  regexp.Compile (inline)
+         0     0% 33.43%   512.69kB 16.66%  regexp.MustCompile
+         0     0% 33.43%   512.69kB 16.66%  regexp.compile
+         0     0% 33.43%   512.69kB 16.66%  regexp/syntax.(*compiler).compile
+  512.69kB 16.66% 50.08%   512.69kB 16.66%  regexp/syntax.(*compiler).inst (inline)
+         0     0% 50.08%   512.69kB 16.66%  regexp/syntax.(*compiler).rune
+         0     0% 50.08%   512.69kB 16.66%  regexp/syntax.Compile
+         0     0% 50.08%   512.69kB 16.66%  runtime.doInit (inline)
+         0     0% 50.08%   512.69kB 16.66%  runtime.doInit1
+         0     0% 50.08%   512.69kB 16.66%  runtime.main
+  512.14kB 16.64% 66.73%   512.14kB 16.64%  market-aggregator/worker.(*Worker).commitPositions
+         0     0% 66.73%   512.14kB 16.64%  market-aggregator/worker.(*Worker).finishBatch
+         0     0% 66.73%   512.06kB 16.64%  google.golang.org/protobuf/internal/impl.(*MessageInfo).init (inline)
+         0     0% 66.73%   512.06kB 16.64%  google.golang.org/protobuf/internal/impl.(*MessageInfo).initOnce
+         0     0% 66.73%   512.06kB 16.64%  google.golang.org/protobuf/internal/impl.(*MessageInfo).makeKnownFieldsFunc
+         0     0% 66.73%   512.06kB 16.64%  google.golang.org/protobuf/internal/impl.(*MessageInfo).makeReflectFuncs
+         0     0% 66.73%   512.06kB 16.64%  google.golang.org/protobuf/internal/impl.(*messageState).ProtoMethods
+  512.06kB 16.64% 83.36%   512.06kB 16.64%  google.golang.org/protobuf/internal/impl.fieldInfoForScalar
+         0     0% 83.36%   512.06kB 16.64%  google.golang.org/protobuf/proto.Marshal
+         0     0% 83.36%   512.06kB 16.64%  google.golang.org/protobuf/proto.MarshalOptions.marshal
+         0     0% 83.36%   512.06kB 16.64%  google.golang.org/protobuf/proto.protoMethods (inline)
+         0     0% 83.36%   512.06kB 16.64%  market-aggregator/kafka.PublishAggregate
+         0     0% 83.36%   512.06kB 16.64%  market-aggregator/worker.(*Worker).FlushWindow
+         0     0% 83.36%   512.02kB 16.64%  main.exposeMetrics
+         0     0% 83.36%   512.02kB 16.64%  net.(*TCPListener).Accept
+         0     0% 83.36%   512.02kB 16.64%  net.(*TCPListener).accept
+         0     0% 83.36%   512.02kB 16.64%  net.(*netFD).accept
+  512.02kB 16.64%   100%   512.02kB 16.64%  net.sockaddrToTCP
+         0     0%   100%   512.02kB 16.64%  net/http.(*Server).ListenAndServe
+         0     0%   100%   512.02kB 16.64%  net/http.(*Server).Serve
+         0     0%   100%   512.02kB 16.64%  net/http.ListenAndServe (inline)
