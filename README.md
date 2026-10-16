@@ -339,31 +339,37 @@ After a load test run, per service processing metrics are visible in Prometheus 
 
 Beyond the local Go microbenchmarks above, the full pipeline was deployed to the AWS infrastructure described above and load tested end to end using the `mockexchange` servers, which replicate Binance, Coinbase, and Kraken's real feed protocols closely enough that adapter cannot tell the difference. The test ramped from 500 to 10,000 combined messages per second.
 
-**End to end latency** (`aggregator_e2e_latency_seconds` and `orderbook_e2e_latency_seconds`, p95, measured from exchange event origination to pipeline pickup):
+**End to end latency** (`persistence_ingest_to_insert_seconds`: from the adapter reading the message off the exchange websocket to the Postgres transaction that stores the row committing, i.e. when the row becomes visible; for each row it is the age of the newest message that row reflects):
 
-| Path | p95 latency |
-| --- | --- |
-| Aggregator, tick path | ~7.1 to 7.4 seconds |
-| Orderbook, book path | ~7.3 to 7.4 seconds |
+| Path | p50 | p95 |
+| --- | --- | --- |
+| Tick aggregates, ingest to Postgres commit | 47 ms | ~85 ms |
+| Orderbook flushes, ingest to Postgres commit | ~150 ms | ~0.3 s |
+| Hop: ingest to aggregator pickup | | 30 to 50 ms |
+| Hop: ingest to orderbook applied | | 0.26 to 0.36 s |
 
-These match. Orderbook initially ran about four times slower, 25 to 29 seconds p95, because of an unconditional 20 second message buffering window in the normalizer that was meant to smooth millisecond scale WebSocket jitter but was sized far larger than the problem it was solving. Getting there took ruling out AWS network causes by reproducing the same latency on a local docker-compose stack, ruling out backpressure churn by correlating pause and resume timestamps directly, and ruling out a Binance specific resync path with its own metric before finding the real cause in the normalizer's message ordering code.
+Of 1,351 steady state tick rows, 92% were visible within 75 ms of ingest, 98% within 100 ms and all within 200 ms. The book path is slower because the orderbook itself holds updates for a 250 ms ordering window on Coinbase and Kraken. This is a data freshness number, not the delay of every individual tick: a tick that arrives just after a window flush also waits for that window's next flush, up to a second for the finest window.
 
-![AWS load test latency](docs/aws_loadtest_metrics/latency.png)
-![AWS load test throughput](docs/aws_loadtest_metrics/throughput.png)
+Two changes got it here. Kafka transactions were replaced by at-least-once delivery: every output carries its source (topic, partition, offset), input offsets are committed only behind acked outputs, and the aggregator saves each symbol's window state together with the source offsets it has already applied in a single checkpoint record, so a replay after a crash is dropped from memory. The persistence batcher then flushes a batch a fixed time after its first row arrives instead of on a ticker, which had been flushing every other tick and holding rows up to 2 seconds. Real MSK calls from the pods measured 3 to 5 ms for Produce, Fetch and offset commit. The earlier August measurement (transactional mode, p95 7.1 to 7.4 s to pipeline pickup) measured a different point in a different mode, so the two are not a like for like comparison, and transactional mode was not re-run on this run's infrastructure. The ramp offered up to 10,000 messages per second, but the mock exchanges cap near 800 per stream, so about 4.9k per second was delivered at the top levels; the adapter's buffers stayed empty. Full detail is in [`docs/aws_loadtest_metrics/RESULTS.md`](docs/aws_loadtest_metrics/RESULTS.md).
+
+![End to end latency, ingest to Postgres commit](docs/aws_loadtest_metrics/e2e-ingest-to-insert.png)
+![Same, whole run including the startup transient](docs/aws_loadtest_metrics/e2e-ingest-to-insert-full-range.png)
+![Per hop latency and broker call latency](docs/aws_loadtest_metrics/hops-and-broker.png)
+![Postgres flush time, flush rate and rows per flush](docs/aws_loadtest_metrics/persistence-batching.png)
 
 **Heap allocation** (pprof `inuse_space`, captured against live pods during the load ramp): adapter's live heap dropped from 60.43MB to 6.8MB, an 89 percent reduction, after replacing a per message `io.ReadAll` allocation in the WebSocket read path with a `sync.Pool` backed reusable buffer, described above under Notable Engineering Decisions. Both numbers were captured on the same running pods under the same load, not derived from a synthetic benchmark.
 
-**CPU usage under the 10K msg/sec ramp** (30 second pprof CPU profile, percentage of wall clock time actually spent executing rather than idle or blocked on I/O):
+**CPU usage at the top of the ramp (10K offered, ~4.9K delivered)** (30 second pprof CPU profile, percentage of wall clock time actually spent executing rather than idle or blocked on I/O):
 
 | Service | CPU busy |
 | --- | --- |
-| Normalizer | ~33.5% |
-| Adapter | ~28.4% |
-| Aggregator | ~1.0% |
-| Orderbook | ~0.7% |
-| Persistence | ~0.1% |
+| Normalizer | ~40% |
+| Adapter | ~31% |
+| Aggregator | ~7% |
+| Orderbook | ~5% |
+| Persistence | ~0.2% |
 
-Aggregator, orderbook, and persistence sitting at close to idle under real load is consistent with the near zero allocation hot paths measured in the local benchmarks above, not a sign of missing instrumentation. Most of the system's CPU time goes to adapter and normalizer, since that is where the WebSocket handling, TLS, and Kafka produce and compression work sits, right at the front of the pipeline. Full pprof text captures, CPU and heap, for all five services are in [`docs/aws_loadtest_pprof/`](docs/aws_loadtest_pprof/).
+Aggregator, orderbook, and persistence sitting at or near idle under real load is consistent with the near zero allocation hot paths measured in the local benchmarks above, not a sign of missing instrumentation. Most of the system's CPU time goes to adapter and normalizer, since that is where the WebSocket handling, TLS, and Kafka produce and compression work sits, right at the front of the pipeline. Full pprof text captures, CPU and heap, for all five services are in [`docs/aws_loadtest_pprof/`](docs/aws_loadtest_pprof/).
 
 ## Testing and Validation
 

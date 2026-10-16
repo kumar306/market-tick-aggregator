@@ -154,7 +154,7 @@ added to orderbook's consumer for correctness; mock exchange now emits
 realistic zero-quantity (cancel) updates so book depth doesn't grow
 unbounded.
 
-**Reconciled number:** `aggregator_e2e_latency_seconds` p95 ≈ 7.1-7.4s,
+**Reconciled number (SUPERSEDED, see Task F):** `aggregator_e2e_latency_seconds` p95 ≈ 7.1-7.4s,
 `orderbook_e2e_latency_seconds` p95 ≈ 7.3-7.4s — the two now match. Both are
 bounded by the same shared mechanism: `normalizer`'s periodic Kafka
 transaction commit (`commit_offset_interval_millis: 5000`) combined with
@@ -171,3 +171,79 @@ floor rather than a bug.
 
 No regression across any of the fixes above — variation is within normal
 run-to-run noise for this environment.
+
+## Task E — pprof heap analysis on real AWS load (RESOLVED, adapter fix)
+
+Captured via `capture-pprof.sh` against the live EKS pods during an active
+10,000/s-combined load ramp (`inuse_space` + `alloc_space` heap profiles,
+30s CPU profiles, one per service).
+
+**Root cause found:** adapter's `inuse_space` profile showed 89% of a 60.43MB
+live heap (54.03MB) attributed to a single call site — `io.ReadAll` inside
+`ReadMessages`, called via `gorilla/websocket.Conn.ReadMessage()`'s internal
+`NextReader()` + `io.ReadAll` implementation. Every inbound exchange message
+allocated a fresh growable buffer; six independent per-stream ring buffers
+(`ringBufferSize: 16384` each) holding backlogged, not-yet-drained messages
+at profile time meant this added up fast. The `alloc_space` view (total
+allocation volume, not just live) confirmed it as the single largest
+allocator by far: 0.36GB of 2.13GB total (17.05%).
+
+**Fix applied:** `adapter/internal/conn_mgmt.go`'s `ReadMessages` switched
+from `conn.ReadMessage()` to `conn.NextReader()` + a `sync.Pool`-backed
+scratch buffer (`adapter/internal/buffer_pool.go`), sized to the typical
+tick/depth JSON payload (1024B) so the common case needs zero growth. The
+buffer is returned to the pool from `PublishToKafkaLoop` immediately after
+`normalizer.Normalize()` consumes it — verified safe because `Normalize`
+(`adapter/feeds/utils.go`) never aliases its input: `string(raw[...])`
+copies (Go's `[]byte`→`string` conversion always copies), and the
+`normalized` output is built via `make` + `append` into an independent
+backing array. No coordination with Kafka's async produce callback needed,
+since the pooled buffer never travels past `Normalize()`.
+
+**Reconciled number:** adapter's live heap dropped from **60.43MB to
+6.8MB** (89%/54MB reduction) with the same live-traffic conditions. `io.ReadAll`
+no longer appears anywhere in the post-fix profile; the remaining heap is
+entirely one-time/library-owned (Kafka producer compression buffers, ring
+buffer's one-time startup allocation, TLS handshake/cert setup, the
+`/metrics` endpoint's own response).
+
+**Known follow-ups (not fixed, out of scope for this pass):**
+- `feeds/utils.Normalize`'s output buffer (`out := make([]byte, 0, ...)`)
+  is a separate, real allocation site — 10.79% of adapter's total
+  `alloc_space` volume. Unlike the buffer above, this one genuinely outlives
+  the synchronous call chain (it's what `kafka.ProduceAsync` hands to
+  `client.Produce()`, held until the async ack), so pooling it needs
+  return-from-produce-callback coordination, not the simpler synchronous
+  return used above.
+- `orderbook`'s Redis client (`min_idle_conns: 100`) accounts for ~10MB
+  (56.62% of a small 17.7MB heap) in eagerly-held idle connections plus
+  their buffered readers/writers — for a usage pattern (periodic snapshot
+  writes every 20s) that doesn't need anywhere near 100 idle connections.
+  Config tune, not a code change.
+
+## Task F — final end-to-end latency, ingest to Postgres commit (RESOLVED, 2026-10-16)
+
+Measured on the same AWS stack as Task D (EKS, MSK Serverless, RDS, ElastiCache), mock exchanges, ramp 500 → 10,000/s
+offered. Supersedes the 7.1-7.4 s figure above. Full write-up: `docs/aws_loadtest_metrics/RESULTS.md`.
+
+**Definition:** `persistence_ingest_to_insert_seconds`: the adapter stamps the time it reads each message off the exchange
+websocket (before the ring buffer) into a Kafka header; the normalizer copies it, aggregator and orderbook emit the newest
+one since their last flush, and persistence observes it after the Postgres transaction commits. It is the age of the newest
+data a row reflects when the row becomes visible, not the delay of every individual tick.
+
+**Result (steady state):** tick aggregates p50 47 ms, **p95 ~85 ms** (per-level 67-100 ms), p99 ~120-135 ms. Orderbook
+flushes p50 ~150 ms, p95 ~0.3 s (dominated by the orderbook's 250 ms ordering window). 92% of tick rows visible within
+75 ms, 98% within 100 ms, 100% within 200 ms.
+
+**What changed to get there:** Kafka transactions replaced by at-least-once delivery with source-offset dedupe
+(normalizer commits behind acked outputs; aggregator checkpoints window state + applied source offsets in one record per
+symbol); persistence batcher flushes `max_wait_ms` (10 ms) after a batch's first row instead of on a ticker. The ticker
+version flushed every other tick (0.5 flushes/s at a 1 s setting), so rows waited 0-2 s and p95 read ~2 s; that was the
+batcher, not Postgres (flush p50 7.7 ms / p95 18 ms for ticks).
+
+**Real broker latency from the pods:** Produce 3.1 ms p50 / 4.8 ms p95, Fetch 3.3 / 10.6, OffsetCommit 3.1 / 5.8,
+Heartbeat 1.7 / 3.7. Not comparable to the Task D figure: different mode and measurement point; transactional mode was not
+re-run on this run's infrastructure.
+
+**Caveats:** one run; ~4.9k msg/s delivered at the top levels because the mock exchanges sleep `1s/rate` per message and
+cap near 800 msg/s per stream (adapter rings stayed empty); first minute of the ramp is a consumer-rejoin transient.

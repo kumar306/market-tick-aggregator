@@ -1,209 +1,219 @@
 File: adapter
-Build ID: ba39653ab9c5c6ce56f6614d0574263b7415fde8
+Build ID: 1ea62cf79b93cd39a87a82f2f9da47278cab9e32
 Type: cpu
-Time: 2026-08-10 00:06:49 IST
-Duration: 30.10s, Total samples = 8.54s (28.37%)
-Showing nodes accounting for 6.45s, 75.53% of 8.54s total
-Dropped 304 nodes (cum <= 0.04s)
+Time: 2026-10-16 12:17:05 IST
+Duration: 30.16s, Total samples = 9.36s (31.03%)
+Showing nodes accounting for 7.02s, 75.00% of 9.36s total
+Dropped 326 nodes (cum <= 0.05s)
       flat  flat%   sum%        cum   cum%
-     0.02s  0.23%  0.23%      3.77s 44.15%  github.com/twmb/franz-go/pkg/kgo.(*broker).handleReq
-         0     0%  0.23%      3.77s 44.15%  github.com/twmb/franz-go/pkg/kgo.(*broker).handleReqs
-     0.01s  0.12%  0.35%      3.63s 42.51%  github.com/twmb/franz-go/pkg/kgo.(*brokerCxn).writeRequest
-     0.01s  0.12%  0.47%      3.44s 40.28%  github.com/twmb/franz-go/pkg/kmsg.(*RequestFormatter).AppendRequest
-     0.02s  0.23%   0.7%      3.43s 40.16%  github.com/twmb/franz-go/pkg/kgo.(*produceRequest).AppendTo
-     0.03s  0.35%  1.05%      3.36s 39.34%  github.com/twmb/franz-go/pkg/kgo.seqRecBatch.appendTo
-     0.03s  0.35%  1.41%      3.29s 38.52%  github.com/twmb/franz-go/pkg/kgo.(*compressor).Compress
-         0     0%  1.41%      2.20s 25.76%  compress/gzip.(*Writer).Reset (inline)
-     0.01s  0.12%  1.52%      2.20s 25.76%  compress/gzip.(*Writer).init
-     0.02s  0.23%  1.76%      2.19s 25.64%  compress/flate.(*Writer).Reset
-     2.01s 23.54% 25.29%      2.01s 23.54%  compress/flate.(*compressor).reset
-         0     0% 25.29%      1.01s 11.83%  compress/flate.(*Writer).Close (inline)
-     0.02s  0.23% 25.53%      1.01s 11.83%  compress/flate.(*compressor).close
-         0     0% 25.53%      1.01s 11.83%  compress/gzip.(*Writer).Close
-         0     0% 25.53%      1.01s 11.83%  runtime.mcall
-     0.07s  0.82% 26.35%      0.99s 11.59%  compress/flate.(*compressor).deflate
-     0.96s 11.24% 37.59%      0.96s 11.24%  internal/runtime/syscall.Syscall6
-     0.06s   0.7% 38.29%      0.91s 10.66%  runtime.schedule
-         0     0% 38.29%      0.89s 10.42%  internal/poll.ignoringEINTRIO (inline)
-         0     0% 38.29%      0.88s 10.30%  syscall.Syscall
-         0     0% 38.29%      0.86s 10.07%  compress/flate.(*compressor).writeBlock
-     0.01s  0.12% 38.41%      0.86s 10.07%  compress/flate.(*huffmanBitWriter).writeBlock
-         0     0% 38.41%      0.85s  9.95%  github.com/twmb/franz-go/pkg/kgo.(*brokerCxn).writeConn.func2
-         0     0% 38.41%      0.80s  9.37%  syscall.RawSyscall6
-         0     0% 38.41%      0.79s  9.25%  runtime.newstack
-         0     0% 38.41%      0.78s  9.13%  crypto/tls.(*Conn).Write
-     0.03s  0.35% 38.76%      0.75s  8.78%  github.com/twmb/franz-go/pkg/kgo.(*brokerCxn).readConn.func2
-     0.02s  0.23% 38.99%      0.74s  8.67%  runtime.copystack
-         0     0% 38.99%      0.74s  8.67%  runtime.findRunnable
-     0.05s  0.59% 39.58%      0.64s  7.49%  compress/flate.(*huffmanBitWriter).indexTokens
-     0.01s  0.12% 39.70%      0.64s  7.49%  crypto/tls.(*Conn).writeRecordLocked
-     0.03s  0.35% 40.05%      0.63s  7.38%  compress/flate.(*huffmanEncoder).generate
-     0.01s  0.12% 40.16%      0.61s  7.14%  io.ReadAtLeast
-         0     0% 40.16%      0.61s  7.14%  io.ReadFull (inline)
-         0     0% 40.16%      0.61s  7.14%  net.(*conn).Read
-     0.01s  0.12% 40.28%      0.61s  7.14%  net.(*netFD).Read
-     0.01s  0.12% 40.40%      0.59s  6.91%  crypto/tls.(*Conn).Read
-     0.03s  0.35% 40.75%      0.59s  6.91%  internal/poll.(*FD).Read
-     0.59s  6.91% 47.66%      0.59s  6.91%  runtime.futex
-     0.03s  0.35% 48.01%      0.58s  6.79%  market-adapter/internal.PublishToKafkaLoop
-         0     0% 48.01%      0.58s  6.79%  runtime.park_m
-         0     0% 48.01%      0.54s  6.32%  syscall.Read (inline)
-     0.01s  0.12% 48.13%      0.54s  6.32%  syscall.read
-         0     0% 48.13%      0.43s  5.04%  runtime.goexit0
-         0     0% 48.13%      0.42s  4.92%  crypto/tls.(*Conn).readRecord (inline)
-     0.01s  0.12% 48.24%      0.42s  4.92%  crypto/tls.(*Conn).readRecordOrCCS
-         0     0% 48.24%      0.42s  4.92%  runtime.systemstack
-         0     0% 48.24%      0.39s  4.57%  market-adapter/internal.ReadMessages
-         0     0% 48.24%      0.38s  4.45%  crypto/tls.(*Conn).write
-     0.01s  0.12% 48.36%      0.38s  4.45%  internal/poll.(*FD).Write
-         0     0% 48.36%      0.38s  4.45%  net.(*conn).Write
-         0     0% 48.36%      0.38s  4.45%  net.(*netFD).Write
-     0.28s  3.28% 51.64%      0.36s  4.22%  compress/flate.(*huffmanEncoder).bitCounts
-     0.06s   0.7% 52.34%      0.36s  4.22%  runtime.adjustframe
-         0     0% 52.34%      0.35s  4.10%  runtime.futexwakeup
-     0.02s  0.23% 52.58%      0.35s  4.10%  runtime.mallocgc
-         0     0% 52.58%      0.35s  4.10%  runtime.notewakeup
-         0     0% 52.58%      0.35s  4.10%  syscall.Write (inline)
-         0     0% 52.58%      0.35s  4.10%  syscall.write
-         0     0% 52.58%      0.34s  3.98%  github.com/gorilla/websocket.(*Conn).NextReader
-     0.01s  0.12% 52.69%      0.34s  3.98%  github.com/gorilla/websocket.(*Conn).advanceFrame
-         0     0% 52.69%      0.34s  3.98%  github.com/twmb/franz-go/pkg/kgo.(*sink).drain
-         0     0% 52.69%      0.33s  3.86%  bufio.(*Reader).Peek
-     0.02s  0.23% 52.93%      0.33s  3.86%  bufio.(*Reader).fill
-         0     0% 52.93%      0.33s  3.86%  github.com/gorilla/websocket.(*Conn).read
-         0     0% 52.93%      0.32s  3.75%  bytes.(*Buffer).ReadFrom
-         0     0% 52.93%      0.32s  3.75%  github.com/twmb/franz-go/pkg/kgo.(*sink).produce
-         0     0% 52.93%      0.31s  3.63%  crypto/tls.(*Conn).readFromUntil
-         0     0% 52.93%      0.30s  3.51%  crypto/tls.(*atLeastReader).Read
-         0     0% 52.93%      0.30s  3.51%  github.com/twmb/franz-go/pkg/kgo.(*brokerCxn).handleResps
-     0.13s  1.52% 54.45%      0.30s  3.51%  runtime.pcvalue
-         0     0% 54.45%      0.30s  3.51%  runtime.startm
-         0     0% 54.45%      0.30s  3.51%  runtime.wakep
-         0     0% 54.45%      0.29s  3.40%  crypto/tls.(*Conn).Handshake (inline)
-         0     0% 54.45%      0.29s  3.40%  crypto/tls.(*Conn).HandshakeContext (inline)
-     0.02s  0.23% 54.68%      0.29s  3.40%  crypto/tls.(*Conn).handshakeContext
-     0.01s  0.12% 54.80%      0.29s  3.40%  github.com/twmb/franz-go/pkg/kgo.(*brokerCxn).handleResp
-     0.02s  0.23% 55.04%      0.28s  3.28%  runtime.(*unwinder).next
-         0     0% 55.04%      0.27s  3.16%  github.com/twmb/franz-go/pkg/kgo.(*sink).handleSeqResps
-         0     0% 55.04%      0.27s  3.16%  runtime.(*_panic).start
-         0     0% 55.04%      0.27s  3.16%  runtime.stopm
-         0     0% 55.04%      0.26s  3.04%  github.com/twmb/franz-go/pkg/kgo.(*sink).produce.func4
-     0.08s  0.94% 55.97%      0.26s  3.04%  runtime.(*unwinder).resolveInternal
-         0     0% 55.97%      0.25s  2.93%  crypto/tls.tls10MAC
-     0.02s  0.23% 56.21%      0.25s  2.93%  github.com/twmb/franz-go/pkg/kgo.(*sink).handleReqResp
-         0     0% 56.21%      0.24s  2.81%  crypto/tls.(*halfConn).encrypt
-         0     0% 56.21%      0.24s  2.81%  runtime.futexsleep
-         0     0% 56.21%      0.24s  2.81%  runtime.mPark (inline)
-     0.03s  0.35% 56.56%      0.24s  2.81%  runtime.newobject
-         0     0% 56.56%      0.24s  2.81%  runtime.notesleep
-         0     0% 56.56%      0.22s  2.58%  market-adapter/kafka.ProduceAsync
-         0     0% 56.56%      0.21s  2.46%  sort.Sort
-     0.01s  0.12% 56.67%      0.21s  2.46%  sort.pdqsort
-         0     0% 56.67%      0.20s  2.34%  github.com/twmb/franz-go/pkg/kgo.(*Client).Produce (inline)
-     0.02s  0.23% 56.91%      0.20s  2.34%  github.com/twmb/franz-go/pkg/kgo.(*Client).produce
-     0.01s  0.12% 57.03%      0.20s  2.34%  runtime.closechan
-         0     0% 57.03%      0.20s  2.34%  runtime.goready (inline)
-     0.01s  0.12% 57.14%      0.20s  2.34%  runtime.netpoll
-     0.01s  0.12% 57.26%      0.20s  2.34%  runtime.ready
-     0.02s  0.23% 57.49%      0.19s  2.22%  github.com/twmb/franz-go/pkg/kgo.(*brokerCxn).readResponse
-     0.01s  0.12% 57.61%      0.18s  2.11%  github.com/twmb/franz-go/pkg/kgo.(*Client).doPartition
-         0     0% 57.61%      0.18s  2.11%  github.com/twmb/franz-go/pkg/kgo.(*Client).loadPartsAndPartition
-     0.04s  0.47% 58.08%      0.18s  2.11%  runtime.(*stkframe).getStackMap
-         0     0% 58.08%      0.18s  2.11%  runtime.funcspdelta (inline)
-     0.13s  1.52% 59.60%      0.18s  2.11%  runtime.step
-         0     0% 59.60%      0.17s  1.99%  compress/flate.(*byFreq).sort (inline)
-         0     0% 59.60%      0.17s  1.99%  crypto/sha1.block
-         0     0% 59.60%      0.17s  1.99%  github.com/twmb/franz-go/pkg/kgo.(*producer).finishPromises
-         0     0% 59.60%      0.17s  1.99%  runtime.closechan.goready.func1
-     0.02s  0.23% 59.84%      0.17s  1.99%  runtime.mallocgcSmallScanNoHeader
-     0.01s  0.12% 59.95%      0.16s  1.87%  crypto/sha1.(*digest).Write
-         0     0% 59.95%      0.16s  1.87%  crypto/tls.(*cthWrapper).Write
-     0.01s  0.12% 60.07%      0.16s  1.87%  github.com/twmb/franz-go/pkg/kgo.(*brokerCxn).writeConn
-         0     0% 60.07%      0.16s  1.87%  internal/runtime/syscall.EpollWait
-         0     0% 60.07%      0.15s  1.76%  crypto/internal/fips140/hmac.(*HMAC).Sum
-     0.01s  0.12% 60.19%      0.15s  1.76%  github.com/twmb/franz-go/pkg/kgo.(*recBuf).bufferRecord
-     0.01s  0.12% 60.30%      0.15s  1.76%  github.com/twmb/franz-go/pkg/kgo.(*sink).createReq
-         0     0% 60.30%      0.15s  1.76%  market-adapter/feeds/kraken.(*KrakenNormalizer).Normalize
-     0.14s  1.64% 61.94%      0.14s  1.64%  crypto/sha1.blockGeneric
-         0     0% 61.94%      0.14s  1.64%  github.com/twmb/franz-go/pkg/kgo.(*Client).finishRecordPromise
-         0     0% 61.94%      0.14s  1.64%  market-adapter/feeds/kraken.shouldSkipControlMessage
-         0     0% 61.94%      0.14s  1.64%  market-adapter/kafka.ProduceAsync.func1
-     0.09s  1.05% 63.00%      0.14s  1.64%  sort.insertionSort
-         0     0% 63.00%      0.13s  1.52%  encoding/json.Unmarshal
-     0.01s  0.12% 63.11%      0.13s  1.52%  github.com/prometheus/client_golang/prometheus.(*MetricVec).GetMetricWithLabelValues
-         0     0% 63.11%      0.13s  1.52%  runtime.(*timers).check
-     0.08s  0.94% 64.05%      0.13s  1.52%  runtime.selectgo
-         0     0% 64.05%      0.12s  1.41%  github.com/twmb/franz-go/pkg/kgo.(*sink).doSequenced
-     0.12s  1.41% 65.46%      0.12s  1.41%  runtime.memmove
-         0     0% 65.46%      0.12s  1.41%  runtime.newproc
-         0     0% 65.46%      0.12s  1.41%  runtime.newproc.func1
-         0     0% 65.46%      0.12s  1.41%  runtime.pcdatavalue
-         0     0% 65.46%      0.11s  1.29%  github.com/prometheus/client_golang/prometheus.(*CounterVec).GetMetricWithLabelValues (inline)
-         0     0% 65.46%      0.11s  1.29%  github.com/prometheus/client_golang/prometheus.(*CounterVec).WithLabelValues
-         0     0% 65.46%      0.11s  1.29%  github.com/prometheus/client_golang/prometheus.(*metricMap).getMetricWithHashAndLabelValues
-         0     0% 65.46%      0.11s  1.29%  github.com/prometheus/client_golang/prometheus.(*metricMap).getOrCreateMetricWithLabelValues
-     0.11s  1.29% 66.74%      0.11s  1.29%  runtime.nextFreeFast (inline)
-     0.01s  0.12% 66.86%      0.10s  1.17%  crypto/tls.(*halfConn).decrypt
-         0     0% 66.86%      0.10s  1.17%  internal/runtime/maps.(*Map).Delete
-     0.01s  0.12% 66.98%      0.10s  1.17%  internal/runtime/maps.(*Map).deleteSmall
-         0     0% 66.98%      0.10s  1.17%  runtime.isSystemGoroutine
-         0     0% 66.98%      0.09s  1.05%  github.com/twmb/franz-go/pkg/kgo.(*brokerCxn).readConn
-         0     0% 66.98%      0.09s  1.05%  internal/runtime/maps.typedmemclr
-         0     0% 66.98%      0.09s  1.05%  runtime.mapdelete_fast32
-         0     0% 66.98%      0.09s  1.05%  runtime.resetspinning
-         0     0% 66.98%      0.08s  0.94%  crypto/internal/fips140/hmac.(*HMAC).Write
-     0.02s  0.23% 67.21%      0.08s  0.94%  encoding/json.(*decodeState).object
-         0     0% 67.21%      0.08s  0.94%  encoding/json.(*decodeState).unmarshal
-         0     0% 67.21%      0.08s  0.94%  encoding/json.(*decodeState).value
-         0     0% 67.21%      0.08s  0.94%  github.com/twmb/franz-go/pkg/kgo.(*broker).loadConnection
-         0     0% 67.21%      0.08s  0.94%  github.com/twmb/franz-go/pkg/kgo.(*brokerCxn).isIdleTimeout
-         0     0% 67.21%      0.08s  0.94%  runtime.(*moduledata).funcName
-         0     0% 67.21%      0.08s  0.94%  runtime.(*timers).run
-     0.07s  0.82% 68.03%      0.08s  0.94%  runtime.adjustpointers
-     0.02s  0.23% 68.27%      0.08s  0.94%  runtime.findnull
-         0     0% 68.27%      0.08s  0.94%  runtime.funcname (inline)
-         0     0% 68.27%      0.08s  0.94%  runtime.gdestroy
-         0     0% 68.27%      0.08s  0.94%  runtime.gostringnocopy (inline)
-     0.01s  0.12% 68.38%      0.08s  0.94%  runtime.newproc1
-     0.01s  0.12% 68.50%      0.07s  0.82%  compress/flate.(*huffmanEncoder).assignEncodingAndSize
-         0     0% 68.50%      0.07s  0.82%  crypto/sha1.(*digest).ConstantTimeSum
-         0     0% 68.50%      0.07s  0.82%  crypto/tls.(*cthWrapper).Sum
-         0     0% 68.50%      0.07s  0.82%  runtime.(*timer).unlockAndRun
-         0     0% 68.50%      0.07s  0.82%  runtime.entersyscall
-     0.01s  0.12% 68.62%      0.07s  0.82%  runtime.mallocgcSmallNoscan
-     0.07s  0.82% 69.44%      0.07s  0.82%  runtime.nanotime (inline)
-     0.06s   0.7% 70.14%      0.06s   0.7%  compress/flate.byFreq.Less
-     0.04s  0.47% 70.61%      0.06s   0.7%  crypto/sha1.(*digest).constSum
-         0     0% 70.61%      0.06s   0.7%  github.com/twmb/franz-go/pkg/kgo.(*broker).do
-         0     0% 70.61%      0.06s   0.7%  github.com/twmb/franz-go/pkg/kgo.(*produceRequest).tryAddBatch
-     0.01s  0.12% 70.73%      0.06s   0.7%  github.com/twmb/franz-go/pkg/kgo.(*sink).handleReqRespBatch
-     0.01s  0.12% 70.84%      0.06s   0.7%  github.com/twmb/franz-go/pkg/kmsg.(*ProduceResponse).ReadFrom
-     0.01s  0.12% 70.96%      0.06s   0.7%  internal/poll.setDeadlineImpl
-         0     0% 70.96%      0.06s   0.7%  internal/runtime/maps.(*Map).growToSmall
-         0     0% 70.96%      0.06s   0.7%  internal/runtime/maps.newGroups (inline)
-         0     0% 70.96%      0.06s   0.7%  internal/runtime/maps.newarray
-     0.02s  0.23% 71.19%      0.06s   0.7%  runtime.chanrecv
-         0     0% 71.19%      0.06s   0.7%  runtime.newarray
-         0     0% 71.19%      0.06s   0.7%  runtime.reentersyscall
-     0.04s  0.47% 71.66%      0.05s  0.59%  compress/flate.(*compressor).findMatch
-     0.05s  0.59% 72.25%      0.05s  0.59%  compress/flate.(*huffmanEncoder).bitLength (inline)
-         0     0% 72.25%      0.05s  0.59%  github.com/twmb/franz-go/pkg/kgo.(*Client).finishBatch
-     0.02s  0.23% 72.48%      0.05s  0.59%  github.com/twmb/franz-go/pkg/kgo.(*producer).promiseBatch
-         0     0% 72.48%      0.05s  0.59%  github.com/twmb/franz-go/pkg/kgo.(*recBuf).maybeTriggerDrain
-     0.01s  0.12% 72.60%      0.05s  0.59%  github.com/twmb/franz-go/pkg/kgo.(*sink).maybeDrain
-     0.01s  0.12% 72.72%      0.05s  0.59%  github.com/twmb/franz-go/pkg/kmsg.(*ProduceResponse).readFrom
-     0.05s  0.59% 73.30%      0.05s  0.59%  indexbytebody
-         0     0% 73.30%      0.05s  0.59%  market-adapter/feeds/utils.Normalize
-         0     0% 73.30%      0.05s  0.59%  runtime.(*mcache).nextFree
-     0.02s  0.23% 73.54%      0.05s  0.59%  runtime.(*unwinder).initAt
-         0     0% 73.54%      0.05s  0.59%  runtime.entersyscall_sysmon
-     0.04s  0.47% 74.00%      0.05s  0.59%  runtime.findfunc
-         0     0% 74.00%      0.05s  0.59%  runtime.funcMaxSPDelta
-         0     0% 74.00%      0.05s  0.59%  runtime.gcBgMarkWorker
-         0     0% 74.00%      0.05s  0.59%  runtime.gcBgMarkWorker.func2
-         0     0% 74.00%      0.05s  0.59%  runtime.lock (inline)
-     0.04s  0.47% 74.47%      0.05s  0.59%  runtime.lock2
-         0     0% 74.47%      0.05s  0.59%  runtime.lockWithRank (inline)
-     0.05s  0.59% 75.06%      0.05s  0.59%  runtime.readvarint (inline)
-     0.02s  0.23% 75.29%      0.05s  0.59%  runtime.stealWork
-     0.02s  0.23% 75.53%      0.05s  0.59%  sort.partition
+         0     0%     0%      4.27s 45.62%  github.com/twmb/franz-go/pkg/kgo.(*broker).handleReqs
+         0     0%     0%      4.26s 45.51%  github.com/twmb/franz-go/pkg/kgo.(*broker).handleReq
+     0.02s  0.21%  0.21%      4.15s 44.34%  github.com/twmb/franz-go/pkg/kgo.(*brokerCxn).writeRequest
+         0     0%  0.21%      3.90s 41.67%  github.com/twmb/franz-go/pkg/kgo.(*produceRequest).AppendTo
+         0     0%  0.21%      3.90s 41.67%  github.com/twmb/franz-go/pkg/kmsg.(*RequestFormatter).AppendRequest
+     0.03s  0.32%  0.53%      3.86s 41.24%  github.com/twmb/franz-go/pkg/kgo.seqRecBatch.appendTo
+     0.03s  0.32%  0.85%      3.82s 40.81%  github.com/twmb/franz-go/pkg/kgo.(*compressor).Compress
+     0.25s  2.67%  3.53%      2.05s 21.90%  compress/flate.(*compressor).deflate
+         0     0%  3.53%      2.04s 21.79%  compress/flate.(*Writer).Close (inline)
+         0     0%  3.53%      2.04s 21.79%  compress/flate.(*compressor).close
+         0     0%  3.53%      2.04s 21.79%  compress/gzip.(*Writer).Close
+         0     0%  3.53%      1.69s 18.06%  compress/gzip.(*Writer).Reset (inline)
+     0.01s  0.11%  3.63%      1.69s 18.06%  compress/gzip.(*Writer).init
+         0     0%  3.63%      1.67s 17.84%  compress/flate.(*Writer).Reset
+         0     0%  3.63%      1.54s 16.45%  compress/flate.(*compressor).writeBlock
+     0.01s  0.11%  3.74%      1.54s 16.45%  compress/flate.(*huffmanBitWriter).writeBlock
+     1.51s 16.13% 19.87%      1.52s 16.24%  compress/flate.(*compressor).reset
+     1.30s 13.89% 33.76%      1.30s 13.89%  internal/runtime/syscall.Syscall6
+         0     0% 33.76%      1.15s 12.29%  internal/poll.ignoringEINTRIO (inline)
+     0.01s  0.11% 33.87%      1.14s 12.18%  syscall.Syscall
+         0     0% 33.87%      1.11s 11.86%  market-adapter/internal.PublishToKafkaLoop
+     0.07s  0.75% 34.62%      1.10s 11.75%  compress/flate.(*huffmanEncoder).generate
+     0.02s  0.21% 34.83%      1.07s 11.43%  market-adapter/internal.ReadMessages
+     0.04s  0.43% 35.26%      1.05s 11.22%  compress/flate.(*huffmanBitWriter).indexTokens
+         0     0% 35.26%      1.03s 11.00%  syscall.RawSyscall6
+     0.01s  0.11% 35.36%      0.83s  8.87%  github.com/gorilla/websocket.(*Conn).NextReader
+     0.02s  0.21% 35.58%      0.81s  8.65%  net.(*conn).Read
+     0.02s  0.21% 35.79%      0.79s  8.44%  github.com/gorilla/websocket.(*Conn).advanceFrame
+     0.01s  0.11% 35.90%      0.79s  8.44%  net.(*netFD).Read
+     0.02s  0.21% 36.11%      0.78s  8.33%  internal/poll.(*FD).Read
+     0.01s  0.11% 36.22%      0.78s  8.33%  runtime.mcall
+     0.03s  0.32% 36.54%      0.77s  8.23%  github.com/gorilla/websocket.(*Conn).read
+         0     0% 36.54%      0.74s  7.91%  bufio.(*Reader).Peek
+     0.01s  0.11% 36.65%      0.74s  7.91%  bufio.(*Reader).fill
+         0     0% 36.65%      0.74s  7.91%  github.com/twmb/franz-go/pkg/kgo.(*brokerCxn).writeConn.func2
+         0     0% 36.65%      0.72s  7.69%  crypto/tls.(*Conn).Write
+         0     0% 36.65%      0.72s  7.69%  syscall.Read (inline)
+         0     0% 36.65%      0.72s  7.69%  syscall.read
+         0     0% 36.65%      0.69s  7.37%  crypto/tls.(*Conn).writeRecordLocked
+     0.01s  0.11% 36.75%      0.69s  7.37%  runtime.schedule
+     0.01s  0.11% 36.86%      0.65s  6.94%  runtime.findRunnable
+     0.46s  4.91% 41.77%      0.57s  6.09%  compress/flate.(*huffmanEncoder).bitCounts
+     0.01s  0.11% 41.88%      0.56s  5.98%  runtime.park_m
+     0.02s  0.21% 42.09%      0.48s  5.13%  runtime.mallocgc
+         0     0% 42.09%      0.47s  5.02%  market-adapter/feeds/kraken.(*KrakenNormalizer).Normalize
+         0     0% 42.09%      0.45s  4.81%  runtime.newstack
+         0     0% 42.09%      0.45s  4.81%  runtime.systemstack
+         0     0% 42.09%      0.42s  4.49%  crypto/tls.(*Conn).write
+         0     0% 42.09%      0.42s  4.49%  internal/poll.(*FD).Write
+         0     0% 42.09%      0.42s  4.49%  net.(*conn).Write
+         0     0% 42.09%      0.42s  4.49%  net.(*netFD).Write
+         0     0% 42.09%      0.42s  4.49%  sort.Sort
+     0.01s  0.11% 42.20%      0.42s  4.49%  sort.pdqsort
+         0     0% 42.20%      0.42s  4.49%  syscall.Write (inline)
+         0     0% 42.20%      0.42s  4.49%  syscall.write
+         0     0% 42.20%      0.41s  4.38%  github.com/twmb/franz-go/pkg/kgo.(*brokerCxn).readConn.func2
+         0     0% 42.20%      0.41s  4.38%  market-adapter/feeds/kraken.shouldSkipControlMessage
+         0     0% 42.20%      0.40s  4.27%  encoding/json.Unmarshal
+         0     0% 42.20%      0.38s  4.06%  runtime.copystack
+         0     0% 42.20%      0.37s  3.95%  market-adapter/kafka.ProduceAsync
+         0     0% 42.20%      0.35s  3.74%  io.ReadAtLeast
+         0     0% 42.20%      0.35s  3.74%  io.ReadFull (inline)
+         0     0% 42.20%      0.34s  3.63%  crypto/tls.(*Conn).Read
+     0.01s  0.11% 42.31%      0.34s  3.63%  runtime.netpoll
+         0     0% 42.31%      0.33s  3.53%  encoding/json.(*decodeState).unmarshal
+     0.01s  0.11% 42.41%      0.31s  3.31%  encoding/json.(*decodeState).object
+         0     0% 42.41%      0.31s  3.31%  encoding/json.(*decodeState).value
+         0     0% 42.41%      0.30s  3.21%  github.com/twmb/franz-go/pkg/kgo.(*Client).Produce (inline)
+     0.04s  0.43% 42.84%      0.30s  3.21%  github.com/twmb/franz-go/pkg/kgo.(*Client).produce
+         0     0% 42.84%      0.29s  3.10%  compress/flate.(*byFreq).sort (inline)
+     0.29s  3.10% 45.94%      0.29s  3.10%  runtime.futex
+     0.01s  0.11% 46.05%      0.28s  2.99%  internal/runtime/syscall.EpollWait
+         0     0% 46.05%      0.27s  2.88%  crypto/tls.tls10MAC
+         0     0% 46.05%      0.26s  2.78%  github.com/twmb/franz-go/pkg/kgo.(*Client).loadPartsAndPartition
+         0     0% 46.05%      0.25s  2.67%  crypto/tls.(*halfConn).encrypt
+         0     0% 46.05%      0.24s  2.56%  crypto/tls.(*Conn).readRecord (inline)
+         0     0% 46.05%      0.24s  2.56%  crypto/tls.(*Conn).readRecordOrCCS
+     0.01s  0.11% 46.15%      0.24s  2.56%  github.com/twmb/franz-go/pkg/kgo.(*brokerCxn).handleResps
+     0.03s  0.32% 46.47%      0.24s  2.56%  runtime.newobject
+     0.19s  2.03% 48.50%      0.23s  2.46%  compress/flate.(*compressor).findMatch
+     0.04s  0.43% 48.93%      0.23s  2.46%  github.com/twmb/franz-go/pkg/kgo.(*Client).doPartition
+     0.04s  0.43% 49.36%      0.23s  2.46%  runtime.mallocgcSmallScanNoHeader
+     0.01s  0.11% 49.47%      0.22s  2.35%  github.com/twmb/franz-go/pkg/kgo.(*brokerCxn).handleResp
+         0     0% 49.47%      0.22s  2.35%  github.com/twmb/franz-go/pkg/kgo.(*sink).handleSeqResps
+     0.01s  0.11% 49.57%      0.21s  2.24%  github.com/twmb/franz-go/pkg/kgo.(*brokerCxn).writeConn
+     0.08s  0.85% 50.43%      0.21s  2.24%  runtime.pcvalue
+     0.01s  0.11% 50.53%      0.20s  2.14%  github.com/prometheus/client_golang/prometheus.(*MetricVec).GetMetricWithLabelValues
+         0     0% 50.53%      0.20s  2.14%  github.com/twmb/franz-go/pkg/kgo.(*sink).produce.func4
+         0     0% 50.53%      0.20s  2.14%  runtime.goexit0
+     0.02s  0.21% 50.75%      0.19s  2.03%  runtime.adjustframe
+     0.19s  2.03% 52.78%      0.19s  2.03%  runtime.memmove
+     0.01s  0.11% 52.88%      0.18s  1.92%  github.com/twmb/franz-go/pkg/kgo.(*sink).handleReqResp
+     0.01s  0.11% 52.99%      0.18s  1.92%  runtime.futexwakeup
+         0     0% 52.99%      0.18s  1.92%  runtime.notewakeup
+     0.15s  1.60% 54.59%      0.18s  1.92%  sort.insertionSort
+     0.02s  0.21% 54.81%      0.17s  1.82%  compress/flate.(*huffmanEncoder).assignEncodingAndSize
+         0     0% 54.81%      0.17s  1.82%  github.com/twmb/franz-go/pkg/kgo.(*producer).finishPromises
+     0.16s  1.71% 56.52%      0.17s  1.82%  sort.partition
+     0.01s  0.11% 56.62%      0.16s  1.71%  bytes.(*Buffer).ReadFrom
+         0     0% 56.62%      0.16s  1.71%  crypto/sha1.block
+         0     0% 56.62%      0.16s  1.71%  github.com/twmb/franz-go/pkg/kgo.(*sink).drain
+         0     0% 56.62%      0.16s  1.71%  github.com/twmb/franz-go/pkg/kgo.(*sink).produce
+         0     0% 56.62%      0.16s  1.71%  runtime.(*unwinder).next
+         0     0% 56.62%      0.16s  1.71%  runtime.startm
+     0.15s  1.60% 58.23%      0.15s  1.60%  compress/flate.(*huffmanBitWriter).generateCodegen
+         0     0% 58.23%      0.15s  1.60%  crypto/internal/fips140/hmac.(*HMAC).Sum
+     0.01s  0.11% 58.33%      0.15s  1.60%  github.com/twmb/franz-go/pkg/kgo.(*Client).finishRecordPromise
+     0.01s  0.11% 58.44%      0.15s  1.60%  github.com/twmb/franz-go/pkg/kgo.(*recBuf).bufferRecord
+     0.05s  0.53% 58.97%      0.15s  1.60%  runtime.(*unwinder).resolveInternal
+         0     0% 58.97%      0.15s  1.60%  runtime.gcBgMarkWorker
+     0.03s  0.32% 59.29%      0.15s  1.60%  runtime.scanobject
+         0     0% 59.29%      0.15s  1.60%  runtime.wakep
+     0.01s  0.11% 59.40%      0.14s  1.50%  crypto/tls.(*halfConn).decrypt
+     0.02s  0.21% 59.62%      0.14s  1.50%  github.com/twmb/franz-go/pkg/kgo.(*brokerCxn).readConn
+         0     0% 59.62%      0.14s  1.50%  github.com/twmb/franz-go/pkg/kgo.(*brokerCxn).readResponse
+         0     0% 59.62%      0.14s  1.50%  market-adapter/feeds/utils.Normalize
+     0.01s  0.11% 59.72%      0.14s  1.50%  market-adapter/ring.(*SpscDropOldestRing[go.shape.struct { Data []uint8; ReadAtMs int64 }]).updateLenMetric
+     0.03s  0.32% 60.04%      0.14s  1.50%  runtime.(*stkframe).getStackMap
+         0     0% 60.04%      0.14s  1.50%  runtime.gcBgMarkWorker.func2
+         0     0% 60.04%      0.14s  1.50%  runtime.gcDrain
+         0     0% 60.04%      0.14s  1.50%  runtime.stopm
+         0     0% 60.04%      0.13s  1.39%  compress/flate.(*byLiteral).sort (inline)
+     0.01s  0.11% 60.15%      0.13s  1.39%  crypto/sha1.(*digest).Write
+     0.13s  1.39% 61.54%      0.13s  1.39%  crypto/sha1.blockGeneric
+         0     0% 61.54%      0.13s  1.39%  crypto/tls.(*cthWrapper).Write
+         0     0% 61.54%      0.13s  1.39%  runtime.newproc
+         0     0% 61.54%      0.13s  1.39%  runtime.newproc.func1
+     0.08s  0.85% 62.39%      0.12s  1.28%  compress/flate.(*huffmanBitWriter).writeTokens
+         0     0% 62.39%      0.12s  1.28%  crypto/tls.(*Conn).Handshake (inline)
+         0     0% 62.39%      0.12s  1.28%  crypto/tls.(*Conn).HandshakeContext (inline)
+         0     0% 62.39%      0.12s  1.28%  crypto/tls.(*Conn).handshakeContext
+     0.02s  0.21% 62.61%      0.12s  1.28%  github.com/prometheus/client_golang/prometheus.(*GaugeVec).GetMetricWithLabelValues (inline)
+         0     0% 62.61%      0.12s  1.28%  github.com/prometheus/client_golang/prometheus.(*GaugeVec).WithLabelValues
+     0.01s  0.11% 62.71%      0.12s  1.28%  github.com/prometheus/client_golang/prometheus.(*metricMap).getOrCreateMetricWithLabelValues
+         0     0% 62.71%      0.12s  1.28%  market-adapter/kafka.ProduceAsync.func1
+         0     0% 62.71%      0.12s  1.28%  runtime.(*_panic).start
+         0     0% 62.71%      0.12s  1.28%  runtime.futexsleep
+         0     0% 62.71%      0.12s  1.28%  runtime.gcDrainMarkWorkerFractional (inline)
+         0     0% 62.71%      0.12s  1.28%  runtime.mPark (inline)
+         0     0% 62.71%      0.12s  1.28%  runtime.notesleep
+     0.12s  1.28% 64.00%      0.12s  1.28%  runtime.step
+         0     0% 64.00%      0.11s  1.18%  crypto/sha1.(*digest).ConstantTimeSum
+         0     0% 64.00%      0.11s  1.18%  crypto/tls.(*cthWrapper).Sum
+     0.01s  0.11% 64.10%      0.11s  1.18%  github.com/prometheus/client_golang/prometheus.(*CounterVec).GetMetricWithLabelValues (inline)
+         0     0% 64.10%      0.11s  1.18%  github.com/prometheus/client_golang/prometheus.(*CounterVec).WithLabelValues
+     0.01s  0.11% 64.21%      0.11s  1.18%  github.com/prometheus/client_golang/prometheus.(*metricMap).getMetricWithHashAndLabelValues
+         0     0% 64.21%      0.11s  1.18%  runtime.pcdatavalue
+         0     0% 64.21%      0.10s  1.07%  crypto/tls.(*Conn).readFromUntil
+     0.01s  0.11% 64.32%      0.10s  1.07%  crypto/tls.(*atLeastReader).Read
+         0     0% 64.32%      0.10s  1.07%  github.com/twmb/franz-go/pkg/kgo.(*sink).createReq
+     0.01s  0.11% 64.42%      0.10s  1.07%  market-adapter/ring.(*SpscDropOldestRing[go.shape.struct { Data []uint8; ReadAtMs int64 }]).Pop
+     0.05s  0.53% 64.96%      0.10s  1.07%  market-adapter/ring.(*SpscDropOldestRing[go.shape.struct { Data []uint8; ReadAtMs int64 }]).Push
+         0     0% 64.96%      0.10s  1.07%  runtime.funcspdelta (inline)
+     0.10s  1.07% 66.03%      0.10s  1.07%  runtime.nextFreeFast (inline)
+     0.05s  0.53% 66.56%      0.09s  0.96%  crypto/sha1.(*digest).constSum
+         0     0% 66.56%      0.09s  0.96%  runtime.growslice
+         0     0% 66.56%      0.09s  0.96%  runtime.mallocgcSmallNoscan
+     0.02s  0.21% 66.77%      0.09s  0.96%  runtime.selectgo
+     0.03s  0.32% 67.09%      0.08s  0.85%  crypto/internal/fips140/hmac.(*HMAC).Reset
+         0     0% 67.09%      0.08s  0.85%  encoding/json.(*decodeState).array
+     0.05s  0.53% 67.63%      0.08s  0.85%  encoding/json.(*decodeState).skip
+         0     0% 67.63%      0.08s  0.85%  internal/runtime/maps.(*Map).growToSmall
+         0     0% 67.63%      0.08s  0.85%  internal/runtime/maps.newGroups (inline)
+         0     0% 67.63%      0.08s  0.85%  internal/runtime/maps.newarray
+         0     0% 67.63%      0.08s  0.85%  runtime.closechan
+         0     0% 67.63%      0.08s  0.85%  runtime.goready (inline)
+     0.02s  0.21% 67.84%      0.08s  0.85%  runtime.newarray
+         0     0% 67.84%      0.08s  0.85%  runtime.ready
+     0.02s  0.21% 68.06%      0.07s  0.75%  crypto/tls.(*Conn).SetWriteDeadline
+         0     0% 68.06%      0.07s  0.75%  runtime.closechan.goready.func1
+     0.01s  0.11% 68.16%      0.07s  0.75%  runtime.makeslice
+     0.03s  0.32% 68.48%      0.07s  0.75%  runtime.mallocgcTiny
+     0.06s  0.64% 69.12%      0.06s  0.64%  compress/flate.(*huffmanEncoder).bitLength (inline)
+         0     0% 69.12%      0.06s  0.64%  encoding/json.(*decodeState).literalStore
+     0.03s  0.32% 69.44%      0.06s  0.64%  encoding/json.checkValid
+     0.02s  0.21% 69.66%      0.06s  0.64%  github.com/twmb/franz-go/pkg/kgo.(*broker).loadConnection
+     0.01s  0.11% 69.76%      0.06s  0.64%  github.com/twmb/franz-go/pkg/kgo.(*produceRequest).tryAddBatch
+         0     0% 69.76%      0.06s  0.64%  internal/poll.setDeadlineImpl
+         0     0% 69.76%      0.06s  0.64%  reflect.New
+         0     0% 69.76%      0.06s  0.64%  runtime.(*mcache).nextFree
+         0     0% 69.76%      0.06s  0.64%  runtime.entersyscall
+     0.05s  0.53% 70.30%      0.06s  0.64%  runtime.findfunc
+     0.02s  0.21% 70.51%      0.06s  0.64%  runtime.mapassign_faststr
+     0.06s  0.64% 71.15%      0.06s  0.64%  runtime.memclrNoHeapPointers
+     0.06s  0.64% 71.79%      0.06s  0.64%  runtime.typePointers.next
+         0     0% 71.79%      0.06s  0.64%  runtime.unlock (inline)
+     0.06s  0.64% 72.44%      0.06s  0.64%  runtime.unlock2
+         0     0% 72.44%      0.06s  0.64%  runtime.unlockWithRank (inline)
+     0.01s  0.11% 72.54%      0.06s  0.64%  time.Now
+         0     0% 72.54%      0.05s  0.53%  compress/gzip.(*Writer).Write
+         0     0% 72.54%      0.05s  0.53%  crypto/internal/fips140/aes.(*CBCEncrypter).CryptBlocks
+         0     0% 72.54%      0.05s  0.53%  crypto/internal/fips140/aes.cryptBlocksEnc (inline)
+     0.02s  0.21% 72.76%      0.05s  0.53%  crypto/internal/fips140/aes.cryptBlocksEncGeneric
+     0.03s  0.32% 73.08%      0.05s  0.53%  encoding/json.indirect
+         0     0% 73.08%      0.05s  0.53%  github.com/prometheus/client_golang/prometheus.(*MetricVec).hashLabelValues
+     0.01s  0.11% 73.18%      0.05s  0.53%  github.com/twmb/franz-go/pkg/kgo.(*seqRecBatches).addBatch (inline)
+         0     0% 73.18%      0.05s  0.53%  github.com/twmb/franz-go/pkg/kmsg.(*ProduceResponse).ReadFrom
+     0.02s  0.21% 73.40%      0.05s  0.53%  github.com/twmb/franz-go/pkg/kmsg.(*ProduceResponse).readFrom
+         0     0% 73.40%      0.05s  0.53%  internal/poll.runtime_pollSetDeadline
+     0.01s  0.11% 73.50%      0.05s  0.53%  internal/runtime/maps.(*Map).Delete
+         0     0% 73.50%      0.05s  0.53%  market-adapter/feeds/coinbase.(*CBNormalizer).Normalize
+     0.01s  0.11% 73.61%      0.05s  0.53%  net.(*conn).SetWriteDeadline
+         0     0% 73.61%      0.05s  0.53%  runtime.(*mcache).refill
+         0     0% 73.61%      0.05s  0.53%  runtime.(*timers).check
+     0.03s  0.32% 73.93%      0.05s  0.53%  runtime.findObject
+     0.01s  0.11% 74.04%      0.05s  0.53%  runtime.mapdelete_fast32
+         0     0% 74.04%      0.05s  0.53%  runtime.newproc1
+     0.02s  0.21% 74.25%      0.05s  0.53%  runtime.reentersyscall
+         0     0% 74.25%      0.05s  0.53%  sort.choosePivot
+     0.02s  0.21% 74.47%      0.05s  0.53%  sort.median
+     0.05s  0.53% 75.00%      0.05s  0.53%  time.runtimeNow

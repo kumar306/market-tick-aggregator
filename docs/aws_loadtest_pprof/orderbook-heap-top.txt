@@ -1,61 +1,74 @@
 File: orderbook
-Build ID: c39e2b7ce54101e8a956d32531ff33d5871ebc08
+Build ID: d599b547695297cb9e6dd18878f39932531abd81
 Type: inuse_space
-Time: 2026-08-10 00:08:05 IST
-Showing nodes accounting for 17724.68kB, 100% of 17724.68kB total
+Time: 2026-10-16 12:18:54 IST
+Showing nodes accounting for 29479.44kB, 100% of 29479.44kB total
       flat  flat%   sum%        cum   cum%
-         0     0%     0% 10035.17kB 56.62%  github.com/redis/go-redis/v9/internal/pool.(*ConnPool).addIdleConn
-         0     0%     0% 10035.17kB 56.62%  github.com/redis/go-redis/v9/internal/pool.(*ConnPool).checkMinIdleConns.func1
-         0     0%     0% 10035.17kB 56.62%  github.com/redis/go-redis/v9/internal/pool.(*ConnPool).dialConn
-         0     0%     0% 10035.17kB 56.62%  github.com/redis/go-redis/v9/internal/pool.NewConnWithBufferSize
- 5809.83kB 32.78% 32.78%  5809.83kB 32.78%  bufio.NewWriterSize (inline)
- 4225.33kB 23.84% 56.62%  4225.33kB 23.84%  bufio.NewReaderSize (inline)
-         0     0% 56.62%  4225.33kB 23.84%  github.com/redis/go-redis/v9/internal/proto.NewReaderSize (inline)
-         0     0% 56.62%  4096.19kB 23.11%  market-orderbook/book.(*TreeBookSide).Upsert
-         0     0% 56.62%  4096.19kB 23.11%  market-orderbook/dispatcher.startWorker
- 4096.19kB 23.11% 79.73%  4096.19kB 23.11%  market-orderbook/orderedtree/skiplist.(*SkipList).Insert
-         0     0% 79.73%  4096.19kB 23.11%  market-orderbook/worker.(*Worker).ProcessBookUpdate
-         0     0% 79.73%  4096.19kB 23.11%  market-orderbook/worker.(*Worker).Run
-         0     0% 79.73%  1537.75kB  8.68%  crypto/tls.(*Conn).HandshakeContext (inline)
-         0     0% 79.73%  1537.75kB  8.68%  crypto/tls.(*Conn).clientHandshake
-         0     0% 79.73%  1537.75kB  8.68%  crypto/tls.(*Conn).handshakeContext
-         0     0% 79.73%  1537.75kB  8.68%  crypto/tls.(*Conn).verifyServerCertificate
-         0     0% 79.73%  1537.75kB  8.68%  crypto/tls.(*Dialer).DialContext
-         0     0% 79.73%  1537.75kB  8.68%  crypto/tls.(*clientHandshakeState).doFullHandshake
-         0     0% 79.73%  1537.75kB  8.68%  crypto/tls.(*clientHandshakeState).handshake
-         0     0% 79.73%  1537.75kB  8.68%  crypto/tls.dial
-         0     0% 79.73%  1537.75kB  8.68%  crypto/x509.(*CertPool).AppendCertsFromPEM
-         0     0% 79.73%  1537.75kB  8.68%  crypto/x509.(*Certificate).Verify
-         0     0% 79.73%  1537.75kB  8.68%  crypto/x509.initSystemRoots
-         0     0% 79.73%  1537.75kB  8.68%  crypto/x509.loadSystemRoots
-         0     0% 79.73%  1537.75kB  8.68%  crypto/x509.systemRootsPool
- 1537.75kB  8.68% 88.40%  1537.75kB  8.68%  encoding/pem.Decode
-         0     0% 88.40%  1537.75kB  8.68%  github.com/twmb/franz-go/pkg/kgo.(*broker).connect
-         0     0% 88.40%  1537.75kB  8.68%  github.com/twmb/franz-go/pkg/kgo.(*broker).handleReq
-         0     0% 88.40%  1537.75kB  8.68%  github.com/twmb/franz-go/pkg/kgo.(*broker).handleReqs
-         0     0% 88.40%  1537.75kB  8.68%  github.com/twmb/franz-go/pkg/kgo.(*broker).loadConnection
-         0     0% 88.40%  1537.75kB  8.68%  github.com/twmb/franz-go/pkg/kgo.NewClient.func2
-         0     0% 88.40%  1537.75kB  8.68%  sync.(*Once).Do (inline)
-         0     0% 88.40%  1537.75kB  8.68%  sync.(*Once).doSlow
-         0     0% 88.40%   516.01kB  2.91%  main.main
-  516.01kB  2.91% 91.31%   516.01kB  2.91%  market-orderbook/dispatcher.CreateWorkerAckChannels
-         0     0% 91.31%   516.01kB  2.91%  runtime.main
-         0     0% 91.31%   515.32kB  2.91%  github.com/twmb/franz-go/pkg/kgo.(*ProcessFetchPartitionOpts).processRecordBatch
-         0     0% 91.31%   515.32kB  2.91%  github.com/twmb/franz-go/pkg/kgo.(*cursorOffsetNext).processRespPartition
-         0     0% 91.31%   515.32kB  2.91%  github.com/twmb/franz-go/pkg/kgo.(*source).fetch
-         0     0% 91.31%   515.32kB  2.91%  github.com/twmb/franz-go/pkg/kgo.(*source).handleReqResp
-         0     0% 91.31%   515.32kB  2.91%  github.com/twmb/franz-go/pkg/kgo.(*source).loopFetch
-         0     0% 91.31%   515.32kB  2.91%  github.com/twmb/franz-go/pkg/kgo.ProcessFetchPartition
-  515.32kB  2.91% 94.22%   515.32kB  2.91%  github.com/twmb/franz-go/pkg/kgo.ensureLen[go.shape.[]github.com/twmb/franz-go/pkg/kgo.Record,go.shape.struct { Key []uint8; Value []uint8; Headers []github.com/twmb/franz-go/pkg/kgo.RecordHeader; Timestamp time.Time; Topic string; Partition int32; Attrs github.com/twmb/franz-go/pkg/kgo.RecordAttrs; ProducerEpoch int16; ProducerID int64; LeaderEpoch int32; Offset int64; Context context.Context }] (inline)
-  512.22kB  2.89% 97.11%   512.22kB  2.89%  runtime.malg
-         0     0% 97.11%   512.22kB  2.89%  runtime.newproc.func1
-         0     0% 97.11%   512.22kB  2.89%  runtime.newproc1
-         0     0% 97.11%   512.22kB  2.89%  runtime.systemstack
-         0     0% 97.11%   512.03kB  2.89%  google.golang.org/protobuf/internal/impl.(*MessageInfo).unmarshal
-         0     0% 97.11%   512.03kB  2.89%  google.golang.org/protobuf/internal/impl.(*MessageInfo).unmarshalPointer
-         0     0% 97.11%   512.03kB  2.89%  google.golang.org/protobuf/internal/impl.(*MessageInfo).unmarshalPointerEager
-         0     0% 97.11%   512.03kB  2.89%  google.golang.org/protobuf/internal/impl.consumeMessageSliceInfo
-         0     0% 97.11%   512.03kB  2.89%  google.golang.org/protobuf/proto.Unmarshal
-         0     0% 97.11%   512.03kB  2.89%  google.golang.org/protobuf/proto.UnmarshalOptions.unmarshal
-         0     0% 97.11%   512.03kB  2.89%  market-orderbook/dispatcher.RunDispatcher
-  512.03kB  2.89%   100%   512.03kB  2.89%  reflect.New
+         0     0%     0% 16896.74kB 57.32%  market-orderbook/book.(*TreeBookSide).Upsert
+         0     0%     0% 16896.74kB 57.32%  market-orderbook/dispatcher.startWorker
+16896.74kB 57.32% 57.32% 16896.74kB 57.32%  market-orderbook/orderedtree/skiplist.(*SkipList).Insert
+         0     0% 57.32% 16896.74kB 57.32%  market-orderbook/worker.(*Worker).ProcessBookUpdate
+         0     0% 57.32% 16896.74kB 57.32%  market-orderbook/worker.(*Worker).Run
+         0     0% 57.32%  8962.71kB 30.40%  github.com/redis/go-redis/v9/internal/pool.(*ConnPool).addIdleConn
+         0     0% 57.32%  8962.71kB 30.40%  github.com/redis/go-redis/v9/internal/pool.(*ConnPool).checkMinIdleConns.func1
+         0     0% 57.32%  8962.71kB 30.40%  github.com/redis/go-redis/v9/internal/pool.(*ConnPool).dialConn
+         0     0% 57.32%  8450.67kB 28.67%  github.com/redis/go-redis/v9/internal/pool.NewConnWithBufferSize
+ 5281.67kB 17.92% 75.23%  5281.67kB 17.92%  bufio.NewWriterSize (inline)
+    3169kB 10.75% 85.98%     3169kB 10.75%  bufio.NewReaderSize (inline)
+         0     0% 85.98%     3169kB 10.75%  github.com/redis/go-redis/v9/internal/proto.NewReaderSize (inline)
+         0     0% 85.98%  1056.71kB  3.58%  github.com/twmb/franz-go/pkg/kgo.(*ProcessFetchPartitionOpts).processRecordBatch
+         0     0% 85.98%  1056.71kB  3.58%  github.com/twmb/franz-go/pkg/kgo.(*cursorOffsetNext).processRespPartition
+         0     0% 85.98%  1056.71kB  3.58%  github.com/twmb/franz-go/pkg/kgo.(*source).fetch
+         0     0% 85.98%  1056.71kB  3.58%  github.com/twmb/franz-go/pkg/kgo.(*source).handleReqResp
+         0     0% 85.98%  1056.71kB  3.58%  github.com/twmb/franz-go/pkg/kgo.(*source).loopFetch
+         0     0% 85.98%  1056.71kB  3.58%  github.com/twmb/franz-go/pkg/kgo.ProcessFetchPartition
+         0     0% 85.98%  1026.91kB  3.48%  sync.(*Once).Do (inline)
+         0     0% 85.98%  1026.91kB  3.48%  sync.(*Once).doSlow
+         0     0% 85.98%  1026.69kB  3.48%  runtime.main
+  544.67kB  1.85% 87.83%   544.67kB  1.85%  github.com/klauspost/compress/s2.Decode
+         0     0% 87.83%   544.67kB  1.85%  github.com/twmb/franz-go/pkg/kgo.(*decompressor).Decompress
+         0     0% 87.83%   514.63kB  1.75%  github.com/twmb/franz-go/pkg/kgo.NewClient
+         0     0% 87.83%   514.63kB  1.75%  github.com/twmb/franz-go/pkg/kgo.defaultCfg
+         0     0% 87.83%   514.63kB  1.75%  github.com/twmb/franz-go/pkg/kgo.defaultCfg.func1 (inline)
+         0     0% 87.83%   514.63kB  1.75%  github.com/twmb/franz-go/pkg/kgo.validateCfg
+         0     0% 87.83%   514.63kB  1.75%  main.main
+         0     0% 87.83%   514.63kB  1.75%  market-orderbook/kafka.Init
+         0     0% 87.83%   514.63kB  1.75%  market-orderbook/kafka.Init.func1
+         0     0% 87.83%   514.63kB  1.75%  math/rand.NewSource (inline)
+  514.63kB  1.75% 89.58%   514.63kB  1.75%  math/rand.newSource (inline)
+         0     0% 89.58%   512.28kB  1.74%  crypto/tls.(*Conn).HandshakeContext (inline)
+         0     0% 89.58%   512.28kB  1.74%  crypto/tls.(*Conn).clientHandshake
+         0     0% 89.58%   512.28kB  1.74%  crypto/tls.(*Conn).handshakeContext
+         0     0% 89.58%   512.28kB  1.74%  crypto/tls.(*Conn).verifyServerCertificate
+         0     0% 89.58%   512.28kB  1.74%  crypto/tls.(*Dialer).DialContext
+         0     0% 89.58%   512.28kB  1.74%  crypto/tls.(*clientHandshakeState).doFullHandshake
+         0     0% 89.58%   512.28kB  1.74%  crypto/tls.(*clientHandshakeState).handshake
+         0     0% 89.58%   512.28kB  1.74%  crypto/tls.dial
+         0     0% 89.58%   512.28kB  1.74%  crypto/x509.(*CertPool).AppendCertsFromPEM
+         0     0% 89.58%   512.28kB  1.74%  crypto/x509.(*Certificate).Verify
+         0     0% 89.58%   512.28kB  1.74%  crypto/x509.initSystemRoots
+         0     0% 89.58%   512.28kB  1.74%  crypto/x509.loadSystemRoots
+         0     0% 89.58%   512.28kB  1.74%  crypto/x509.systemRootsPool
+  512.28kB  1.74% 91.31%   512.28kB  1.74%  encoding/pem.Decode
+         0     0% 91.31%   512.28kB  1.74%  github.com/twmb/franz-go/pkg/kgo.(*broker).connect
+         0     0% 91.31%   512.28kB  1.74%  github.com/twmb/franz-go/pkg/kgo.(*broker).handleReq
+         0     0% 91.31%   512.28kB  1.74%  github.com/twmb/franz-go/pkg/kgo.(*broker).handleReqs
+         0     0% 91.31%   512.28kB  1.74%  github.com/twmb/franz-go/pkg/kgo.(*broker).loadConnection
+         0     0% 91.31%   512.28kB  1.74%  github.com/twmb/franz-go/pkg/kgo.NewClient.func2
+  512.22kB  1.74% 93.05%   512.22kB  1.74%  runtime.malg
+         0     0% 93.05%   512.22kB  1.74%  runtime.newproc.func1
+         0     0% 93.05%   512.22kB  1.74%  runtime.newproc1
+         0     0% 93.05%   512.22kB  1.74%  runtime.systemstack
+  512.09kB  1.74% 94.79%   512.09kB  1.74%  market-orderbook/dispatcher.RunDispatcher
+         0     0% 94.79%   512.06kB  1.74%  runtime.doInit (inline)
+         0     0% 94.79%   512.06kB  1.74%  runtime.doInit1
+  512.06kB  1.74% 96.53%   512.06kB  1.74%  runtime/metrics.init.0
+         0     0% 96.53%   512.05kB  1.74%  github.com/redis/go-redis/v9.(*Options).init.NewDialer.func1
+         0     0% 96.53%   512.05kB  1.74%  github.com/redis/go-redis/v9.(*baseClient).dial
+         0     0% 96.53%   512.05kB  1.74%  github.com/redis/go-redis/v9.(*hooksMixin).dialHook
+         0     0% 96.53%   512.05kB  1.74%  github.com/redis/go-redis/v9.newConnPool.func1
+         0     0% 96.53%   512.05kB  1.74%  net.(*Dialer).DialContext
+         0     0% 96.53%   512.05kB  1.74%  net.(*Resolver).internetAddrList
+  512.05kB  1.74% 98.26%   512.05kB  1.74%  net.(*Resolver).lookupIPAddr
+         0     0% 98.26%   512.05kB  1.74%  net.(*Resolver).resolveAddrList
+  512.04kB  1.74%   100%   512.04kB  1.74%  github.com/twmb/franz-go/pkg/kgo.recordToRecord

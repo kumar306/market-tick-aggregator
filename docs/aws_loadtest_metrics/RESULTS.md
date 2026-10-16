@@ -1,15 +1,15 @@
-# AWS load test, run 2: persistence batcher flushes `max_wait_ms` after the first row
+# AWS load test: persistence batcher flushes `max_wait_ms` after the first row
 
 Run: 2026-10-16, ramp 12:09:55 to 12:14:55 IST, image tag `v15`, same cluster as run 1
-(`../aws_loadtest_at_least_once/`). Same `at_least_once` normalizer and aggregator, same mock-exchange ramp. The only
+(the first run used a 1 s ticker in the persistence batcher). Same `at_least_once` normalizer and aggregator, same mock-exchange ramp. The only
 changes: the persistence batcher redesign (`max_wait_ms: 10`, batch size 100 / 200 unchanged) and fine histogram
 buckets. One run, one pass.
 
 Files: `e2e-ingest-to-insert.png` (steady state 12:12:30 to 12:16:30), `e2e-ingest-to-insert-full-range.png` (from
 12:09:30, includes the startup transient), `hops-and-broker.png`, `persistence-batching.png`, `e2e-by-level.json`,
-`pprof/` (heap + 30s CPU, five services, captured at the plateau after 12:16:39).
+`../aws_loadtest_pprof/` (heap + 30s CPU, five services, captured at the plateau after 12:16:39).
 
-## What was wrong in run 1
+## What was wrong with the earlier batcher
 
 The tick pipeline flushed 0.5 times a second although the interval was 1 s. The batcher used a 1 s ticker plus a check
 "has a full interval passed since the last flush". With both equal to 1 s, scheduler jitter made the check fail every
@@ -39,7 +39,7 @@ a measured value. Postgres was not the limit: a flush costs 7.7 ms p50 / 18 ms p
 | 5,000 | 2,709 | 47 ms | 71 ms | 74 ms | 125 ms | 285 ms | 297 ms |
 | 10,000 | 4,886 | 48 ms | 92 ms | 135 ms | 94 ms | 255 ms | 291 ms |
 
-Run 1 for comparison (same levels): tick p50 about 1.3 s, p95 somewhere in 1.02 to 2.05 s, p99 about 2 s.
+The same ramp with the earlier 1 s ticker batcher gave tick p50 about 1.3 s, p95 somewhere in 1.02 to 2.05 s, p99 about 2 s.
 
 Distribution of 1,351 tick rows, 12:12 to 12:16 IST: 66.6% within 50 ms, 92.2% within 75 ms, 98.2% within 100 ms,
 99.4% within 150 ms, 100% within 200 ms. Book rows (72): 33% within 75 ms, 70% within 200 ms, 90.5% within 300 ms,
