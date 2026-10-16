@@ -274,7 +274,7 @@
     {
       "id": 5,
       "type": "timeseries",
-      "title": "rate(persistence_db_rows_written[1m]) / on() group_left rate(persistence_pipeline_flush_count[1m])",
+      "title": "rows per flush = sum(rate(persistence_db_rows_written[1m])) / sum(rate(persistence_pipeline_flush_count[1m]))",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -317,7 +317,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "rate(persistence_db_rows_written{pipeline=\"aggregated_ticks\"}[1m]) / rate(persistence_pipeline_flush_count{pipeline=\"tickPipeline\"}[1m])",
+          "expr": "sum(rate(persistence_db_rows_written{pipeline=\"aggregated_ticks\"}[1m])) / sum(rate(persistence_pipeline_flush_count{pipeline=\"tickPipeline\"}[1m]))",
           "legendFormat": "tick rows per flush",
           "range": true
         },
@@ -327,7 +327,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "rate(persistence_db_rows_written{pipeline=\"orderbook_flushes\"}[1m]) / rate(persistence_pipeline_flush_count{pipeline=\"bookPipeline\"}[1m])",
+          "expr": "sum(rate(persistence_db_rows_written{pipeline=\"orderbook_flushes\"}[1m])) / sum(rate(persistence_pipeline_flush_count{pipeline=\"bookPipeline\"}[1m]))",
           "legendFormat": "book rows per flush",
           "range": true
         }

@@ -1,0 +1,82 @@
+File: normalizer
+Build ID: 5ec15acc68969941d5f7eade21554ee7cf6e1fa4
+Type: inuse_space
+Time: 2026-10-16 12:19:33 IST
+Showing nodes accounting for 5719.46kB, 100% of 5719.46kB total
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%  2088.10kB 36.51%  github.com/twmb/franz-go/pkg/kgo.(*broker).handleReq
+         0     0%     0%  2088.10kB 36.51%  github.com/twmb/franz-go/pkg/kgo.(*broker).handleReqs
+         0     0%     0%  1572.09kB 27.49%  github.com/twmb/franz-go/pkg/kgo.(*brokerCxn).writeRequest
+         0     0%     0%  1568.40kB 27.42%  github.com/twmb/franz-go/pkg/kgo.(*source).fetch
+         0     0%     0%  1568.40kB 27.42%  github.com/twmb/franz-go/pkg/kgo.(*source).loopFetch
+         0     0%     0%  1060.05kB 18.53%  github.com/twmb/franz-go/pkg/kgo.(*produceRequest).AppendTo
+         0     0%     0%  1060.05kB 18.53%  github.com/twmb/franz-go/pkg/kgo.seqRecBatch.appendTo
+         0     0%     0%  1060.05kB 18.53%  github.com/twmb/franz-go/pkg/kmsg.(*RequestFormatter).AppendRequest
+ 1056.33kB 18.47% 18.47%  1056.33kB 18.47%  compress/flate.(*dictDecoder).init (inline)
+         0     0% 18.47%  1056.33kB 18.47%  compress/flate.NewReader
+         0     0% 18.47%  1056.33kB 18.47%  compress/gzip.(*Reader).Reset
+         0     0% 18.47%  1056.33kB 18.47%  compress/gzip.(*Reader).readHeader
+         0     0% 18.47%  1056.33kB 18.47%  github.com/twmb/franz-go/pkg/kgo.(*ProcessFetchPartitionOpts).processRecordBatch
+         0     0% 18.47%  1056.33kB 18.47%  github.com/twmb/franz-go/pkg/kgo.(*cursorOffsetNext).processRespPartition
+         0     0% 18.47%  1056.33kB 18.47%  github.com/twmb/franz-go/pkg/kgo.(*decompressor).Decompress
+         0     0% 18.47%  1056.33kB 18.47%  github.com/twmb/franz-go/pkg/kgo.(*source).handleReqResp
+         0     0% 18.47%  1056.33kB 18.47%  github.com/twmb/franz-go/pkg/kgo.ProcessFetchPartition
+         0     0% 18.47%  1031.20kB 18.03%  sync.(*Once).Do (inline)
+         0     0% 18.47%  1031.20kB 18.03%  sync.(*Once).doSlow
+         0     0% 18.47%   544.67kB  9.52%  bytes.(*Buffer).Grow (inline)
+         0     0% 18.47%   544.67kB  9.52%  bytes.(*Buffer).grow
+  544.67kB  9.52% 27.99%   544.67kB  9.52%  bytes.growSlice
+         0     0% 27.99%   544.67kB  9.52%  github.com/twmb/franz-go/pkg/kgo.(*compressor).Compress
+         0     0% 27.99%   521.05kB  9.11%  crypto/tls.(*Conn).Write
+         0     0% 27.99%   521.05kB  9.11%  crypto/tls.(*Conn).writeRecordLocked
+         0     0% 27.99%   521.05kB  9.11%  crypto/tls.(*halfConn).encrypt
+  521.05kB  9.11% 37.10%   521.05kB  9.11%  crypto/tls.sliceForAppend (inline)
+         0     0% 37.10%   521.05kB  9.11%  github.com/twmb/franz-go/pkg/kgo.(*brokerCxn).writeConn.func2
+         0     0% 37.10%   516.01kB  9.02%  crypto/tls.(*Conn).HandshakeContext (inline)
+         0     0% 37.10%   516.01kB  9.02%  crypto/tls.(*Conn).clientHandshake
+         0     0% 37.10%   516.01kB  9.02%  crypto/tls.(*Conn).handshakeContext
+         0     0% 37.10%   516.01kB  9.02%  crypto/tls.(*Conn).verifyServerCertificate
+         0     0% 37.10%   516.01kB  9.02%  crypto/tls.(*Dialer).DialContext
+         0     0% 37.10%   516.01kB  9.02%  crypto/tls.(*clientHandshakeState).doFullHandshake
+         0     0% 37.10%   516.01kB  9.02%  crypto/tls.(*clientHandshakeState).handshake
+         0     0% 37.10%   516.01kB  9.02%  crypto/tls.dial
+         0     0% 37.10%   516.01kB  9.02%  crypto/x509.(*CertPool).AppendCertsFromPEM
+  516.01kB  9.02% 46.12%   516.01kB  9.02%  crypto/x509.(*CertPool).addCertFunc (inline)
+         0     0% 46.12%   516.01kB  9.02%  crypto/x509.(*Certificate).Verify
+         0     0% 46.12%   516.01kB  9.02%  crypto/x509.initSystemRoots
+         0     0% 46.12%   516.01kB  9.02%  crypto/x509.loadSystemRoots
+         0     0% 46.12%   516.01kB  9.02%  crypto/x509.systemRootsPool
+         0     0% 46.12%   516.01kB  9.02%  github.com/twmb/franz-go/pkg/kgo.(*broker).connect
+         0     0% 46.12%   516.01kB  9.02%  github.com/twmb/franz-go/pkg/kgo.(*broker).loadConnection
+         0     0% 46.12%   516.01kB  9.02%  github.com/twmb/franz-go/pkg/kgo.NewClient.func2
+  515.38kB  9.01% 55.14%   515.38kB  9.01%  github.com/twmb/franz-go/pkg/kbin.AppendVarintBytes
+         0     0% 55.14%   515.38kB  9.01%  github.com/twmb/franz-go/pkg/kgo.promisedRec.appendTo
+         0     0% 55.14%   515.19kB  9.01%  html.EscapeString (inline)
+         0     0% 55.14%   515.19kB  9.01%  net/http.(*ServeMux).ServeHTTP
+         0     0% 55.14%   515.19kB  9.01%  net/http.(*conn).serve
+         0     0% 55.14%   515.19kB  9.01%  net/http.HandlerFunc.ServeHTTP
+         0     0% 55.14%   515.19kB  9.01%  net/http.serverHandler.ServeHTTP
+         0     0% 55.14%   515.19kB  9.01%  net/http/pprof.Index
+         0     0% 55.14%   515.19kB  9.01%  net/http/pprof.indexTmplExecute
+         0     0% 55.14%   515.19kB  9.01%  strings.(*Replacer).Replace
+  515.19kB  9.01% 64.14%   515.19kB  9.01%  strings.(*Replacer).build
+         0     0% 64.14%   515.19kB  9.01%  strings.(*Replacer).buildOnce
+         0     0% 64.14%   514.63kB  9.00%  github.com/twmb/franz-go/pkg/kgo.(*Client).doPartition
+         0     0% 64.14%   514.63kB  9.00%  github.com/twmb/franz-go/pkg/kgo.(*Client).mergeTopicPartitions
+         0     0% 64.14%   514.63kB  9.00%  github.com/twmb/franz-go/pkg/kgo.(*Client).mergeTopicPartitions.func1
+         0     0% 64.14%   514.63kB  9.00%  github.com/twmb/franz-go/pkg/kgo.(*Client).storePartitionsUpdate
+         0     0% 64.14%   514.63kB  9.00%  github.com/twmb/franz-go/pkg/kgo.(*Client).updateMetadata
+         0     0% 64.14%   514.63kB  9.00%  github.com/twmb/franz-go/pkg/kgo.(*Client).updateMetadataLoop
+         0     0% 64.14%   514.63kB  9.00%  github.com/twmb/franz-go/pkg/kgo.(*uniformBytesPartitioner).ForTopic
+         0     0% 64.14%   514.63kB  9.00%  math/rand.NewSource (inline)
+  514.63kB  9.00% 73.14%   514.63kB  9.00%  math/rand.newSource (inline)
+         0     0% 73.14%   512.08kB  8.95%  github.com/opencontainers/go-digest.init
+         0     0% 73.14%   512.08kB  8.95%  regexp.Compile (inline)
+         0     0% 73.14%   512.08kB  8.95%  regexp.MustCompile
+  512.08kB  8.95% 82.09%   512.08kB  8.95%  regexp.compile
+         0     0% 82.09%   512.08kB  8.95%  runtime.doInit (inline)
+         0     0% 82.09%   512.08kB  8.95%  runtime.doInit1
+         0     0% 82.09%   512.08kB  8.95%  runtime.main
+  512.07kB  8.95% 91.05%   512.07kB  8.95%  github.com/twmb/franz-go/pkg/kgo.(*fetchRequest).addCursor
+         0     0% 91.05%   512.07kB  8.95%  github.com/twmb/franz-go/pkg/kgo.(*source).createReq
+  512.05kB  8.95%   100%   512.05kB  8.95%  github.com/twmb/franz-go/pkg/kgo.(*brokerCxn).writeConn

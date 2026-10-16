@@ -1,0 +1,31 @@
+File: persistence
+Build ID: b5031ac6236ba36f09ff441d07cb77d559584e4c
+Type: inuse_space
+Time: 2026-10-16 12:20:13 IST
+Showing nodes accounting for 1927.20kB, 100% of 1927.20kB total
+      flat  flat%   sum%        cum   cum%
+         0     0%     0%   902.59kB 46.83%  bufio.(*Writer).Flush
+  902.59kB 46.83% 46.83%   902.59kB 46.83%  compress/flate.NewWriter (inline)
+         0     0% 46.83%   902.59kB 46.83%  compress/gzip.(*Writer).Write
+         0     0% 46.83%   902.59kB 46.83%  github.com/prometheus/client_golang/prometheus/promhttp.HandlerForTransactional.func1
+         0     0% 46.83%   902.59kB 46.83%  github.com/prometheus/common/expfmt.MetricFamilyToText
+         0     0% 46.83%   902.59kB 46.83%  github.com/prometheus/common/expfmt.MetricFamilyToText.func1
+         0     0% 46.83%   902.59kB 46.83%  github.com/prometheus/common/expfmt.NewEncoder.func7
+         0     0% 46.83%   902.59kB 46.83%  github.com/prometheus/common/expfmt.encoderCloser.Encode
+         0     0% 46.83%   902.59kB 46.83%  net/http.(*ServeMux).ServeHTTP
+         0     0% 46.83%   902.59kB 46.83%  net/http.(*conn).serve
+         0     0% 46.83%   902.59kB 46.83%  net/http.HandlerFunc.ServeHTTP
+         0     0% 46.83%   902.59kB 46.83%  net/http.serverHandler.ServeHTTP
+         0     0% 46.83%   512.56kB 26.60%  runtime.allocm
+         0     0% 46.83%   512.56kB 26.60%  runtime.handoffp
+         0     0% 46.83%   512.56kB 26.60%  runtime.mProfStackInit (inline)
+  512.56kB 26.60% 73.43%   512.56kB 26.60%  runtime.makeProfStackFP (inline)
+         0     0% 73.43%   512.56kB 26.60%  runtime.mcall
+         0     0% 73.43%   512.56kB 26.60%  runtime.mcommoninit
+         0     0% 73.43%   512.56kB 26.60%  runtime.newm
+         0     0% 73.43%   512.56kB 26.60%  runtime.park_m
+         0     0% 73.43%   512.56kB 26.60%  runtime.schedule
+         0     0% 73.43%   512.56kB 26.60%  runtime.startm
+         0     0% 73.43%   512.56kB 26.60%  runtime.stoplockedm
+         0     0% 73.43%   512.05kB 26.57%  github.com/prometheus/client_golang/prometheus.(*Registry).Register.func1
+  512.05kB 26.57%   100%   512.05kB 26.57%  github.com/prometheus/client_golang/prometheus.(*goCollector).Describe
