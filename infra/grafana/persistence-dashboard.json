@@ -1,0 +1,389 @@
+{
+  "uid": "mta-persistence",
+  "title": "mta-persistence-batching",
+  "tags": [
+    "mta"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "",
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "histogram_quantile(0.95, sum(rate(persistence_ingest_to_insert_seconds_bucket[1m])) by (le, pipeline))",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 10
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "lineWidth": 1,
+            "showPoints": "auto",
+            "pointSize": 4,
+            "fillOpacity": 0
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.5, sum(rate(persistence_ingest_to_insert_seconds_bucket{pipeline=\"tickPipeline\"}[1m])) by (le))",
+          "legendFormat": "tick p50",
+          "range": true
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum(rate(persistence_ingest_to_insert_seconds_bucket{pipeline=\"tickPipeline\"}[1m])) by (le))",
+          "legendFormat": "tick p95",
+          "range": true
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.99, sum(rate(persistence_ingest_to_insert_seconds_bucket{pipeline=\"tickPipeline\"}[1m])) by (le))",
+          "legendFormat": "tick p99",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "histogram_quantile(0.95, sum(rate(persistence_ingest_to_insert_seconds_bucket[1m])) by (le, pipeline))",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 10
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "lineWidth": 1,
+            "showPoints": "auto",
+            "pointSize": 4,
+            "fillOpacity": 0
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.5, sum(rate(persistence_ingest_to_insert_seconds_bucket{pipeline=\"bookPipeline\"}[1m])) by (le))",
+          "legendFormat": "book p50",
+          "range": true
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum(rate(persistence_ingest_to_insert_seconds_bucket{pipeline=\"bookPipeline\"}[1m])) by (le))",
+          "legendFormat": "book p95",
+          "range": true
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.99, sum(rate(persistence_ingest_to_insert_seconds_bucket{pipeline=\"bookPipeline\"}[1m])) by (le))",
+          "legendFormat": "book p99",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "histogram_quantile(0.95, sum(rate(persistence_txn_duration_bucket[1m])) by (le, pipeline))  (Postgres flush: BEGIN..COMMIT)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 10,
+        "w": 12,
+        "h": 9
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "lineWidth": 1,
+            "showPoints": "auto",
+            "pointSize": 4,
+            "fillOpacity": 0
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.5, sum(rate(persistence_txn_duration_bucket[1m])) by (le, pipeline))",
+          "legendFormat": "p50 {{pipeline}}",
+          "range": true
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum(rate(persistence_txn_duration_bucket[1m])) by (le, pipeline))",
+          "legendFormat": "p95 {{pipeline}}",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "rate(persistence_pipeline_flush_count[1m])",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 10,
+        "w": 12,
+        "h": 9
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 1,
+            "showPoints": "auto",
+            "pointSize": 4,
+            "fillOpacity": 0
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "rate(persistence_pipeline_flush_count[1m])",
+          "legendFormat": "flushes/s {{pipeline}}",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "rate(persistence_db_rows_written[1m]) / on() group_left rate(persistence_pipeline_flush_count[1m])",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 19,
+        "w": 12,
+        "h": 9
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 1,
+            "showPoints": "auto",
+            "pointSize": 4,
+            "fillOpacity": 0
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "rate(persistence_db_rows_written{pipeline=\"aggregated_ticks\"}[1m]) / rate(persistence_pipeline_flush_count{pipeline=\"tickPipeline\"}[1m])",
+          "legendFormat": "tick rows per flush",
+          "range": true
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "rate(persistence_db_rows_written{pipeline=\"orderbook_flushes\"}[1m]) / rate(persistence_pipeline_flush_count{pipeline=\"bookPipeline\"}[1m])",
+          "legendFormat": "book rows per flush",
+          "range": true
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "rate(persistence_db_rows_written[1m])",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 19,
+        "w": 12,
+        "h": 9
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 1,
+            "showPoints": "auto",
+            "pointSize": 4,
+            "fillOpacity": 0
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "rate(persistence_db_rows_written[1m])",
+          "legendFormat": "{{pipeline}}",
+          "range": true
+        }
+      ]
+    }
+  ]
+}

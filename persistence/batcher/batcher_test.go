@@ -150,7 +150,7 @@ func TestFlushIfNeededNoItems(t *testing.T) {
 	}
 }
 
-func TestFlushIfNeededFlushesAfterInterval(t *testing.T) {
+func TestFlushIfNeededFlushesWhatTheBatchHolds(t *testing.T) {
 	initTestMetrics()
 
 	called := 0
@@ -174,8 +174,6 @@ func TestFlushIfNeededFlushesAfterInterval(t *testing.T) {
 			Offset:    1,
 		},
 	})
-	b.lastFlush = time.Now().Add(-5 * time.Second)
-
 	if err := b.FlushIfNeeded(); err != nil {
 		t.Fatalf("FlushIfNeeded() error = %v", err)
 	}

@@ -17,7 +17,6 @@ type BatchEvent int
 
 const (
 	AddEvent BatchEvent = iota
-	TimerEvent
 )
 
 type BatchItem[T any] struct {
@@ -37,13 +36,19 @@ type BatcherAdder[U any] interface {
 
 // batching logic is shared across both consumers. only flush fn differs
 // better to have 2 instantiations of the batcher rather than batcher interface
+//
+// A batch is flushed when it reaches batchSize OR when maxWait has passed since its FIRST row arrived, whichever is
+// first. The clock starts with the first row (a per-batch timer), not on a free-running tick, so a row never waits
+// longer than maxWait plus the flush itself. The previous design (a ticker plus "has a full interval passed since the
+// last flush") flushed every OTHER tick whenever the two intervals matched, so rows waited up to 2x the interval.
 type Batcher[T any] struct {
 	pipeline       string
 	ctx            context.Context
 	batchCh        chan *BatchMessage[T]
 	items          []*BatchItem[T]
-	intervalMs     time.Duration
-	lastFlush      time.Time
+	maxWait        time.Duration
+	linger         *time.Timer
+	lingerArmed    bool
 	batchSize      int
 	flushFn        func(context.Context, util.Tx, []T) error
 	invalidCheckFn func(T) error
@@ -55,21 +60,23 @@ func NewBatcher[T any](
 	ctx context.Context,
 	pipeline string,
 	batchSize int,
-	intervalMs time.Duration,
+	maxWait time.Duration,
 	flushFn func(context.Context, util.Tx, []T) error,
 	invalidCheckFn func(T) error,
 	sink util.Sink,
 	eventProcessor util.EventProcessor) Batcher[T] {
-	logger.Log.Info("Starting batcher", "batchSize", batchSize, "intervalMs", intervalMs)
+	logger.Log.Info("Starting batcher", "batchSize", batchSize, "maxWait", maxWait)
+	linger := time.NewTimer(time.Hour)
+	linger.Stop()
 	return Batcher[T]{
 		batchSize:      batchSize,
 		pipeline:       pipeline,
 		batchCh:        make(chan *BatchMessage[T], batchSize*3),
-		intervalMs:     intervalMs,
+		maxWait:        maxWait,
+		linger:         linger,
 		flushFn:        flushFn,
 		invalidCheckFn: invalidCheckFn,
 		items:          make([]*BatchItem[T], 0, batchSize),
-		lastFlush:      time.Now(),
 		ctx:            ctx,
 		sink:           sink,
 		eventProcessor: eventProcessor,
@@ -78,37 +85,47 @@ func NewBatcher[T any](
 
 // loop reading from internal channel
 // Add() - posts into batch channel
-// ticker - posts into same batch channel
+// linger timer - fires maxWait after the first row of the current batch arrived
 func (b *Batcher[T]) Run() {
-	ticker := time.NewTicker(b.intervalMs)
 	for {
 		select {
 		case <-b.ctx.Done():
 			logger.Log.Info("Received ctx done. Flushing and closing batcher internal channel loop")
 
+			b.stopLinger()
 			if len(b.items) > 0 {
 				_ = b.Flush()
 			}
 
 			return
-		case <-ticker.C:
-			select {
-			case b.batchCh <- &BatchMessage[T]{
-				BatchEvent: TimerEvent,
-			}:
-			default:
-				logger.Log.Info("Dropping timer event because internal channel full.")
-				metrics.Persistence_BatchDroppedTimers.WithLabelValues(b.pipeline).Inc()
+		case <-b.linger.C:
+			b.lingerArmed = false
+			if err := b.FlushIfNeeded(); err != nil {
+				// nothing else would retry a failed batch until another row arrived, so retry after another maxWait
+				logger.Log.Error("Error in batcher timed flush, will retry", "error", err, "pipeline", b.pipeline)
+				b.armLinger()
 			}
 		case msg := <-b.batchCh:
 			switch msg.BatchEvent {
 			case AddEvent:
-				b.HandleBatchAndFlush(&msg.Item)
-			case TimerEvent:
-				b.FlushIfNeeded()
+				_ = b.HandleBatchAndFlush(&msg.Item)
 			}
 		}
 	}
+}
+
+// start the wait clock, unless one is already running for the current batch
+func (b *Batcher[T]) armLinger() {
+	if b.lingerArmed {
+		return
+	}
+	b.linger.Reset(b.maxWait)
+	b.lingerArmed = true
+}
+
+func (b *Batcher[T]) stopLinger() {
+	b.linger.Stop()
+	b.lingerArmed = false
 }
 
 // add event - struct with event type, item - posted into channel
@@ -129,9 +146,10 @@ func (b *Batcher[T]) Add(item BatchItem[T]) {
 	}
 }
 
-// flush on items size exceeds limit
+// add a row. The first row of a batch starts the maxWait clock; reaching batchSize flushes immediately.
 func (b *Batcher[T]) HandleBatchAndFlush(item *BatchItem[T]) error {
 	b.items = append(b.items, item)
+	b.armLinger()
 	metrics.Persistence_BatchSize.WithLabelValues(b.pipeline).Observe(float64(len(b.items)))
 
 	if len(b.items) >= b.batchSize {
@@ -144,19 +162,12 @@ func (b *Batcher[T]) HandleBatchAndFlush(item *BatchItem[T]) error {
 	return nil
 }
 
-// timer based flush
+// called when the maxWait clock fires: flush whatever the batch holds
 func (b *Batcher[T]) FlushIfNeeded() error {
 	if len(b.items) == 0 {
-		logger.Log.Info("Batch periodic flush -- No items present in batcher", "pipeline", b.pipeline)
 		return nil
 	}
-
-	if time.Since(b.lastFlush) >= b.intervalMs {
-		logger.Log.Info("Time since last flush >= Interval", "pipeline", b.pipeline)
-		return b.Flush()
-	}
-
-	return nil
+	return b.Flush()
 }
 
 // delegate the flush fn to callbacks which we will write for tick and book
@@ -204,7 +215,12 @@ func (b *Batcher[T]) Flush() error {
 	}
 
 	if len(valid) == 0 {
-		logger.Log.Warn("No valid records to flush after filtering out corrupted records. Returning from Flush()")
+		// every row went to the DLQ above. They are handled, so clear them and move the offsets on; leaving them in
+		// the batch would send them to the DLQ again on every later flush (every maxWait, once the wait is short)
+		logger.Log.Warn("No valid records to flush after filtering out corrupted records. Clearing the batch")
+		b.eventProcessor.MarkUpstreamProcessed(b.ctx, maxOffsetPerPartitionMap)
+		b.items = b.items[:0]
+		b.stopLinger()
 		return nil
 	}
 
@@ -226,7 +242,7 @@ func (b *Batcher[T]) Flush() error {
 		metrics.Persistence_TxnFailures.WithLabelValues(b.pipeline).Inc()
 		return err
 	}
-	metrics.Persistence_BatchFlushDuration.WithLabelValues(b.pipeline).Observe(float64(time.Since(flushStart)))
+	metrics.Persistence_BatchFlushDuration.WithLabelValues(b.pipeline).Observe(time.Since(flushStart).Seconds())
 
 	if err := tx.Commit(b.ctx); err != nil {
 		logger.Log.Error("Error in commit", "error", err)
@@ -256,9 +272,9 @@ func (b *Batcher[T]) Flush() error {
 	// fire and forget
 	b.eventProcessor.MarkUpstreamProcessed(b.ctx, maxOffsetPerPartitionMap)
 
-	// clear the batch
+	// clear the batch; the next row starts a new wait
 	b.items = b.items[:0]
-	b.lastFlush = time.Now()
+	b.stopLinger()
 
 	metrics.Persistence_TxnDuration.WithLabelValues(b.pipeline).Observe(float64(time.Since(start).Seconds()))
 	metrics.Persistence_BatchSize.WithLabelValues(b.pipeline).Observe(0)

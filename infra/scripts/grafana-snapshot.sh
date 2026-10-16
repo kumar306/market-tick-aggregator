@@ -3,7 +3,8 @@
 # images in docs/ were taken (a real Grafana page, header and time range included).
 #
 # Usage:
-#   ./infra/scripts/grafana-snapshot.sh <from_epoch_ms> <to_epoch_ms> <out.png>
+#   ./infra/scripts/grafana-snapshot.sh <from_epoch_ms> <to_epoch_ms> <out.png> [dashboard.json]
+# dashboard.json defaults to infra/grafana/e2e-dashboard.json; others: hops-dashboard.json, persistence-dashboard.json
 #
 # Needs: kubectl + helm pointed at the cluster, curl, Node 22+, and Microsoft Edge or Chrome.
 # The port-forward is local-only. Anonymous Viewer access is switched on so the headless browser needs no login;
@@ -12,6 +13,7 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 
 FROM="${1:?from epoch ms}"; TO="${2:?to epoch ms}"; OUT="${3:?output png}"
+DASH="${4:-infra/grafana/e2e-dashboard.json}"
 case "$OUT" in /*|?:*) ;; *) OUT="$PWD/$OUT" ;; esac   # an absolute path: the browser resolves a relative one against its own cwd
 PORT=3000
 BASE="http://localhost:${PORT}"
@@ -57,13 +59,14 @@ fi
 echo "== uploading dashboard =="
 python - <<PY > /tmp/grafana-dash-body.json
 import json
-d = json.load(open("infra/grafana/e2e-dashboard.json"))
+d = json.load(open("${DASH}"))
 print(json.dumps({"dashboard": d, "overwrite": True}))
 PY
 curl -s -u "admin:${PASS}" -H 'Content-Type: application/json' -X POST "$BASE/api/dashboards/db" -d @/tmp/grafana-dash-body.json
 echo
 
-URL="${BASE}/d/mta-e2e/mta-e2e-ingest-to-insert?orgId=1&from=${FROM}&to=${TO}"
+UID_=$(python -c "import json;print(json.load(open('${DASH}'))['uid'])")
+URL="${BASE}/d/${UID_}?orgId=1&from=${FROM}&to=${TO}"
 echo "== screenshot =="
 # DevTools capture with a real wait: the plain --screenshot flag fires at page load, before the panels have drawn
 node infra/scripts/cdp-screenshot.mjs "$(browser)" "$URL" "$(cygpath -w "$OUT")" 30

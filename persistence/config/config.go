@@ -33,8 +33,10 @@ type BatcherConfig struct {
 }
 
 type PipelineBatcherConfig struct {
-	BatchSize  int `yaml:"batch_size"`
-	IntervalMs int `yaml:"interval_ms"`
+	// flush when this many rows are waiting...
+	BatchSize int `yaml:"batch_size"`
+	// ...or when the oldest waiting row has waited this long, whichever comes first
+	MaxWaitMs int `yaml:"max_wait_ms"`
 }
 
 type PostgresConfig struct {
@@ -125,16 +127,16 @@ func Validate(cfg *Config) error {
 		return logger.LogAndWrap("Tick batch config size is too low", nil)
 	}
 
-	if batcherCfg.TickBatchConfig.IntervalMs < 1000 {
-		return logger.LogAndWrap("Tick batch interval is too low.", nil)
+	if batcherCfg.TickBatchConfig.MaxWaitMs < 1 {
+		return logger.LogAndWrap("Tick batch max_wait_ms must be at least 1.", nil)
 	}
 
 	if batcherCfg.BookBatchConfig.BatchSize < 10 {
 		return logger.LogAndWrap("Book batch config size is too low", nil)
 	}
 
-	if batcherCfg.BookBatchConfig.IntervalMs < 1000 {
-		return logger.LogAndWrap("Book batch interval is too low.", nil)
+	if batcherCfg.BookBatchConfig.MaxWaitMs < 1 {
+		return logger.LogAndWrap("Book batch max_wait_ms must be at least 1.", nil)
 	}
 
 	kafkaCfg := cfg.KafkaConfig

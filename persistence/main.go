@@ -59,7 +59,7 @@ func main() {
 		config.TickPipelineName,
 		config.AggregatedTicksTopic,
 		cfg.BatcherConfig.TickBatchConfig.BatchSize,
-		time.Duration(cfg.BatcherConfig.TickBatchConfig.IntervalMs)*time.Millisecond,
+		time.Duration(cfg.BatcherConfig.TickBatchConfig.MaxWaitMs)*time.Millisecond,
 		func(ctx context.Context, tx util.Tx, rows []*model.AggregatedTick) error {
 			return writer.FlushAggregateTicks(ctx, tx, rows)
 		},
@@ -71,7 +71,7 @@ func main() {
 		config.BookPipelineName,
 		config.OrderbookFlushesTopic,
 		cfg.BatcherConfig.BookBatchConfig.BatchSize,
-		time.Duration(cfg.BatcherConfig.BookBatchConfig.IntervalMs)*time.Millisecond,
+		time.Duration(cfg.BatcherConfig.BookBatchConfig.MaxWaitMs)*time.Millisecond,
 		func(ctx context.Context, tx util.Tx, rows []*model.OrderbookFlush) error {
 			return writer.FlushOrderbook(ctx, tx, rows)
 		},

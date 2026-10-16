@@ -64,8 +64,11 @@ func InitPersistenceMetrics() {
 	Persistence_DLQCount = NewCounterVec("persistence_dlq_count", "Number of DLQ publishes", []string{"pipeline"})
 	Persistence_TickFlushLagSeconds = NewHistogram("persistence_tick_flush_lag_seconds", "Time from a window's end_ts to the row landing in postgres", prometheus.ExponentialBuckets(0.001, 2, 18))
 	Persistence_BookFlushLagSeconds = NewHistogram("persistence_book_flush_lag_seconds", "Time from a book flush's event_time to the row landing in postgres", prometheus.ExponentialBuckets(0.001, 2, 18))
-	// 0.5ms .. ~65s
+	// Fine buckets from 5ms to 60s. The first version used doubling buckets (0.5ms * 2^n), so a p95 anywhere between
+	// 1.02s and 2.05s was reported as ~2s and could not be resolved. Dense below 1s, where the answer now lives;
+	// sparse above, where only the startup transient reaches.
 	Persistence_IngestToInsertSeconds = NewHistogramVec("persistence_ingest_to_insert_seconds",
 		"End-to-end: exchange websocket ingest of the newest message a row reflects, to that row being committed in postgres",
-		prometheus.ExponentialBuckets(0.0005, 2, 18), []string{"pipeline"})
+		[]float64{0.005, 0.01, 0.015, 0.02, 0.03, 0.04, 0.05, 0.075, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.75, 1, 1.5, 2, 3, 5, 10, 30, 60},
+		[]string{"pipeline"})
 }

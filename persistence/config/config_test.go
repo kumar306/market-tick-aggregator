@@ -11,11 +11,11 @@ func validConfig() *Config {
 		BatcherConfig: &BatcherConfig{
 			TickBatchConfig: &PipelineBatcherConfig{
 				BatchSize:  10,
-				IntervalMs: 1000,
+				MaxWaitMs: 10,
 			},
 			BookBatchConfig: &PipelineBatcherConfig{
 				BatchSize:  10,
-				IntervalMs: 1000,
+				MaxWaitMs: 10,
 			},
 		},
 		KafkaConfig: &KafkaConfig{
@@ -55,7 +55,7 @@ func TestValidateRejectsBadConfig(t *testing.T) {
 		{
 			name: "book interval too low",
 			mutate: func(cfg *Config) {
-				cfg.BatcherConfig.BookBatchConfig.IntervalMs = 999
+				cfg.BatcherConfig.BookBatchConfig.MaxWaitMs = 0
 			},
 		},
 		{
@@ -109,10 +109,10 @@ func TestGetConfig(t *testing.T) {
 batcher:
   aggregated_ticks:
     batch_size: 10
-    interval_ms: 1000
+    max_wait_ms: 10
   orderbook_flushes:
     batch_size: 10
-    interval_ms: 1000
+    max_wait_ms: 10
 kafka:
   bootstrap_servers:
     - localhost:9092

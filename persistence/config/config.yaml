@@ -1,10 +1,10 @@
 batcher:
   aggregated_ticks:
     batch_size: 100
-    interval_ms: 1000  # was 30000: a batch waits for 100 rows OR 1s, whichever first
+    max_wait_ms: 10  # was interval_ms 30000. A batch flushes at batch_size rows OR when its oldest row has waited this long
   orderbook_flushes:
     batch_size: 200
-    interval_ms: 1000  # was 50000
+    max_wait_ms: 10  # was interval_ms 50000
 
 kafka:
   bootstrap_servers:
